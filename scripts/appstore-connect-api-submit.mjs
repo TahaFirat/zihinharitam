@@ -768,19 +768,17 @@ async function syncReviewDetail(client, versionId) {
   const notes = readMeta('review_information/notes.txt');
   const contactFirstName = process.env.APPSTORE_CONTACT_FIRST_NAME || 'Taha';
   const contactLastName = process.env.APPSTORE_CONTACT_LAST_NAME || 'Firat';
-  const contactEmail = process.env.APPSTORE_CONTACT_EMAIL || '';
-  const contactPhone = process.env.APPSTORE_CONTACT_PHONE || '';
+  const contactEmail = process.env.APPSTORE_CONTACT_EMAIL || 'tafifirat@gmail.com';
+  const contactPhone = process.env.APPSTORE_CONTACT_PHONE || '+905444266440';
 
   const attrs = {
-    signInRequired: false,
+    demoAccountRequired: false,
     notes,
+    contactFirstName,
+    contactLastName,
+    contactEmail,
+    contactPhone,
   };
-  if (contactEmail && contactPhone) {
-    attrs.contactFirstName = contactFirstName;
-    attrs.contactLastName = contactLastName;
-    attrs.contactEmail = contactEmail;
-    attrs.contactPhone = contactPhone;
-  }
 
   try {
     const existing = await client.request(
