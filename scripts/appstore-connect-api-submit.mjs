@@ -629,14 +629,12 @@ async function ensureLifetimeProIap(client, appId) {
     {
       locale: 'tr',
       name: 'Ömür Boyu Pro Erişim',
-      description:
-        'Sınırsız harita, 25.000+ çıkartma, not kesme ve 300 DPI PDF çıktısını tek ödemeyle açar.',
+      description: 'Sınırsız harita, 25.000+ çıkartma ve 300 DPI PDF açar.',
     },
     {
       locale: 'en-US',
       name: 'Lifetime Pro Access',
-      description:
-        'Unlock unlimited maps, 25,000+ stickers, note cropping, and 300 DPI PDF export forever.',
+      description: 'Unlocks unlimited maps, 25,000+ stickers & PDF export.',
     },
   ];
 
@@ -654,6 +652,68 @@ async function ensureLifetimeProIap(client, appId) {
       });
       console.log(`  -> IAP çevirisi eklendi [${loc.locale}]: ${loc.name}`);
     }
+  }
+
+  // Ensure Worldwide Availability
+  try {
+    const terrResp = await client.request('GET', '/v1/territories?limit=200');
+    const allTerritories = (terrResp?.data || []).map((t) => ({ type: 'territories', id: t.id }));
+    if (allTerritories.length > 0) {
+      await client.request('POST', '/v1/inAppPurchaseAvailabilities', {
+        data: {
+          type: 'inAppPurchaseAvailabilities',
+          attributes: { availableInNewTerritories: true },
+          relationships: {
+            inAppPurchase: { data: { type: 'inAppPurchases', id: iap.id } },
+            availableTerritories: { data: allTerritories },
+          },
+        },
+      });
+      console.log(`  -> IAP ülke erişilebilirliği ayarlandı (${allTerritories.length} ülke).`);
+    }
+  } catch {
+    // Availability already configured
+  }
+
+  // Ensure ₺199,99 (200 TL tier) Price Schedule on TUR base territory
+  try {
+    let url = `/v2/inAppPurchases/${iap.id}/pricePoints?filter[territory]=TUR&limit=200`;
+    let targetPricePoint = null;
+    while (url && !targetPricePoint) {
+      const ppResp = await client.request('GET', url);
+      targetPricePoint =
+        (ppResp?.data || []).find((p) => String(p.attributes?.customerPrice) === '199.99') ||
+        (ppResp?.data || []).find((p) => String(p.attributes?.customerPrice) === '200.0');
+      url = ppResp?.links?.next || null;
+    }
+    if (targetPricePoint) {
+      await client.request('POST', '/v1/inAppPurchasePriceSchedules', {
+        data: {
+          type: 'inAppPurchasePriceSchedules',
+          relationships: {
+            inAppPurchase: { data: { type: 'inAppPurchases', id: iap.id } },
+            baseTerritory: { data: { type: 'territories', id: 'TUR' } },
+            manualPrices: { data: [{ type: 'inAppPurchasePrices', id: '${base-price-1}' }] },
+          },
+        },
+        included: [
+          {
+            type: 'inAppPurchasePrices',
+            id: '${base-price-1}',
+            attributes: { startDate: null },
+            relationships: {
+              inAppPurchaseV2: { data: { type: 'inAppPurchases', id: iap.id } },
+              inAppPurchasePricePoint: {
+                data: { type: 'inAppPurchasePricePoints', id: targetPricePoint.id },
+              },
+            },
+          },
+        ],
+      });
+      console.log(`  -> IAP Fiyat Basamağı ayarlandı: ₺${targetPricePoint.attributes.customerPrice} (TUR bazlı tüm dünya eşitlemesi aktif).`);
+    }
+  } catch (err) {
+    console.log(`  -> IAP Fiyat Planı bilgi: ${err.message}`);
   }
 
   // Upload IAP Review Screenshot (05-paywall-pro.png) if missing
