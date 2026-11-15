@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gizlilik Politikası (Privacy Policy) — ZihinHaritam</title>
+    <title>Gizlilik Politikası (Privacy Policy) — ZihinHaritam / MindSticker</title>
     <style>
       :root {
         --bg: #faf9f5;
@@ -35,12 +35,12 @@
         padding: 32px 16px 64px;
       }
       .container {
-        max-width: 780px;
+        max-width: 820px;
         margin: 0 auto;
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 24px;
-        padding: 32px 28px;
+        padding: 34px 30px;
       }
       .badge {
         display: inline-block;
@@ -68,7 +68,7 @@
       hr {
         border: 0;
         border-top: 1px solid var(--border);
-        margin: 32px 0;
+        margin: 34px 0;
       }
       a {
         color: var(--accent);
@@ -79,7 +79,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 14px;
-        margin-top: 24px;
+        margin-top: 28px;
         font-size: 14px;
       }
     </style>
@@ -87,53 +87,67 @@
   <body>
     <main class="container">
       <span class="badge">ZihinHaritam • MindSticker</span>
-      <h1>Gizlilik Politikası</h1>
-      <p><strong>Yürürlük Tarihi:</strong> 15 Kasım 2026 &bull; <strong>Paket Kimliği:</strong> <code>com.tahafirat.zihinharitam</code></p>
+      <h1>Gizlilik Politikası (Privacy Policy)</h1>
+      <p>
+        <strong>Yürürlük Tarihi:</strong> 15 Kasım 2026 &bull;
+        <strong>Geliştirici:</strong> Taha Fırat &bull;
+        <strong>Paket Kimliği:</strong> <code>com.tahafirat.zihinharitam</code>
+      </p>
 
       <h2>1. Yerel Öncelikli (Local-First) Mimari ve Veri Saklama</h2>
       <p>
-        ZihinHaritam, hesap veya üyelik zorunluluğu olmadan %100 çevrimdışı çalışacak şekilde tasarlanmıştır. Oluşturduğunuz zihin haritaları, düğümler, el çizimleri ve ders notlarından kestiğiniz çıkartmalar yalnızca kendi cihazınızın yerel veritabanında (IndexedDB / yerel dosya alanı) saklanır; geliştirici sunucularına yüklenmez.
+        ZihinHaritam (MindSticker), hesap oluşturma, e-posta kaydı veya oturum açma zorunluluğu olmadan %100 çevrimdışı çalışacak şekilde tasarlanmıştır. Oluşturduğunuz zihin haritaları, düğümler, el çizimleri ve ders notlarından kestiğiniz çıkartmalar yalnızca kendi cihazınızın yerel veritabanında (IndexedDB / yerel uygulama saklama alanı) tutulur; geliştiriciye ait herhangi bir bulut sunucusuna otomatik olarak yüklenmez.
       </p>
 
       <h2>2. İzleme (Tracking) ve Analitik</h2>
       <p>
-        Uygulama hiçbir üçüncü taraf reklam ağı, davranışsal analitik SDK'sı veya uygulamalar arası izleyici (<code>NSPrivacyTracking = false</code>) içermez. Kişisel verileriniz satılmaz, kiralanmaz veya reklam amacıyla işlenmez.
+        Uygulama hiçbir üçüncü taraf reklam ağı, davranışsal analitik SDK'sı, parmak izi (fingerprinting) veya uygulamalar arası izleyici (<code>NSPrivacyTracking = false</code>) içermez. Kişisel verileriniz toplanmaz, satılmaz veya reklam amacıyla işlenmez.
       </p>
 
       <h2>3. Kamera ve Fotoğraf Arşivi İzinleri</h2>
       <ul>
         <li><strong>Kamera (<code>NSCameraUsageDescription</code>):</strong> Yalnızca siz "Nottan Kes" aracını açtığınızda ders kitabı, defter veya slayt şemalarının fotoğrafını çekip zihin haritanıza çıkartma eklemek için kullanılır.</li>
-        <li><strong>Fotoğraf Arşivi:</strong> Yalnızca seçtiğiniz bir şema görselini içe aktarmak veya dışa aktardığınız zihin haritası posterini cihazınıza kaydetmek için kullanılır. Tüm görüntü işleme cihaz içinde gerçekleşir.</li>
+        <li><strong>Fotoğraf Arşivi (<code>NSPhotoLibraryUsageDescription</code>):</strong> Yalnızca seçtiğiniz bir şema görselini içe aktarmak veya dışa aktardığınız zihin haritası posterini cihazınıza kaydetmek için kullanılır. Arka plan temizleme ve kontur (die-cut) işlemleri %100 cihaz içinde (on-device WebAssembly/Canvas) gerçekleşir; fotoğraflarınız hiçbir dış sunucuya gönderilmez.</li>
       </ul>
 
-      <h2>4. Uygulama İçi Satın Alma (Apple StoreKit 2)</h2>
+      <h2>4. İsteğe Bağlı Çevrimiçi Görsel Arama ve AI Çıkartma Stüdyosu</h2>
       <p>
-        "Ömür Boyu Pro Erişim" (<code>com.tahafirat.zihinharitam.lifetime_pro</code>) satın alma ve "Satın Alımları Geri Yükle" işlemleri doğrudan Apple App Store (StoreKit 2) altyapısı üzerinden yürütülür. ZihinHaritam kredi kartı veya ödeme bilgilerinize hiçbir zaman erişmez.
+        Uygulamanın 25.200+ ikonluk temel çıkartma motoru tamamen çevrimdışıdır. Kullanıcı çevrimiçiyken tam çıkartma galerisini veya isteğe bağlı "AI Çiz" (AI Sticker Studio) aracını kullandığında:
+      </p>
+      <ul>
+        <li>Açık lisanslı eğitim görseli kataloglarına (Wikimedia Commons, Openverse, ARASAAC) yalnızca aranan akademik kavram kelimesi salt-okunur sorgu olarak iletilir.</li>
+        <li>"AI Çiz" stüdyosunda kullanıcı bir kavram yazdığında, yalnızca bu kısa nesne betimlemesi (prompt) görsel üretim uç noktasına (varsayılan Pollinations Flux servisi veya kullanıcının kendi isteğiyle cihazında yerel sakladığı Google Gemini / OpenAI / Fal.ai / Together AI API anahtarı) gönderilir. Hiçbir kişisel veri, kullanıcı kimliği, fotoğraf veya harita içeriği paylaşılmaz.</li>
+      </ul>
+
+      <h2>5. Uygulama İçi Satın Alma (Apple StoreKit 2)</h2>
+      <p>
+        "Ömür Boyu Pro Erişim" (<code>com.tahafirat.zihinharitam.lifetime_pro</code>) tek seferlik satın alma ve "Satın Alımları Geri Yükle" işlemleri doğrudan Apple App Store (StoreKit 2) altyapısı üzerinden yürütülür. Geliştirici kredi kartı veya ödeme bilgilerinize hiçbir zaman erişmez.
       </p>
 
-      <h2>5. İletişim</h2>
+      <h2>6. İletişim</h2>
       <p>
-        Gizlilik politikamızla ilgili her türlü sorunuz için <a href="mailto:destek@zihinharitam.app">destek@zihinharitam.app</a> adresinden bize ulaşabilirsiniz.
+        Gizlilik politikamızla ilgili her türlü sorunuz için doğrudan geliştirici e-posta adresimiz olan <a href="mailto:tafifirat@gmail.com">tafifirat@gmail.com</a> üzerinden bize ulaşabilirsiniz.
       </p>
 
       <hr />
 
-      <h1>Privacy Policy (English Summary for App Review)</h1>
+      <h1>Privacy Policy (Complete English Version)</h1>
       <p>
-        <strong>ZihinHaritam (MindSticker)</strong> is a privacy-first, offline-capable visual mind mapping application.
+        <strong>ZihinHaritam (MindSticker)</strong> (Bundle ID: <code>com.tahafirat.zihinharitam</code>, developed by Taha Firat) is a privacy-first, offline-capable visual mind mapping and study note application for iOS and iPadOS.
       </p>
       <ul>
-        <li><strong>No Account Required &amp; On-Device Storage:</strong> All mind maps, sketches, and cropped note stickers are stored locally on your device. We do not collect, upload, or store your personal documents on external servers.</li>
-        <li><strong>Zero Tracking:</strong> We do not use third-party advertising SDKs, cross-app tracking, or behavioral profiling (<code>NSPrivacyTracking = false</code>).</li>
-        <li><strong>Camera &amp; Photos:</strong> Accessed strictly when initiated by you to crop diagrams from your study notes into map stickers or to save exported map posters. Processing happens 100% locally on-device.</li>
-        <li><strong>In-App Purchases:</strong> Handled securely and natively via Apple StoreKit 2 (<code>com.tahafirat.zihinharitam.lifetime_pro</code>). We never receive or store your billing details.</li>
+        <li><strong>No Account Required &amp; 100% On-Device Storage:</strong> No registration or sign-in is required. All mind maps, node notes, Apple Pencil sketches, and cropped notebook diagrams are stored exclusively on your device (local IndexedDB &amp; app storage). We do not collect or store personal user data on external servers.</li>
+        <li><strong>Zero Tracking &amp; Zero Ads:</strong> We do not embed any third-party advertising SDKs, analytics trackers, or cross-app tracking technologies (<code>NSPrivacyTracking = false</code>; App Store Privacy Label: <em>Data Not Collected</em>).</li>
+        <li><strong>Camera &amp; Photo Library:</strong> Accessed strictly when initiated by you to photograph or import study diagrams for local die-cut sticker cropping, or to save exported PDF/PNG posters. All image segmentation runs 100% locally on-device; your photos never leave your device.</li>
+        <li><strong>Optional Online Visual Catalogs &amp; AI Sticker Studio:</strong> While the 25,200+ vector icon engine runs 100% offline, if you optionally search online catalogs (Wikimedia Commons, Openverse, ARASAAC) or request an AI-generated object illustration in the AI Sticker Studio (via Pollinations Flux or an optional user-supplied API key stored solely in local device storage), only the non-personal concept keyword you typed is sent to retrieve the illustration—never personal data, identifiers, or document files.</li>
+        <li><strong>In-App Purchases (StoreKit 2):</strong> One-time Non-Consumable <em>Lifetime Pro</em> (<code>com.tahafirat.zihinharitam.lifetime_pro</code>) purchases and <em>Restore Purchases</em> are processed natively and exclusively by Apple StoreKit 2. We never receive or store financial or billing details.</li>
       </ul>
-      <p>Contact: <a href="mailto:destek@zihinharitam.app">destek@zihinharitam.app</a></p>
+      <p>Developer &amp; Privacy Contact: <a href="mailto:tafifirat@gmail.com">tafifirat@gmail.com</a> (Taha Firat)</p>
 
       <nav class="nav">
-        <a href="/">← Uygulamaya Dön</a>
-        <a href="/terms.html">Kullanım Koşulları (Terms of Use)</a>
-        <a href="/support.html">Destek Merkezi (Support)</a>
+        <a href="./index.html">← Resmi Ürün Sayfası (Home)</a>
+        <a href="./terms.html">Kullanım Koşulları (Terms of Use / EULA)</a>
+        <a href="./support.html">Destek Merkezi (Support)</a>
       </nav>
     </main>
   </body>

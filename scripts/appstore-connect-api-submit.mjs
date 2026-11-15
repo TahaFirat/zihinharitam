@@ -31,6 +31,12 @@ const TARGET_VERSION = process.env.MARKETING_VERSION || '1.0.0';
 const DRY_RUN = process.argv.includes('--dry-run');
 const SUBMIT_FOR_REVIEW = process.argv.includes('--submit');
 const SKIP_SCREENSHOTS = process.argv.includes('--skip-screenshots');
+const REPLACE_SCREENSHOTS = process.argv.includes('--replace-screenshots');
+const REVIEW_VIDEO_ARG_IDX = process.argv.indexOf('--review-video');
+const REVIEW_VIDEO_PATH =
+  REVIEW_VIDEO_ARG_IDX >= 0 && process.argv[REVIEW_VIDEO_ARG_IDX + 1]
+    ? path.resolve(process.cwd(), process.argv[REVIEW_VIDEO_ARG_IDX + 1])
+    : process.env.APPSTORE_REVIEW_VIDEO_PATH || '';
 
 function loadDotEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -595,7 +601,20 @@ async function uploadScreenshotsForLocale(client, versionLocalizationId, localeL
       'GET',
       `/v1/appScreenshotSets/${targetSet.id}/appScreenshots`
     );
-    const existingNames = new Set((shotsResp?.data || []).map((s) => s.attributes?.fileName));
+    const existingShots = shotsResp?.data || [];
+    if (REPLACE_SCREENSHOTS && existingShots.length > 0) {
+      for (const oldShot of existingShots) {
+        try {
+          await client.request('DELETE', `/v1/appScreenshots/${oldShot.id}`);
+        } catch {
+          // Ignore delete error
+        }
+      }
+      console.log(`  -> [${localeLabel}] ${group.label} eski ekran görüntüleri temizlendi (${existingShots.length} adet).`);
+    }
+    const existingNames = REPLACE_SCREENSHOTS
+      ? new Set()
+      : new Set(existingShots.map((s) => s.attributes?.fileName));
 
     for (const fileName of files) {
       if (existingNames.has(fileName)) {
@@ -834,20 +853,22 @@ async function syncReviewDetail(client, versionId) {
   };
 
   try {
+    let reviewDetailId = null;
     const existing = await client.request(
       'GET',
       `/v1/appStoreVersions/${versionId}/appStoreReviewDetail`
     );
     if (existing?.data?.id) {
-      await client.request('PATCH', `/v1/appStoreReviewDetails/${existing.data.id}`, {
+      reviewDetailId = existing.data.id;
+      await client.request('PATCH', `/v1/appStoreReviewDetails/${reviewDetailId}`, {
         data: {
           type: 'appStoreReviewDetails',
-          id: existing.data.id,
+          id: reviewDetailId,
           attributes: attrs,
         },
       });
     } else {
-      await client.request('POST', '/v1/appStoreReviewDetails', {
+      const createdDetail = await client.request('POST', '/v1/appStoreReviewDetails', {
         data: {
           type: 'appStoreReviewDetails',
           attributes: attrs,
@@ -856,8 +877,53 @@ async function syncReviewDetail(client, versionId) {
           },
         },
       });
+      reviewDetailId = createdDetail?.data?.id || null;
     }
-    console.log(`  -> App Review notları kaydedildi (Üyelik/Giriş gerekmez: signInRequired=false).`);
+    console.log(`  -> App Review notları kaydedildi (${notes.length} karakter, signInRequired=false).`);
+
+    if (reviewDetailId && REVIEW_VIDEO_PATH && fs.existsSync(REVIEW_VIDEO_PATH)) {
+      const fileName = path.basename(REVIEW_VIDEO_PATH);
+      const buf = fs.readFileSync(REVIEW_VIDEO_PATH);
+      const md5 = crypto.createHash('md5').update(buf).digest('hex');
+      console.log(`  -> Fiziksel cihaz ekran kaydı yükleniyor: ${fileName} (${(buf.length / (1024 * 1024)).toFixed(2)} MB)...`);
+
+      const attList = await client.request(
+        'GET',
+        `/v1/appStoreReviewDetails/${reviewDetailId}/appStoreReviewAttachments`
+      );
+      for (const oldAtt of attList?.data || []) {
+        if (oldAtt.attributes?.fileName === fileName) {
+          await client.request('DELETE', `/v1/appStoreReviewAttachments/${oldAtt.id}`);
+        }
+      }
+
+      const resv = await client.request('POST', '/v1/appStoreReviewAttachments', {
+        data: {
+          type: 'appStoreReviewAttachments',
+          attributes: {
+            fileName,
+            fileSize: buf.length,
+          },
+          relationships: {
+            appStoreReviewDetail: {
+              data: { type: 'appStoreReviewDetails', id: reviewDetailId },
+            },
+          },
+        },
+      });
+      await uploadBinaryOperations(resv.data.attributes?.uploadOperations || [], buf);
+      await client.request('PATCH', `/v1/appStoreReviewAttachments/${resv.data.id}`, {
+        data: {
+          type: 'appStoreReviewAttachments',
+          id: resv.data.id,
+          attributes: {
+            uploaded: true,
+            sourceFileChecksum: md5,
+          },
+        },
+      });
+      console.log(`  -> Fiziksel cihaz ekran kaydı App Review Attachments bölümüne başarıyla eklendi! (id=${resv.data.id})`);
+    }
   } catch (err) {
     console.log(`  -> App Review detay bilgi (iletişim e-posta/telefon girildiğinde tamamlanır): ${err.message}`);
   }
@@ -887,11 +953,34 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
     console.log(`  -> "--submit" bayrağı algılandı: Uygulama Apple İncelemesine (App Review) gönderiliyor...`);
     const existingSubs = await client.request(
       'GET',
-      `/v1/apps/${appId}/reviewSubmissions?filter[platform]=IOS`
+      `/v1/apps/${appId}/reviewSubmissions?filter[platform]=IOS&include=items`
     );
     let activeSub = (existingSubs?.data || []).find((s) =>
-      ['READY_FOR_REVIEW', 'UNSUBMITTED'].includes(s.attributes?.state)
+      ['READY_FOR_REVIEW', 'UNSUBMITTED', 'UNRESOLVED_ISSUES'].includes(s.attributes?.state)
     );
+
+    if (activeSub && activeSub.attributes?.state === 'UNRESOLVED_ISSUES') {
+      const subItems = await client.request(
+        'GET',
+        `/v1/reviewSubmissions/${activeSub.id}/items`
+      );
+      for (const item of subItems?.data || []) {
+        if (item.attributes?.state === 'REJECTED') {
+          try {
+            await client.request('PATCH', `/v1/reviewSubmissionItems/${item.id}`, {
+              data: {
+                type: 'reviewSubmissionItems',
+                id: item.id,
+                attributes: { resolved: true },
+              },
+            });
+            console.log(`  -> Çözülen inceleme maddesi işaretlendi (item=${item.id}).`);
+          } catch (resErr) {
+            console.log(`  -> İnceleme maddesi bilgi: ${resErr.message}`);
+          }
+        }
+      }
+    }
 
     if (!activeSub) {
       const subResp = await client.request('POST', '/v1/reviewSubmissions', {

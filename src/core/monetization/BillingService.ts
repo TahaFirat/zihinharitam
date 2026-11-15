@@ -112,13 +112,19 @@ export const BillingService = {
       }
     }
 
+    const isTrLocale =
+      typeof navigator === 'undefined' ||
+      (navigator.language || 'tr').toLowerCase().startsWith('tr');
+
     return {
       id: productId,
       title: 'ZihinHaritam Ömür Boyu Pro',
       description:
         'Sınırsız zihin haritası, 25.000+ akademik çıkartma, nottan şema kesme ve 300 DPI PDF çıktısı.',
-      displayPrice: APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr,
-      price: 199.99,
+      displayPrice: isTrLocale
+        ? APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr
+        : APP_RELEASE_CONFIG.iap.appStoreReferenceUsd,
+      price: isTrLocale ? 199.99 : 3.99,
     };
   },
 

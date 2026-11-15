@@ -25,13 +25,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare static legal pages
+      - name: Prepare official product, support & legal pages
         run: |
-          mkdir -p _site
+          mkdir -p _site/screenshots
+          cp public/landing.html _site/index.html
           cp public/privacy.html _site/privacy.html
           cp public/terms.html _site/terms.html
           cp public/support.html _site/support.html
-          cp public/support.html _site/index.html
+          if [ -d "appstore-submission/screenshots/iphone-6.9" ]; then
+            cp appstore-submission/screenshots/iphone-6.9/*.png _site/screenshots/ || true
+          fi
+          for vid in public/review-demo.mp4 public/review-demo.mov public/review-demo.html; do
+            if [ -f "$vid" ]; then
+              cp "$vid" _site/
+            fi
+          done
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

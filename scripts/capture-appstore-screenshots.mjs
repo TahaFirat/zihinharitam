@@ -44,9 +44,16 @@ const SCENES = [
     filename: '01-kardiyoloji-harita.png',
     query: '?view=canvas&tpl=tpl_tip_kardiyoloji&no_onboard=1',
     bgHex: '#FAF9F5',
-    prepare: async (page) => {
+    prepare: async (page, device) => {
       await page.waitForSelector('canvas', { timeout: 10000 });
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(550);
+      if (device?.isMobile) {
+        const cx = Math.round(device.viewport.width / 2);
+        const cy = Math.round(device.viewport.height / 2);
+        await page.mouse.move(cx, cy);
+        await page.mouse.wheel(0, -290);
+        await page.waitForTimeout(350);
+      }
     },
   },
   {
@@ -60,11 +67,18 @@ const SCENES = [
   },
   {
     filename: '03-sistem-mimarisi-koyu.png',
-    query: '?view=canvas&tpl=tpl_sistem_tasarimi&dark=1&no_onboard=1',
+    query: '?view=canvas&tpl=tpl_sistem_tasarimi&dark=1&exam=hide_text&no_onboard=1',
     bgHex: '#0F141D',
-    prepare: async (page) => {
+    prepare: async (page, device) => {
       await page.waitForSelector('canvas', { timeout: 10000 });
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(550);
+      if (device?.isMobile) {
+        const cx = Math.round(device.viewport.width / 2);
+        const cy = Math.round(device.viewport.height / 2);
+        await page.mouse.move(cx, cy);
+        await page.mouse.wheel(0, -340);
+        await page.waitForTimeout(350);
+      }
     },
   },
   {
@@ -99,14 +113,17 @@ const SCENES = [
   },
   {
     filename: '05-paywall-pro.png',
-    query:
-      '?view=canvas&tpl=tpl_tip_kardiyoloji&exam=hide_text&paywall=pro_sticker&no_onboard=1',
+    query: '?view=canvas&tpl=tpl_tip_kardiyoloji&edit=m1&no_onboard=1',
     bgHex: '#FAF9F5',
     prepare: async (page) => {
+      await page.waitForSelector('canvas', { timeout: 10000 });
+      const proStickerBtn = page.locator('button:has-text("PRO")').first();
+      await proStickerBtn.waitFor({ state: 'visible', timeout: 8000 });
+      await proStickerBtn.click();
       await page.waitForSelector('[data-testid="lifetime-paywall-modal"]', {
         timeout: 10000,
       });
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(550);
     },
   },
 ];
@@ -182,7 +199,7 @@ async function main() {
         await page.goto(`${baseUrl}/${scene.query}`, {
           waitUntil: 'domcontentloaded',
         });
-        await scene.prepare(page);
+        await scene.prepare(page, device);
 
         const rawShot = await page.screenshot({
           type: 'png',

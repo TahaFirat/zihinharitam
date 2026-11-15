@@ -24,7 +24,7 @@ export const APP_RELEASE_CONFIG = {
     productType: 'Non-Consumable' as const,
     defaultDisplayPriceTr: '200 ₺',
     appStorePriceTierTr: '₺199,99',
-    appStoreReferenceUsd: '$4.99',
+    appStoreReferenceUsd: '$3.99',
   },
 
   quotas: {
@@ -41,7 +41,7 @@ export const APP_RELEASE_CONFIG = {
     privacyPath: '/privacy.html',
     termsPath: '/terms.html',
     supportPath: '/support.html',
-    supportEmail: 'destek@zihinharitam.app',
+    supportEmail: 'tafifirat@gmail.com',
     developerName: 'Taha Fırat',
   },
 } as const;

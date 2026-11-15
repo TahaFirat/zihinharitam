@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Destek ve Yardım Merkezi (Support) — ZihinHaritam</title>
+    <title>Destek ve Yardım Merkezi (Support) — ZihinHaritam / MindSticker</title>
     <style>
       :root {
         --bg: #faf9f5;
@@ -35,12 +35,12 @@
         padding: 32px 16px 64px;
       }
       .container {
-        max-width: 780px;
+        max-width: 820px;
         margin: 0 auto;
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 24px;
-        padding: 32px 28px;
+        padding: 34px 30px;
       }
       .badge {
         display: inline-block;
@@ -72,6 +72,11 @@
         padding: 18px 20px;
         margin: 20px 0;
       }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: 32px 0;
+      }
       a {
         color: var(--accent);
         text-decoration: none;
@@ -88,36 +93,57 @@
   </head>
   <body>
     <main class="container">
-      <span class="badge">ZihinHaritam Müşteri Desteği</span>
-      <h1>Destek &amp; Yardım Merkezi</h1>
-      <p>ZihinHaritam (MindSticker) ile ilgili tüm soru, öneri ve lisans geri yükleme talepleriniz için yanınızdayız.</p>
+      <span class="badge">ZihinHaritam • MindSticker Müşteri Desteği</span>
+      <h1>Destek &amp; Yardım Merkezi (Customer Support)</h1>
+      <p>
+        ZihinHaritam (MindSticker — <code>com.tahafirat.zihinharitam</code>) ile ilgili tüm teknik destek, öneri ve StoreKit lisans geri yükleme talepleriniz için doğrudan geliştirici ekibimize ulaşabilirsiniz.
+      </p>
 
       <div class="contact-box">
-        <strong>Doğrudan Destek E-postası (Direct Support Email):</strong><br />
-        <a href="mailto:destek@zihinharitam.app">destek@zihinharitam.app</a><br />
-        <small>Ortalama yanıt süresi: 24 saat içinde (TR &amp; EN).</small>
+        <strong>Geliştirici &amp; Doğrudan Destek İletişimi (Developer Support):</strong><br />
+        <strong>Geliştirici (Developer):</strong> Taha Fırat<br />
+        <strong>E-posta (Email):</strong> <a href="mailto:tafifirat@gmail.com">tafifirat@gmail.com</a><br />
+        <small>Ortalama yanıt süresi (Response time): 24 saat içinde — Türkçe &amp; English.</small>
       </div>
 
-      <h2>Sıkça Sorulan Sorular (FAQ)</h2>
+      <h2>Sıkça Sorulan Sorular (FAQ — TR)</h2>
       <ul>
         <li>
           <strong>Ömür Boyu Pro satın alımımı yeni iPhone veya iPad cihazımda nasıl etkinleştiririm?</strong><br />
           Aynı Apple Hesabı (Apple ID) ile giriş yaptıktan sonra <em>Ayarlar &rarr; Satın Alımları Geri Yükle</em> (veya Pro ekranındaki <em>Satın Alımları Geri Yükle</em>) düğmesine dokunmanız yeterlidir.
         </li>
         <li>
-          <strong>İnternet bağlantısı olmadan çalışabilir miyim?</strong><br />
-          Evet! 25.000+ akademik çıkartma indeksi ve tüm zihin haritası motoru %100 çevrimdışı (uçak modunda dahi) <span style="white-space: nowrap">&lt; 8 ms</span> hızda çalışır.
+          <strong>Üyelik veya giriş gerekiyor mu? İnternetsiz çalışır mı?</strong><br />
+          Hayır, hesap açma zorunluluğu yoktur. 25.000+ akademik çıkartma indeksi ve tüm zihin haritası motoru uçak modunda dahi 8 ms altında %100 çevrimdışı çalışır.
         </li>
         <li>
           <strong>Haritalarımı başka bir cihaza nasıl taşırım?</strong><br />
-          <em>Ayarlar &rarr; Tüm Haritaları Yedekle (.zihin)</em> seçeneğiyle tek bir yedek paketi alıp AirDrop, Dosyalar veya iCloud Drive üzerinden diğer cihazınıza aktarabilir ve <em>Yedekten Geri Yükle</em> ile açabilirsiniz.
+          <em>Ayarlar &rarr; Tüm Verileri Yedekle (.zihin)</em> seçeneğiyle tek bir yedek paketi alıp AirDrop, Dosyalar veya iCloud Drive üzerinden diğer cihazınıza aktarabilir ve <em>.zihin Yedeği İçe Aktar</em> ile açabilirsiniz.
+        </li>
+      </ul>
+
+      <hr />
+
+      <h2>English Support &amp; Quick Troubleshooting</h2>
+      <ul>
+        <li>
+          <strong>How do I restore my Lifetime Pro purchase (<code>com.tahafirat.zihinharitam.lifetime_pro</code>)?</strong><br />
+          Open the app on any iPhone or iPad signed into the same Apple Account, open <em>Settings (gear icon)</em> or the <em>Pro</em> sheet, and tap <strong>Satın Alımları Geri Yükle (Restore Purchases)</strong>. StoreKit 2 syncs your entitlement immediately at no charge.
+        </li>
+        <li>
+          <strong>Do I need an account or internet connection?</strong><br />
+          No account or login is required. All mind maps and 25,000+ bundled academic stickers work 100% offline on-device.
+        </li>
+        <li>
+          <strong>Need direct assistance?</strong><br />
+          Email developer Taha Firat directly at <a href="mailto:tafifirat@gmail.com">tafifirat@gmail.com</a>. We reply within 24 hours.
         </li>
       </ul>
 
       <nav class="nav">
-        <a href="/">← Uygulamaya Dön</a>
-        <a href="/privacy.html">Gizlilik Politikası</a>
-        <a href="/terms.html">Kullanım Koşulları</a>
+        <a href="./index.html">← Resmi Ürün Sayfası (Home)</a>
+        <a href="./privacy.html">Gizlilik Politikası (Privacy Policy)</a>
+        <a href="./terms.html">Kullanım Koşulları (Terms of Use)</a>
       </nav>
     </main>
   </body>
