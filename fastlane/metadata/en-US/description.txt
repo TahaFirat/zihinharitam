@@ -1,0 +1,13 @@
+MindSticker (ZihinHaritam) transforms dense lecture notes, engineering architectures, and exam outlines into vibrant, sticker-powered visual mind maps on iPhone and iPad.
+
+KEY HIGHLIGHTS
+• 25,000+ Instant Offline Stickers: Type any concept and immediately pick from curated Medical, System Design, Law, Electronics, Architecture, and Science icons in under 8ms—100% offline.
+• 60/120 FPS Organic Infinite Canvas & Apple Pencil: Smooth tapered Bezier branches, palm-rejected quick sketches, and architectural cross-links.
+• Crop Textbook & Slide Diagrams: Snap any diagram from your notebook or lecture slides and turn it into a clean die-cut vinyl sticker on your branch.
+• Active Recall Exam Mode: Hide branch titles or visuals and tap to reveal—ideal for medical boards, law exams, and university finals.
+• Print-Ready 300 DPI Export: Export crystal-clear A4/A3 PDF posters, scalable vector SVGs, or high-res PNGs for GoodNotes, Notability, or printing.
+• Local-First Privacy: No account or login required, zero tracking SDKs.
+
+FREE TIER & ONE-TIME LIFETIME PRO
+• Create up to 3 active mind maps (up to 45 nodes per map) with ~1,500 starter icons for free forever.
+• Upgrade once with Lifetime Pro (Non-Consumable one-time purchase—no subscriptions) to unlock unlimited maps, all 25,000+ specialist icons, unlimited note cropping, full exam mode, and 300 DPI PDF/SVG exports.

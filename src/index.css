@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark-study, .dark-study *));
+
+:root {
+  --canvas-bg: #FAF9F5;
+  --canvas-dot: #E2E0D8;
+  --hud-bg: rgba(255, 255, 255, 0.88);
+  --hud-border: rgba(15, 23, 42, 0.08);
+  --hud-text: #0F172A;
+  --hud-muted: #64748B;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --node-text: #0F172A;
+  --node-subtext: #475569;
+  --node-pill-bg: rgba(255, 255, 255, 0.94);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+.dark-study {
+  --canvas-bg: #0F141D;
+  --canvas-dot: #232C3D;
+  --hud-bg: rgba(19, 25, 37, 0.9);
+  --hud-border: rgba(255, 255, 255, 0.1);
+  --hud-text: #F8FAFC;
+  --hud-muted: #94A3B8;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --node-text: #F8FAFC;
+  --node-subtext: #CBD5E1;
+  --node-pill-bg: rgba(22, 29, 43, 0.94);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* iOS WKWebView Keyboard Scroll Lock: prevents page jump when virtual keyboard opens */
+html,
+body,
+#root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: var(--canvas-bg);
+  color: var(--hud-text);
+  font-family: 'Plus Jakarta Sans', 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* iOS / iPadOS / Mobile Canvas Touch Safeguards */
+.canvas-touch-lock {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.allow-text-input {
+  touch-action: manipulation;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Apple HIG 44x44px invisible touch hit-slop for compact branch `+` handles */
+.hit-slop-44:not(.absolute):not(.fixed) {
+  position: relative;
+}
+.hit-slop-44::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+
+/* Balanced wrapping for long Turkish academic compounds ("Elektrokardiyografik", "Kuvvetler Ayrılığı") */
+.node-title-balanced {
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Smooth Horizontal Carousel Scrollbar Hiding */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Spring Bounce Sticker Placement Animation (0.6 -> 1.08 -> 1.0) */
+@keyframes stickerSpringPop {
+  0% {
+    transform: scale(0.58) rotate(-4deg);
+    opacity: 0.4;
+  }
+  58% {
+    transform: scale(1.09) rotate(1.5deg);
+    opacity: 1;
+  }
+  82% {
+    transform: scale(0.97) rotate(-0.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.animate-sticker-pop {
+  animation: stickerSpringPop 380ms cubic-bezier(0.22, 1.35, 0.36, 1) forwards;
+}
+
+@keyframes cardRevealFlip {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.5;
+  }
+  65% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-card-reveal {
+  animation: cardRevealFlip 260ms cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+}
+
+/* Zero-Jitter Interaction Lock + Mobile GPU Drop-Shadow Bypass during active pan/zoom/drag */
+.canvas-stage[data-interacting="true"],
+.canvas-stage[data-interacting="true"] * {
+  transition: none !important;
+}
+
+.canvas-stage[data-interacting="true"] .die-cut-shadow {
+  filter: none !important;
+}
+
+/* Smooth 320ms spring glide ONLY when Smart Auto-Layout is triggered */
+.canvas-stage[data-auto-layout="true"] .mind-node-wrapper {
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease !important;
+}
+
+/* Die-cut sticker paper elevation shadow when idle */
+.die-cut-shadow {
+  filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.14));
+}
+
+.dark-study .die-cut-shadow {
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.48));
+}

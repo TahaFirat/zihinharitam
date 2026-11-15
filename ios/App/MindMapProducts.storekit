@@ -1,0 +1,64 @@
+{
+  "identifier" : "ZIHINHARITAM_STOREKIT_CONFIG_V4",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "199.99",
+      "familyShareable" : true,
+      "internalID" : "6730002001",
+      "localizations" : [
+        {
+          "description" : "Sınırsız zihin haritası, 25.000+ akademik çıkartma, nottan şema kesme ve 300 DPI PDF çıktısını tek ödemeyle ömür boyu açar.",
+          "displayName" : "Ömür Boyu Pro Erişim",
+          "locale" : "tr"
+        },
+        {
+          "description" : "Unlock unlimited visual mind maps, 25,000+ academic stickers, note cropping, and 300 DPI PDF export forever with one payment.",
+          "displayName" : "Lifetime Pro Access",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tahafirat.zihinharitam.lifetime_pro",
+      "referenceName" : "Lifetime Pro Unlock (Omur Boyu Erisim)",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6730002000",
+    "_developerTeamID" : "",
+    "_lastSynchronizedDate" : 784900000,
+    "_locale" : "tr",
+    "_storefront" : "TUR",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

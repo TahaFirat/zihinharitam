@@ -1,0 +1,64 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Derle, imzala ve doğrudan TestFlight'a yükle"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("APPSTORE_KEY_ID"),
+      issuer_id: ENV.fetch("APPSTORE_ISSUER_ID"),
+      key_filepath: ENV["ASC_KEY_PATH"] || File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{ENV['APPSTORE_KEY_ID']}.p8")
+    )
+
+    increment_build_number(
+      xcodeproj: "ios/App/App.xcodeproj",
+      build_number: ENV["BUILD_NUMBER"] || Time.now.utc.strftime("%Y%m%d%H%M")
+    )
+
+    build_app(
+      workspace: "ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/ipa",
+      output_name: "ZihinHaritam.ipa",
+      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')}"
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Derle, imzala ve App Store Connect inceleme sürümüne yükle"
+  lane :release do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("APPSTORE_KEY_ID"),
+      issuer_id: ENV.fetch("APPSTORE_ISSUER_ID"),
+      key_filepath: ENV["ASC_KEY_PATH"] || File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{ENV['APPSTORE_KEY_ID']}.p8")
+    )
+
+    increment_build_number(
+      xcodeproj: "ios/App/App.xcodeproj",
+      build_number: ENV["BUILD_NUMBER"] || Time.now.utc.strftime("%Y%m%d%H%M")
+    )
+
+    build_app(
+      workspace: "ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/ipa",
+      output_name: "ZihinHaritam.ipa",
+      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')}"
+    )
+
+    upload_to_app_store(
+      api_key: api_key,
+      force: true,
+      skip_screenshots: false,
+      skip_metadata: false,
+      submit_for_review: false
+    )
+  end
+end

@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "MindSticker";
+"NSCameraUsageDescription" = "Camera access is needed to capture diagrams from your textbooks, notebooks, or lecture slides and attach them as stickers to your mind map.";
+"NSPhotoLibraryUsageDescription" = "Photo library access is needed to select study diagrams and images from your gallery to attach onto your mind map branches.";
+"NSPhotoLibraryAddUsageDescription" = "Permission is needed to save your exported high-resolution visual mind map posters to your photo library.";

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build & Bundle Outputs
+dist/
+build/
+public/offline-packs/
+*.ipa
+*.xcarchive
+*.dSYM.zip
+
+# Capacitor / Xcode Ephemeral & Pod Artifacts
+ios/App/Pods/
+ios/App/build/
+ios/App/output/
+ios/App/DerivedData/
+ios/App/*.xcworkspace/xcuserdata/
+ios/App/*.xcodeproj/xcuserdata/
+ios/App/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Secrets, Signing Keys & Certificates (NEVER COMMIT!)
+.secrets/
+.env
+.env.local
+.env.appstore
+*.p8
+*.p12
+*.cer
+*.csr
+*.key
+*.pem
+*.mobileprovision
+*.provisionprofile
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.log

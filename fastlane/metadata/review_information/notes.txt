@@ -1,0 +1,5 @@
+Thank you for reviewing ZihinHaritam (MindSticker)!
+1. No account or login is required — the app works 100% offline right out of the box with 5 built-in academic templates and local icon search.
+2. Free Tier includes up to 3 active mind maps and ~1,500 starter icons.
+3. Lifetime Pro (com.tahafirat.zihinharitam.lifetime_pro, Non-Consumable one-time purchase) can be tested by creating a 4th map from the Home Workspace, tapping any 'PRO' badged academic sticker in the visual bar, or tapping the 'Pro' pill in the top header.
+4. 'Restore Purchases' (AppStore.sync()) is prominently available both on the Paywall sheet and inside Settings.

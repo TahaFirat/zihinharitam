@@ -1,0 +1,51 @@
+workflows:
+  ios-appstore-release:
+    name: ZihinHaritam Capacitor iOS App Store Release
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: ZihinHaritam_ASC_Key
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.tahafirat.zihinharitam
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "com.tahafirat.zihinharitam"
+      node: 22
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm ci
+      - name: Build Zero-Alpha Icons, 25k Offline Shards & Web Bundle
+        script: |
+          npm run generate:icons
+          npm run build
+      - name: Sync Capacitor iOS & Install CocoaPods
+        script: |
+          npx cap sync ios
+          cd ios/App && pod install
+      - name: Set Up Code Signing Settings on Xcode Project
+        script: |
+          xcode-project use-profiles
+      - name: Increment Build Number
+        script: |
+          cd ios/App
+          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || echo 0)
+          xcrun agvtool new-version -all $(($LATEST_BUILD + 1))
+      - name: Build Signed .ipa for App Store Connect
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false

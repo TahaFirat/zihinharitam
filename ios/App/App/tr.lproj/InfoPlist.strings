@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "ZihinHaritam";
+"NSCameraUsageDescription" = "Ders kitabınızdaki, defterinizdeki veya slaytlardaki diyagramların fotoğrafını çekip zihin haritanıza çıkartma olarak eklemek için kameranıza erişim gerekir.";
+"NSPhotoLibraryUsageDescription" = "Galerinizdeki ders notu şemalarını ve görselleri seçip zihin haritanızdaki dallara eklemek için fotoğraf arşivinize erişim gerekir.";
+"NSPhotoLibraryAddUsageDescription" = "Oluşturduğunuz görsel zihin haritası posterlerini cihazınızın galerisine kaydetmek için izin gerekir.";

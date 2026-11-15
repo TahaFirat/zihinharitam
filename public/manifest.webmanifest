@@ -1,0 +1,18 @@
+{
+  "name": "Görsel Zihin Haritası",
+  "short_name": "ZihinHaritası",
+  "description": "Telefon, Tablet ve Bilgisayar için Çıkartma Tabanlı Sonsuz Görsel Zihin Haritası",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAF9F5",
+  "theme_color": "#FAF9F5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

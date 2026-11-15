@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#272366"/>
+      <stop offset="52%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <radialGradient id="warmGlow" cx="50%" cy="44%" r="54%">
+      <stop offset="0%" stop-color="#4F46E5" stop-opacity="0.48"/>
+      <stop offset="65%" stop-color="#1E1B4B" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#1E1B4B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="skyBranch" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="amberBranch" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+    <linearGradient id="emeraldBranch" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="roseBranch" x1="1" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#F43F5E"/>
+      <stop offset="100%" stop-color="#FB7185"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Solid 100% opaque full-bleed background -->
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bgGrad)"/>
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#warmGlow)"/>
+
+  <!-- Subtle architectural notebook orbit ring -->
+  <circle cx="512" cy="512" r="338" fill="none" stroke="#6366F1" stroke-opacity="0.18" stroke-width="6" stroke-dasharray="18 22"/>
+
+  <!-- 4 Organic Tapered Mind-Map Branches -->
+  <path d="M 512 512 C 512 378, 636 332, 760 264" fill="none" stroke="url(#skyBranch)" stroke-width="46" stroke-linecap="round"/>
+  <path d="M 512 512 C 512 384, 388 336, 264 268" fill="none" stroke="url(#roseBranch)" stroke-width="46" stroke-linecap="round"/>
+  <path d="M 512 512 C 512 644, 392 692, 268 758" fill="none" stroke="url(#emeraldBranch)" stroke-width="46" stroke-linecap="round"/>
+  <path d="M 512 512 C 512 644, 632 692, 756 758" fill="none" stroke="url(#amberBranch)" stroke-width="46" stroke-linecap="round"/>
+
+  <!-- Satellite Die-Cut Sticker Nodes -->
+  <!-- Top-Right Sky Node -->
+  <circle cx="768" cy="258" r="88" fill="#FFFFFF"/>
+  <circle cx="768" cy="258" r="64" fill="#0EA5E9"/>
+  <circle cx="750" cy="240" r="18" fill="#BAE6FD"/>
+
+  <!-- Top-Left Rose Node -->
+  <circle cx="256" cy="262" r="88" fill="#FFFFFF"/>
+  <circle cx="256" cy="262" r="64" fill="#F43F5E"/>
+  <path d="M 256 290 C 230 270, 222 246, 238 234 C 248 226, 256 236, 256 242 C 256 236, 264 226, 274 234 C 290 246, 282 270, 256 290 Z" fill="#FFFFFF"/>
+
+  <!-- Bottom-Left Emerald Node -->
+  <circle cx="262" cy="762" r="88" fill="#FFFFFF"/>
+  <circle cx="262" cy="762" r="64" fill="#10B981"/>
+  <rect x="234" y="734" width="56" height="56" rx="14" fill="#FFFFFF"/>
+
+  <!-- Bottom-Right Amber Node -->
+  <circle cx="762" cy="762" r="88" fill="#FFFFFF"/>
+  <circle cx="762" cy="762" r="64" fill="#F59E0B"/>
+  <polygon points="762,724 796,784 728,784" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- Center Vinyl Die-Cut Sticker Star Hub -->
+  <rect x="356" y="356" width="312" height="312" rx="92" fill="#FFFFFF"/>
+  <rect x="382" y="382" width="260" height="260" rx="74" fill="#EEF2FF"/>
+  <path
+    d="M 512 406 C 526 468, 556 498, 618 512 C 556 526, 526 556, 512 618 C 498 556, 468 526, 406 512 C 468 498, 498 468, 512 406 Z"
+    fill="#312E81"
+  />
+  <circle cx="574" cy="444" r="16" fill="#F59E0B"/>
+</svg>
