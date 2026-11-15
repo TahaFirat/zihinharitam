@@ -1,7 +1,7 @@
 ZihinHaritam, klasik metin ağırlıklı notların ötesine geçerek ders özetlerinizi, mühendislik mimarilerinizi ve sınav konularınızı canlı çıkartmalarla zenginleştirilmiş görsel zihin haritalarına dönüştürür.
 
 ÖNE ÇIKAN ÖZELLİKLER
-• %100 Çevrimdışı 25.000+ Akademik Çıkartma: Konu başlığını yazdığınız anda Tıp, Sistem Tasarımı, Hukuk, Elektronik, Mimarlık ve Temel Bilimler çıkartmaları <8 ms hızda klavyenin üstünde belirir.
+• %100 Çevrimdışı 25.000+ Akademik Çıkartma: Konu başlığını yazdığınız anda Tıp, Sistem Tasarımı, Hukuk, Elektronik, Mimarlık ve Temel Bilimler çıkartmaları 8 ms altında klavyenin üstünde belirir.
 • 60/120 FPS Organik Tuval & Apple Pencil Desteği: Kalından inceye akan renkli dallar, avuç içi reddi (palm rejection) destekli el çizimi çıkartmalar ve çapraz mimari bağlantılar.
 • Ders Notundan Şema Kesme: Kitabınızdaki veya slaytınızdaki bir diyagramın fotoğrafını çekip tek dokunuşla beyaz konturlu (die-cut) çıkartmaya dönüştürün.
 • Aktif Hatırlama (Sınav Modu): Dal başlıklarını veya görselleri gizleyip dokunarak açın; TUS, YKS, HMGS, KPSS ve vize/final konularını aktif hatırlamayla test edin.

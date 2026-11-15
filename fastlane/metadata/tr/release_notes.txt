@@ -1,4 +1,4 @@
 ZihinHaritam 1.0.0 ilk sürümü yayında!
-• 25.000+ çevrimdışı akademik ve mühendislik çıkartması (<8 ms anlık arama)
+• 25.000+ çevrimdışı akademik ve mühendislik çıkartması (8 ms altı anlık arama)
 • 60/120 FPS organik dallar, Apple Pencil çizim ve ders notundan şema kesme
 • Aktif hatırlama (Sınav Modu) ve 300 DPI A4/A3 poster çıktısı
