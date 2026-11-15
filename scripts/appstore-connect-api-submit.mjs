@@ -259,7 +259,60 @@ async function findAppRecord(client) {
 }
 
 async function syncAppInfosAndCategories(client, appId, baseUrl) {
-  console.log(`\n[3/8] Uygulama Adı, Alt Başlık, Gizlilik URL ve Kategoriler senkronize ediliyor...`);
+  console.log(`\n[3/8] Uygulama Adı, Alt Başlık, Gizlilik URL, Ücretsiz Fiyat ($0) ve Kategoriler senkronize ediliyor...`);
+
+  // Content Rights Declaration (DOES_NOT_USE_THIRD_PARTY_CONTENT)
+  try {
+    await client.request('PATCH', `/v1/apps/${appId}`, {
+      data: {
+        type: 'apps',
+        id: appId,
+        attributes: {
+          contentRightsDeclaration: 'DOES_NOT_USE_THIRD_PARTY_CONTENT',
+        },
+      },
+    });
+    console.log(`  -> İçerik hakları beyanı onaylandı: DOES_NOT_USE_THIRD_PARTY_CONTENT`);
+  } catch (err) {
+    console.log(`  -> İçerik hakları bilgi: ${err.message}`);
+  }
+
+  // Base App Pricing: Free (₺0.00 / $0.00 — Freemium + 200 TL IAP)
+  try {
+    const ppResp = await client.request(
+      'GET',
+      `/v1/apps/${appId}/appPricePoints?filter[territory]=TUR&limit=50`
+    );
+    const freePoint = (ppResp?.data || []).find(
+      (p) => parseFloat(p.attributes?.customerPrice || '1') === 0
+    );
+    if (freePoint) {
+      await client.request('POST', '/v1/appPriceSchedules', {
+        data: {
+          type: 'appPriceSchedules',
+          relationships: {
+            app: { data: { type: 'apps', id: appId } },
+            baseTerritory: { data: { type: 'territories', id: 'TUR' } },
+            manualPrices: { data: [{ type: 'appPrices', id: '${free-app-price}' }] },
+          },
+        },
+        included: [
+          {
+            type: 'appPrices',
+            id: '${free-app-price}',
+            attributes: { startDate: null },
+            relationships: {
+              appPricePoint: { data: { type: 'appPricePoints', id: freePoint.id } },
+            },
+          },
+        ],
+      });
+      console.log(`  -> Uygulama indirme fiyatı ayarlandı: ÜCRETSİZ (₺0,00 / $0.00 Freemium)`);
+    }
+  } catch (err) {
+    console.log(`  -> Uygulama fiyat planı bilgi: ${err.message}`);
+  }
+
   const infos = await client.request('GET', `/v1/apps/${appId}/appInfos`);
   const editableInfo =
     infos?.data?.find((i) => i.attributes?.appStoreState !== 'READY_FOR_SALE') || infos?.data?.[0];
@@ -832,26 +885,51 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
 
   if (SUBMIT_FOR_REVIEW) {
     console.log(`  -> "--submit" bayrağı algılandı: Uygulama Apple İncelemesine (App Review) gönderiliyor...`);
-    const subResp = await client.request('POST', '/v1/reviewSubmissions', {
-      data: {
-        type: 'reviewSubmissions',
-        attributes: { platform: 'IOS' },
-        relationships: {
-          app: { data: { type: 'apps', id: appId } },
-        },
-      },
-    });
-    const submissionId = subResp.data.id;
+    const existingSubs = await client.request(
+      'GET',
+      `/v1/apps/${appId}/reviewSubmissions?filter[platform]=IOS`
+    );
+    let activeSub = (existingSubs?.data || []).find((s) =>
+      ['READY_FOR_REVIEW', 'UNSUBMITTED'].includes(s.attributes?.state)
+    );
 
-    await client.request('POST', '/v1/reviewSubmissionItems', {
-      data: {
-        type: 'reviewSubmissionItems',
-        relationships: {
-          reviewSubmission: { data: { type: 'reviewSubmissions', id: submissionId } },
-          appStoreVersion: { data: { type: 'appStoreVersions', id: versionId } },
+    if (!activeSub) {
+      const subResp = await client.request('POST', '/v1/reviewSubmissions', {
+        data: {
+          type: 'reviewSubmissions',
+          attributes: { platform: 'IOS' },
+          relationships: {
+            app: { data: { type: 'apps', id: appId } },
+          },
         },
-      },
-    });
+      });
+      activeSub = subResp.data;
+    }
+    const submissionId = activeSub.id;
+
+    const itemsResp = await client.request(
+      'GET',
+      `/v1/reviewSubmissions/${submissionId}/items`
+    );
+    const hasVersionItem = (itemsResp?.data || []).some(
+      (it) => it.relationships?.appStoreVersion?.data?.id === versionId
+    );
+
+    if (!hasVersionItem) {
+      try {
+        await client.request('POST', '/v1/reviewSubmissionItems', {
+          data: {
+            type: 'reviewSubmissionItems',
+            relationships: {
+              reviewSubmission: { data: { type: 'reviewSubmissions', id: submissionId } },
+              appStoreVersion: { data: { type: 'appStoreVersions', id: versionId } },
+            },
+          },
+        });
+      } catch (itemErr) {
+        console.log(`  -> Sürüm öğesi bilgi: ${itemErr.message}`);
+      }
+    }
 
     await client.request('PATCH', `/v1/reviewSubmissions/${submissionId}`, {
       data: {
