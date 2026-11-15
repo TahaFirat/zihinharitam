@@ -300,7 +300,7 @@ jobs:
           ls -lh build/ipa
 
       - name: Upload .ipa Directly to App Store Connect / TestFlight
-        if: ${{ inputs.upload_to_appstore != false }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload_to_appstore == true }}
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
@@ -315,7 +315,7 @@ jobs:
             --apiIssuer "$APPSTORE_ISSUER_ID"
 
       - name: Sync TR/EN Store Metadata, 15 Screenshots & 200 TL IAP via ASC API
-        if: ${{ inputs.sync_store_metadata != false }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.sync_store_metadata == true }}
         continue-on-error: true
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
