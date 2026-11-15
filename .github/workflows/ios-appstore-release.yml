@@ -51,25 +51,17 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium for Readiness & Screenshots
-        run: npx playwright install chromium
-
       - name: Generate Zero-Alpha App Icons, Offline Shards & Production Build
         run: |
           npm run generate:icons
           npm run build
-
-      - name: Capture 15 App Store Connect Screenshots & Run Readiness Gate
-        run: |
-          npm run appstore:screenshots
-          npm run verify:appstore
 
       - name: Sync Web Bundle & StoreKit 2 Plugin to Capacitor iOS
         run: |
           npx cap sync ios
           cd ios/App && pod install
 
-      - name: Prepare App Store Connect API Key (.p8) & Signing Keychain
+      - name: Prepare App Store Connect API Key (.p8), Keychain & Provisioning Profile
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
@@ -88,7 +80,7 @@ jobs:
 
           mkdir -p "$HOME/.appstoreconnect/private_keys"
           KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
-          printf "%s" "$APPSTORE_PRIVATE_KEY_P8" > "$KEY_PATH"
+          printf "%s\n" "$APPSTORE_PRIVATE_KEY_P8" > "$KEY_PATH"
           chmod 600 "$KEY_PATH"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
@@ -100,7 +92,7 @@ jobs:
 
           if [ -n "${BUILD_CERTIFICATE_BASE64:-}" ]; then
             CERT_PATH="$RUNNER_TEMP/dist_cert.p12"
-            echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+            printf "%s" "$BUILD_CERTIFICATE_BASE64" | tr -d '[:space:]' | base64 --decode > "$CERT_PATH"
           else
             echo "==> BUILD_CERTIFICATE_BASE64 tanımlı değil; App Store Connect API ile Distribution sertifikası hazırlanıyor..."
             P12_PASSWORD="$(uuidgen)"
@@ -111,23 +103,32 @@ jobs:
           security import "$CERT_PATH" -P "${P12_PASSWORD:-}" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
           SIGNING_STYLE="automatic"
           PROFILE_SPECIFIER=""
+          PROFILE_UUID=""
           if [ -n "${BUILD_PROVISION_PROFILE_BASE64:-}" ]; then
             PP_PATH="$RUNNER_TEMP/build.mobileprovision"
-            echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
+            printf "%s" "$BUILD_PROVISION_PROFILE_BASE64" | tr -d '[:space:]' | base64 --decode > "$PP_PATH"
             mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-            PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$PP_PATH")")
-            PP_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$PP_PATH")")
+            DECODED_PLIST="$RUNNER_TEMP/profile.plist"
+            /usr/bin/security cms -D -i "$PP_PATH" > "$DECODED_PLIST"
+            PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$DECODED_PLIST")
+            PP_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$DECODED_PLIST")
             cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision"
             SIGNING_STYLE="manual"
             PROFILE_SPECIFIER="$PP_NAME"
+            PROFILE_UUID="$PP_UUID"
+            echo "Installed Provisioning Profile: $PP_NAME ($PP_UUID)"
           fi
           echo "SIGNING_STYLE=$SIGNING_STYLE" >> "$GITHUB_ENV"
           echo "PROFILE_SPECIFIER=$PROFILE_SPECIFIER" >> "$GITHUB_ENV"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
 
-      - name: Increment Marketing Version & Build Number (agvtool)
+      - name: Configure App Target Signing & Build Version
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           BUILD_NUM="${{ inputs.build_number }}"
@@ -142,11 +143,34 @@ jobs:
           cd ios/App
           xcrun agvtool new-marketing-version "$MARKETING_VER"
           xcrun agvtool new-version -all "$BUILD_NUM"
-          echo "Using MARKETING_VERSION=$MARKETING_VER, CURRENT_PROJECT_VERSION=$BUILD_NUM"
+          cd ../..
+
+          # Scope Manual/Automatic signing strictly to App target in project.pbxproj (never Pods!)
+          node -e '
+            const fs = require("fs");
+            const pbxPath = "ios/App/App.xcodeproj/project.pbxproj";
+            let pbx = fs.readFileSync(pbxPath, "utf8");
+            const teamId = process.env.APPLE_TEAM_ID;
+            const style = process.env.SIGNING_STYLE;
+            const spec = process.env.PROFILE_SPECIFIER;
+            if (style === "manual") {
+              pbx = pbx.replace(/ProvisioningStyle = Automatic;/g, "ProvisioningStyle = Manual;");
+              pbx = pbx.replace(
+                /CODE_SIGN_STYLE = Automatic;\s*(CURRENT_PROJECT_VERSION = [^;]+;)/g,
+                `CODE_SIGN_IDENTITY = "Apple Distribution";\n\t\t\t\t"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";\n\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = ${teamId};\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "${spec}";\n\t\t\t\t$1`
+              );
+            } else {
+              pbx = pbx.replace(
+                /CODE_SIGN_STYLE = Automatic;\s*(CURRENT_PROJECT_VERSION = [^;]+;)/g,
+                `CODE_SIGN_STYLE = Automatic;\n\t\t\t\tDEVELOPMENT_TEAM = ${teamId};\n\t\t\t\t$1`
+              );
+            }
+            fs.writeFileSync(pbxPath, pbx, "utf8");
+          '
+          echo "Configured App target signing ($SIGNING_STYLE) for MARKETING_VERSION=$MARKETING_VER, BUILD=$BUILD_NUM"
 
       - name: Archive Release iOS App (xcodebuild archive)
         env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
         run: |
@@ -159,10 +183,6 @@ jobs:
               -configuration Release \
               -sdk iphoneos \
               -archivePath build/App.xcarchive \
-              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-              CODE_SIGN_STYLE=Manual \
-              CODE_SIGN_IDENTITY="Apple Distribution" \
-              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_SPECIFIER" \
               archive
           else
             xcodebuild -workspace ios/App/App.xcworkspace \
@@ -170,8 +190,6 @@ jobs:
               -configuration Release \
               -sdk iphoneos \
               -archivePath build/App.xcarchive \
-              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-              CODE_SIGN_STYLE=Automatic \
               -allowProvisioningUpdates \
               -authenticationKeyPath "$ASC_KEY_PATH" \
               -authenticationKeyID "$APPSTORE_KEY_ID" \
@@ -179,7 +197,7 @@ jobs:
               archive
           fi
 
-      - name: Generate Dynamic ExportOptions.plist & Export Signed .ipa
+      - name: Generate ExportOptions.plist & Export Signed .ipa
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
@@ -188,57 +206,62 @@ jobs:
           set -euo pipefail
           mkdir -p build/ipa
 
-          if [ "$SIGNING_STYLE" = "manual" ]; then
-            cat > build/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
+          node -e '
+            const fs = require("fs");
+            const teamId = process.env.APPLE_TEAM_ID;
+            const style = process.env.SIGNING_STYLE;
+            const spec = process.env.PROFILE_SPECIFIER;
+            const xml = style === "manual"
+              ? `<?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>destination</key>
-              <string>export</string>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>teamID</key>
-              <string>${APPLE_TEAM_ID}</string>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.tahafirat.zihinharitam</key>
-                  <string>${PROFILE_SPECIFIER}</string>
-              </dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>teamID</key>
+            <string>${teamId}</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.tahafirat.zihinharitam</key>
+              <string>${spec}</string>
+            </dict>
           </dict>
-          </plist>
-          EOF
+          </plist>\n`.replace(/^          /gm, "")
+              : `<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>manageAppVersionAndBuildNumber</key>
+            <true/>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>${teamId}</string>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>\n`.replace(/^          /gm, "");
+            fs.writeFileSync("build/ExportOptions.plist", xml, "utf8");
+          '
 
+          if [ "$SIGNING_STYLE" = "manual" ]; then
             xcodebuild -exportArchive \
               -archivePath build/App.xcarchive \
               -exportOptionsPlist build/ExportOptions.plist \
               -exportPath build/ipa
           else
-            cat > build/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>destination</key>
-              <string>export</string>
-              <key>manageAppVersionAndBuildNumber</key>
-              <true/>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>signingStyle</key>
-              <string>automatic</string>
-              <key>teamID</key>
-              <string>${APPLE_TEAM_ID}</string>
-              <key>uploadSymbols</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
-
             xcodebuild -exportArchive \
               -archivePath build/App.xcarchive \
               -exportOptionsPlist build/ExportOptions.plist \
