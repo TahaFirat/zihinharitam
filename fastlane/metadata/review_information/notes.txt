@@ -1,34 +1,38 @@
-GUIDELINE 2.1 — INFORMATION NEEDED RESPONSE
+Dear Apple App Review Team,
 
-1. PHYSICAL DEVICE SCREEN RECORDING
-- Attached in App Review Information -> Attachments (captured on a physical iPhone 12 running the latest iOS, starting from tapping ZihinHaritam on the iOS Home Screen). Web mirror: https://tahafirat.github.io/zihinharitam/
-- Flow shown: Home Screen launch -> Home Workspace & templates -> editing a mind map & picking instant (<8ms) offline stickers -> Active Recall Exam Mode (tap hidden nodes to reveal) & Export/Note Cropper -> StoreKit 2 "Lifetime Pro" sheet (com.tahafirat.zihinharitam.lifetime_pro) & "Restore Purchases".
-- Account login/deletion: N/A — ZERO account registration or login required; all data stays locally on-device.
-- UGC moderation/blocking: N/A — NO public feed, social sharing, or user-to-user content.
+Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA build: Version 1.0.0 (Build 7), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
 
-2. PURPOSE, TARGET AUDIENCE & VALUE
-- Audience: University students, medical/engineering/law exam candidates, educators, and visual thinkers.
-- Problem & Value: Linear notes are passive and hard to recall. ZihinHaritam (MindSticker) applies dual-coding memory principles by pairing color-coded Bezier mind maps with 25,200+ instant offline academic stickers, on-device diagram cropping into die-cut stickers, Apple Pencil sketches, Active Recall self-testing, and 300 DPI PDF/SVG exports.
+1. Physical Device Testing & Scope (TestFlight Builds 1–7):
+- Tested via TestFlight on physical iPhone hardware (iPhone 12, latest iOS) across Builds 1–7 verifying safe-area margins, 60 FPS canvas navigation, StoreKit 2 Sandbox flows, and crash-free offline execution. Build 7 unifies support contact (tafifirat@gmail.com) and StoreKit currency fallback.
+- Confirmations:
+  * Account login/deletion: NONE (no sign-in; stored locally on-device in IndexedDB).
+  * User-generated content: NONE (no public feed, social sharing, or chat).
+  * Paid content: Non-Consumable "Lifetime Pro" (com.tahafirat.zihinharitam.lifetime_pro, 175 regions: TRY 199.99 / USD $3.99) submitted with 1.0.0 + "Restore Purchases" (AppStore.sync()).
 
-3. SETUP & MAIN FEATURE INSTRUCTIONS
-- Credentials / Sample Files: NONE needed; 5 academic mind maps are preloaded out of the box.
-- Steps:
-  1) Tap any template on Home Workspace (or "+ Boş Görsel Harita" for up to 3 free maps).
-  2) Double-tap a node (or "+ Yeni Dal") and type a term ("kalp", "sunucu", "mahkeme", "atom") for instant offline stickers above the keyboard.
-  3) Tap the graduation-cap icon (top HUD) for Active Recall Exam Mode; tap hidden nodes to reveal.
-  4) Tap Share (top-right) for PNG/SVG/300 DPI PDF export, or Gear for Settings, .zihin backup, Legal docs, and Restore Purchases.
-  5) Paid Content (com.tahafirat.zihinharitam.lifetime_pro, Non-Consumable one-time unlock): tap the "Kilidi Aç" Pro pill, any "PRO" sticker, or create a 4th map to test StoreKit 2 Sandbox purchase and "Satın Alımları Geri Yükle" (AppStore.sync()).
+2. Purpose, Audience, Value & Portfolio Distinction:
+- Audience & Value: Visual dual-coding mind mapping & Active Recall study studio for university students, exam candidates, and educators. Combines tapered Bezier mind maps, 25,200+ instant (<8ms) offline academic icons, on-device textbook diagram cropping into die-cut stickers, Apple Pencil sketching, one-tap Exam Recall, and 300 DPI PDF/SVG export.
+- Portfolio Distinction (4.3): Sole visual mind-mapping & diagramming app on our account—shares zero UI, database, or scope with Void Carver (arcade game) or quiz trainers.
 
-4. EXTERNAL SERVICES, TOOLS & PLATFORMS
-- Native Runtime & Payments (On-Device): Capacitor 7 (WKWebView + Swift) and native Apple StoreKit 2 (StoreKitPlugin.swift). Zero third-party payment SDKs, zero ads, zero analytics/tracking SDKs (NSPrivacyTracking = false).
-- Local Storage & ML (On-Device): IndexedDB (Dexie.js & Yjs); MiniSearch Web Worker (25,209 offline icons); on-device ONNX WebAssembly (@imgly/background-removal) for local photo segmentation; jsPDF for local PDF export.
-- Optional Online Services (only when online & initiated by user):
-  * Public open-license visual APIs: Wikipedia/Wikimedia Commons, Openverse, and ARASAAC APIs (keyword only).
-  * Optional "AI Çiz" (AI Sticker Studio): Pollinations.ai Flux endpoint by default (or optional user BYOK keys stored solely on-device for Gemini Imagen, OpenAI Images, Fal.ai, or Together AI) for isolated object icons. Only the non-personal object keyword is sent; zero personal data or photos leave the device.
+3. Setup & Main Feature Instructions (No Login / No Files Needed):
+- Cold launch opens Home Workspace with 5 preloaded academic templates.
+- Quick UI Guide (TR -> EN):
+  * Templates / "+ Boş Görsel Harita" (+ Blank Map): 3 free maps (45 nodes/map, ~1,500 icons).
+  * Tap node / "+ Yeni Dal" (+ New Branch): Type any term ("kalp", "sunucu", "mahkeme", "atom") for instant offline stickers; tap "AI Çiz" for custom stickers or Camera icon (built-in sample notebook diagram included).
+  * Graduation Cap (Top HUD): Active Recall Exam Mode; tap hidden nodes to reveal.
+  * Share (Top-Right): Export PNG, SVG, 300 DPI PDF. Gear: Settings, .zihin backup, Legal docs, "Satın Alımları Geri Yükle" (Restore Purchases).
+  * Test IAP: Tap "Kilidi Aç" (Pro pill), any "PRO" sticker, or 4th map to test StoreKit 2 Sandbox & Restore.
 
-5. REGIONAL DIFFERENCES
-- None. All features and quotas work identically across all 175 App Store regions with zero geo-restrictions. UI is Turkish (supporting English/Latin terms and custom text in any language); StoreKit 2 localizes Lifetime Pro pricing per storefront (TRY 199.99 in Türkiye, USD $3.99 in USA).
+4. External Services, Tools & Platforms:
+- Core & Payments (On-Device): Capacitor 7 (WKWebView + Swift), native Apple StoreKit 2 (StoreKitPlugin.swift). ZERO third-party payment SDKs, ZERO ads, ZERO tracking SDKs (NSPrivacyTracking = false).
+- Local Engine: IndexedDB (Dexie.js, Yjs), MiniSearch Worker (25,209 offline icons), ONNX WASM (@imgly/background-removal), jsPDF.
+- Optional Online APIs (user-triggered): Open-license search (Wikimedia Commons, Openverse, ARASAAC) & optional "AI Çiz" (Pollinations.ai Flux or local BYOK keys for Gemini/OpenAI/Fal/Together) sending only non-personal concept keywords.
 
-6. REGULATED INDUSTRIES & THIRD-PARTY MATERIAL
-- Non-Regulated Study Tool: Sample Cardiology and Law maps are illustrative student study notes only—NOT medical diagnosis, clinical advice, or legal services.
-- Open-Source Assets Only: Permissive open-source icons (MIT, Apache-2.0, CC0, CC-BY: Fluent UI Emoji, HealthIcons CC0, Phosphor, Tabler, Carbon, IconPark, OpenMoji, Game-Icons) + original SVGs: https://tahafirat.github.io/zihinharitam/terms.html
+5. Regional Differences:
+- None. Identical across all 175 App Store regions, zero geo-restrictions. Primary UI is Turkish (any text supported); StoreKit 2 localizes Lifetime Pro pricing per storefront (TRY 199.99 TR / USD $3.99 US).
+
+6. Regulated Industry & Third-Party Material:
+- Non-Regulated Student Utility: Sample Cardiology/Law templates are study outlines only—NOT medical or legal advice.
+- Open-Source Assets Only: Permissive MIT, Apache-2.0, CC0, CC-BY icons + original SVGs: https://tahafirat.github.io/zihinharitam/terms.html
+
+Best regards,
+Taha Firat
