@@ -944,10 +944,49 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
   }
 
   console.log(`  -> Uygun .ipa Build bulundu: buildVersion=${latestBuild.attributes?.version} (id=${latestBuild.id})`);
-  await client.request('PATCH', `/v1/appStoreVersions/${versionId}/relationships/build`, {
-    data: { type: 'builds', id: latestBuild.id },
-  });
-  console.log(`  -> Build başarıyla ${TARGET_VERSION} sürümüne bağlandı!`);
+
+  const existingBuildResp = await client.request(
+    'GET',
+    `/v1/appStoreVersions/${versionId}/build`
+  );
+  const currentBuildId = existingBuildResp?.data?.id || null;
+
+  if (currentBuildId !== latestBuild.id) {
+    if (SUBMIT_FOR_REVIEW) {
+      const preSubs = await client.request(
+        'GET',
+        `/v1/apps/${appId}/reviewSubmissions?filter[platform]=IOS`
+      );
+      const waitingSub = (preSubs?.data || []).find(
+        (s) => s.attributes?.state === 'WAITING_FOR_REVIEW'
+      );
+      if (waitingSub) {
+        console.log(`  -> Yeni build bağlamak için mevcut WAITING_FOR_REVIEW gönderimi geri çekiliyor (${waitingSub.id})...`);
+        await client.request('PATCH', `/v1/reviewSubmissions/${waitingSub.id}`, {
+          data: {
+            type: 'reviewSubmissions',
+            id: waitingSub.id,
+            attributes: { canceled: true },
+          },
+        });
+      }
+    }
+
+    try {
+      await client.request('PATCH', `/v1/appStoreVersions/${versionId}/relationships/build`, {
+        data: { type: 'builds', id: latestBuild.id },
+      });
+      console.log(`  -> Build başarıyla ${TARGET_VERSION} sürümüne bağlandı!`);
+    } catch (buildErr) {
+      if (!SUBMIT_FOR_REVIEW) {
+        console.log(`  -> Build güncelleme bilgi (incelemedeki sürümde --submit ile güncellenir): ${buildErr.message}`);
+      } else {
+        throw buildErr;
+      }
+    }
+  } else {
+    console.log(`  -> Güncel Build (${latestBuild.attributes?.version}) zaten ${TARGET_VERSION} sürümüne bağlı.`);
+  }
 
   if (SUBMIT_FOR_REVIEW) {
     console.log(`  -> "--submit" bayrağı algılandı: Uygulama Apple İncelemesine (App Review) gönderiliyor...`);
@@ -1018,6 +1057,29 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
       } catch (itemErr) {
         console.log(`  -> Sürüm öğesi bilgi: ${itemErr.message}`);
       }
+    }
+
+    // Ensure READY_TO_SUBMIT Non-Consumable IAP is bundled into the same review submission (Guideline 3.1.1)
+    try {
+      const iapList = await client.request(
+        'GET',
+        `/v1/apps/${appId}/inAppPurchasesV2?filter[productId]=${encodeURIComponent(IAP_PRODUCT_ID)}`
+      );
+      const iapRec = iapList?.data?.find((item) => item.attributes?.productId === IAP_PRODUCT_ID);
+      if (iapRec && iapRec.attributes?.state === 'READY_TO_SUBMIT') {
+        await client.request('POST', '/v1/reviewSubmissionItems', {
+          data: {
+            type: 'reviewSubmissionItems',
+            relationships: {
+              reviewSubmission: { data: { type: 'reviewSubmissions', id: submissionId } },
+              inAppPurchaseV2: { data: { type: 'inAppPurchases', id: iapRec.id } },
+            },
+          },
+        });
+        console.log(`  -> Ömür Boyu Pro IAP (${IAP_PRODUCT_ID}) inceleme paketine eklendi.`);
+      }
+    } catch {
+      // Already attached or already submitted
     }
 
     await client.request('PATCH', `/v1/reviewSubmissions/${submissionId}`, {
