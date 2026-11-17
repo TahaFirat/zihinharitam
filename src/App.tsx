@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search,
-  Link2,
-  Wand2,
   Plus,
   Sparkles,
   Maximize2,
@@ -1593,6 +1591,11 @@ export const App: React.FC = () => {
 
   const defaultNodeStyle: NodeVisualStyle = doc.defaultNodeStyle ?? 'card';
   const activeEditNode = editingNodeId ? doc.nodes[editingNodeId] ?? null : null;
+  const activeStudioNode =
+    activeEditNode ??
+    (examMode === 'off' && !linkingFromNodeId && selectedNodeId
+      ? doc.nodes[selectedNodeId] ?? null
+      : null);
   const targetModalNodeId = editingNodeId ?? selectedNodeId ?? doc.rootNodeId;
   const targetModalNode =
     doc.nodes[targetModalNodeId] ?? doc.nodes[doc.rootNodeId];
@@ -1777,7 +1780,7 @@ export const App: React.FC = () => {
             viewport={radarSnap.vp}
             stageWidth={radarSnap.w}
             stageHeight={radarSnap.h}
-            isObstructedByBottomBar={Boolean(editingNodeId)}
+            isObstructedByBottomBar={Boolean(activeStudioNode)}
             onJumpToWorldPoint={(wx, wy) => {
               setRadarJump((prev) => ({
                 x: wx,
@@ -1788,13 +1791,31 @@ export const App: React.FC = () => {
           />
 
           <KeyboardVisualBar
-            activeNode={activeEditNode}
-            isRootNode={activeEditNode?.id === doc.rootNodeId}
-            isMainBranch={activeEditNode?.parentId === doc.rootNodeId}
+            activeNode={activeStudioNode}
+            isEditingText={Boolean(activeEditNode)}
+            isRootNode={activeStudioNode?.id === doc.rootNodeId}
+            isMainBranch={activeStudioNode?.parentId === doc.rootNodeId}
             defaultNodeStyle={defaultNodeStyle}
             mapContext={mapContext}
             proactiveSuggestions={proactiveSuggestions}
             nodeScreenPos={activeNodeScreenPos}
+            onUpdateNodeTitle={handleUpdateNodeTitle}
+            onRequestEditTitle={() => {
+              if (activeStudioNode) {
+                setEditingNodeId(activeStudioNode.id);
+              }
+            }}
+            onAddChildBranch={(parentId) => {
+              const parent = doc.nodes[parentId];
+              if (!parent) return;
+              const pos = findBestOpenBranchPosition(
+                parent,
+                doc.nodes,
+                doc.rootNodeId
+              );
+              const col = resolveNewBranchColor(parent, doc.nodes, doc.rootNodeId);
+              handleCreateChildBranch(parent.id, pos.x, pos.y, col);
+            }}
             onApplySticker={handleApplySticker}
             onRequestProStickerUnlock={(item) => openPaywall('pro_sticker', item)}
             onApplyProactiveSuggestion={handleApplyProactiveSuggestion}
@@ -1806,7 +1827,7 @@ export const App: React.FC = () => {
             onDeleteNode={handleDeleteNode}
             onOpenGalleryDrawer={() => setStickerDrawerOpen(true)}
             onOpenAIStudio={() =>
-              handleRequestOpenAIStudio(activeEditNode?.title || null)
+              handleRequestOpenAIStudio(activeStudioNode?.title || null)
             }
             onOpenNoteCropper={handleRequestOpenNoteCropper}
             onOpenQuickSketch={() => setSketchPopoverOpen(true)}
@@ -1814,7 +1835,10 @@ export const App: React.FC = () => {
             onOpenSmartSubBranches={() =>
               handleRequestOpenSmartGenerator('proactive_branches', false)
             }
-            onCloseEdit={handleFinishEditing}
+            onCloseEdit={() => {
+              handleFinishEditing();
+              setSelectedNodeId(null);
+            }}
           />
 
           {/* Mobile & Tablet Thumb-Reachable Bottom Quick-Action Pill (When idle) */}
@@ -1827,7 +1851,7 @@ export const App: React.FC = () => {
                 style={{ paddingBottom: 'calc(var(--safe-bottom) + 14px)' }}
               >
                 <div
-                  className="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border px-2 py-1.5 text-xs font-extrabold shadow-lg backdrop-blur-md"
+                  className="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border px-2 py-1.5 text-xs font-extrabold shadow-xl backdrop-blur-xl"
                   style={{
                     backgroundColor: 'var(--hud-bg)',
                     borderColor: 'var(--hud-border)',
@@ -1850,7 +1874,7 @@ export const App: React.FC = () => {
                       );
                       handleCreateChildBranch(root.id, pos.x, pos.y, col);
                     }}
-                    className="inline-flex items-center gap-1 rounded-xl bg-sky-500 px-3 py-1.5 text-white shadow-xs active:scale-95"
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl bg-sky-500 px-3 py-1.5 text-white shadow-xs active:scale-95"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Yeni Dal</span>
@@ -1858,7 +1882,7 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAutoLayout}
-                    className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
                   >
                     <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                     <span>Düzenle</span>
@@ -1866,7 +1890,7 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setFitTrigger((n) => n + 1)}
-                    className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
                   >
                     <Maximize2 className="h-3.5 w-3.5 text-emerald-500" />
                     <span>Merkez</span>
@@ -1874,103 +1898,10 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setCommandPaletteOpen(true)}
-                    className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
                   >
                     <Search className="h-3.5 w-3.5 text-violet-500" />
                     <span>İkon Ara</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-          {/* Selected Node Quick-Edit Pill */}
-          {selectedNodeId &&
-            !editingNodeId &&
-            !linkingFromNodeId &&
-            examMode === 'off' &&
-            doc.nodes[selectedNodeId] && (
-              <div
-                className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-2.5"
-                style={{ paddingBottom: 'calc(var(--safe-bottom) + 14px)' }}
-              >
-                <div
-                  className="no-scrollbar pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border px-2.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur-md"
-                  style={{
-                    backgroundColor: 'var(--hud-bg)',
-                    borderColor: 'var(--hud-border)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setEditingNodeId(selectedNodeId)}
-                    className="shrink-0 rounded-xl bg-sky-500 px-3 py-1 text-white shadow-xs active:scale-95"
-                  >
-                    ✨ Düzenle
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const parent = doc.nodes[selectedNodeId];
-                      if (!parent) return;
-                      const pos = findBestOpenBranchPosition(
-                        parent,
-                        doc.nodes,
-                        doc.rootNodeId
-                      );
-                      const col = resolveNewBranchColor(
-                        parent,
-                        doc.nodes,
-                        doc.rootNodeId
-                      );
-                      handleCreateChildBranch(parent.id, pos.x, pos.y, col);
-                    }}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1 hover:bg-slate-500/10"
-                  >
-                    <Plus className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>Alt Dal</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStickerDrawerOpen(true)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1 hover:bg-slate-500/10"
-                  >
-                    <Search className="h-3.5 w-3.5 text-sky-500" />
-                    <span>+150 Görsel</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLinkingFromNodeId(selectedNodeId)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1 hover:bg-slate-500/10"
-                  >
-                    <Link2 className="h-3.5 w-3.5 text-indigo-500" />
-                    <span>İlişki Çek</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleRequestOpenSmartGenerator(
-                        'proactive_branches',
-                        false
-                      )
-                    }
-                    className="inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1 hover:bg-slate-500/10"
-                  >
-                    <Wand2 className="h-3.5 w-3.5 text-amber-500" />
-                    <span>Öneriler</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRequestOpenNoteCropper}
-                    className="shrink-0 rounded-xl px-2 py-1 hover:bg-slate-500/10"
-                  >
-                    📷 Nottan Kes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSketchPopoverOpen(true)}
-                    className="shrink-0 rounded-xl px-2 py-1 hover:bg-slate-500/10"
-                  >
-                    ✏️ Karala
                   </button>
                 </div>
               </div>

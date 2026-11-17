@@ -24,6 +24,7 @@ import { buildDuotoneVectorStickerDataUri } from '../core/visuals/PureVectorStic
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
+import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface StickerGalleryDrawerProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
   onOpenAIStudio,
 }) => {
   useEntitlements();
+  const kb = useKeyboardInset();
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState<GalleryCategoryFilter>('all');
   const [matchBranchColor, setMatchBranchColor] = useState(true);
@@ -176,13 +178,24 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
+      onClick={onClose}
+    >
       <div
-        className="flex h-[88dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:h-[85dvh] sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          paddingBottom: 'var(--safe-bottom)',
+          height: kb.isKeyboardOpen
+            ? `${Math.max(260, kb.viewportH - 18)}px`
+            : kb.isPhone
+            ? '88dvh'
+            : '85dvh',
+          maxHeight: `${Math.max(260, kb.viewportH - 16)}px`,
+          paddingBottom: kb.isKeyboardOpen ? '4px' : 'var(--safe-bottom)',
         }}
       >
         {/* Header Bar */}
@@ -246,9 +259,9 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Türkçe veya İngilizce kavram arayın (örn. mikroorganizma, çip, ekokardiyografi, istinaf, uçan payanda)..."
-                autoFocus
-                className="allow-text-input w-full rounded-xl border bg-transparent py-2 pr-8 pl-9 text-sm font-semibold outline-none focus:ring-2 focus:ring-sky-500"
+                placeholder="Türkçe veya İngilizce kavram arayın (örn. mikroorganizma, çip, ekokardiyografi)..."
+                autoFocus={!kb.isTouchDevice}
+                className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-8 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
               {query && (

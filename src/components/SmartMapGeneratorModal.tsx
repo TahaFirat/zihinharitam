@@ -16,6 +16,7 @@ import {
 } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
+import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface SmartMapGeneratorModalProps {
   isOpen: boolean;
@@ -259,6 +260,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   onGenerateCompleteMap,
   onAddProactiveBranches,
 }) => {
+  const kb = useKeyboardInset();
   const [tab, setTab] = useState<'text_to_map' | 'proactive_branches'>(initialTab);
   const [outlineText, setOutlineText] = useState('');
   const [deptHint, setDeptHint] = useState<AcademicDepartment>('genel');
@@ -285,13 +287,19 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
+      onClick={onClose}
+    >
       <div
-        className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          paddingBottom: 'var(--safe-bottom)',
+          maxHeight: `${Math.max(280, kb.viewportH - 16)}px`,
+          paddingBottom: kb.isKeyboardOpen ? '4px' : 'var(--safe-bottom)',
         }}
       >
         {/* Header */}
@@ -384,11 +392,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   Konu Başlığı veya Maddeli Ders Özeti Yapıştırın:
                 </label>
                 <textarea
-                  rows={8}
+                  rows={kb.isKeyboardOpen ? 4 : 8}
                   value={outlineText}
                   onChange={(e) => setOutlineText(e.target.value)}
                   placeholder={`Tek bir konu yazabilir (örn: "Dağıtık Sistem Mimarisi" veya "Mitral Kapak Darlığı")\nveya maddeli not yapıştırabilirsiniz:\n\nMerkezi Konu\n- Ana Dal 1 [Teknik Rozet]\n  - Alt Kavram A\n  - Alt Kavram B`}
-                  className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-xs leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
+                  className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
                   style={{ borderColor: 'var(--hud-border)' }}
                 />
               </div>

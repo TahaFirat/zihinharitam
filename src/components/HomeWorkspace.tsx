@@ -255,7 +255,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Harita adı veya içindeki konuyu ara..."
-                className="allow-text-input min-h-[42px] w-full rounded-2xl border bg-slate-500/5 py-2 pr-8 pl-9 text-xs font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-[13px]"
+                className="allow-text-input min-h-[44px] w-full rounded-2xl border bg-slate-500/5 py-2 pr-8 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
               {searchQuery && (
@@ -430,12 +430,16 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   type="button"
                   onClick={() => onCreateFromTemplate(tpl.id)}
                   data-testid={`template-card-${tpl.id}`}
-                  className="flex min-h-[108px] w-56 shrink-0 flex-col justify-between rounded-2xl border p-4 text-left transition hover:border-sky-500/45 hover:shadow-sm active:scale-[0.98]"
+                  className="relative flex min-h-[112px] w-56 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border p-4 text-left shadow-2xs transition hover:-translate-y-0.5 hover:border-sky-500/45 hover:shadow-md active:scale-[0.98]"
                   style={{
                     backgroundColor: 'var(--hud-bg)',
                     borderColor: 'var(--hud-border)',
                   }}
                 >
+                  <span
+                    className="absolute inset-x-0 top-0 h-1 opacity-90"
+                    style={{ backgroundColor: tpl.accentColor }}
+                  />
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-extrabold">{tpl.badge}</span>
                     <span
@@ -808,7 +812,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               placeholder="Örn: Kardiyoloji Semiyolojisi, Mikroservis Mimarisi..."
               autoFocus
               data-testid="new-map-title-input"
-              className="allow-text-input mt-1.5 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500"
+              className="allow-text-input mt-1.5 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-base font-bold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
               style={{ borderColor: 'var(--hud-border)' }}
             />
 

@@ -184,7 +184,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
               }
             }}
             autoFocus
-            className="allow-text-input w-28 rounded-lg bg-sky-500/10 px-2 py-0.5 text-xs font-bold outline-none ring-1 ring-sky-500 sm:w-48 sm:text-sm"
+            className="allow-text-input w-32 rounded-lg bg-sky-500/10 px-2 py-0.5 text-base font-bold outline-none ring-1 ring-sky-500 sm:w-48 sm:text-sm"
           />
         ) : (
           <button
@@ -244,23 +244,23 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           type="button"
           onClick={onOpenCommandPalette}
           title="Hızlı Dal & 25.000+ İkon Arama Paleti (Ctrl+K)"
-          className="flex h-8 items-center gap-1.5 rounded-xl bg-slate-500/10 px-2 text-xs font-extrabold hover:bg-sky-500/15 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
+          className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-500/10 px-2.5 text-xs font-extrabold hover:bg-sky-500/15 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
         >
-          <Search className="h-3.5 w-3.5" />
+          <Search className="h-4 w-4" />
           <span className="hidden lg:inline">Ara</span>
           <kbd className="hidden rounded bg-slate-500/15 px-1 py-0.5 font-mono text-[10px] opacity-75 xl:inline">
             ⌘K
           </kbd>
         </button>
 
-        {/* Desktop Undo/Redo */}
+        {/* Desktop & iPad Undo/Redo */}
         <div className="hidden items-center gap-0.5 md:flex">
           <button
             type="button"
             onClick={onUndo}
             disabled={!canUndo}
             title="Geri Al (Ctrl+Z)"
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
+            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
           >
             <Undo2 className="h-4 w-4" />
           </button>
@@ -269,7 +269,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
             onClick={onRedo}
             disabled={!canRedo}
             title="Yinele (Ctrl+Y)"
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
+            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
           >
             <Redo2 className="h-4 w-4" />
           </button>
@@ -611,7 +611,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           onClick={onOpenSettings}
           data-testid="hud-settings-btn"
           title="Ayarlar, Yedekleme & Lisans"
-          className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10 active:scale-95"
+          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 active:scale-95"
         >
           <Settings className="h-4 w-4" />
         </button>
@@ -621,7 +621,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           type="button"
           onClick={onOpenExport}
           title="300 DPI PDF / PNG / SVG Çıktı ve Canlı Paylaşım"
-          className="flex h-8 items-center gap-1.5 rounded-xl bg-slate-900 px-2.5 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 dark:bg-sky-500 dark:text-slate-950"
+          className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 dark:bg-sky-500 dark:text-slate-950"
         >
           <Share2 className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Paylaş</span>

@@ -35,6 +35,7 @@ import {
 } from '../core/canvas/RadialAutoLayout';
 import { resolveStarterStickerForConcept } from '../data/academicTemplates';
 import { hapticLight, hapticMedium, hapticSuccess } from '../core/native/NativeBridge';
+import { getViewportKeyboardSnapshot } from '../core/native/useKeyboardInset';
 
 interface CanvasStageProps {
   nodes: Record<string, MindNode>;
@@ -499,8 +500,9 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   }, [radarJumpRequest, stageSize.w, stageSize.h]);
 
   useEffect(() => {
-    if (!editingNodeId) return;
-    const node = nodes[editingNodeId];
+    const activeTargetId = editingNodeId ?? selectedNodeId;
+    if (!activeTargetId) return;
+    const node = nodes[activeTargetId];
     if (!node) return;
 
     const centerAboveKeyboard = () => {
@@ -508,22 +510,33 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       if (window.scrollY !== 0 || window.scrollX !== 0) {
         window.scrollTo(0, 0);
       }
-      const vv = window.visualViewport;
-      const availW = vv ? vv.width : window.innerWidth;
-      const availH = vv ? vv.height : window.innerHeight;
-      const isCompact = window.innerWidth < 768 || window.innerHeight - availH > 85;
+      const snap = getViewportKeyboardSnapshot();
+      const availW = snap.viewportW || window.innerWidth;
+      const availH = snap.visibleBottomY || window.innerHeight;
+      const barH = snap.studioBarHeight || 220;
+      const isCompactOrKeyboard =
+        snap.isPhone || snap.isTablet || snap.isKeyboardOpen || snap.isTouchDevice;
 
       const curScale = viewportRef.current.getTransform().scale;
       const desiredScale =
-        curScale < 0.72 ? 0.88 : curScale > 1.55 ? 1.25 : curScale;
+        editingNodeId && curScale < 0.78
+          ? 0.92
+          : curScale < 0.65
+          ? 0.85
+          : curScale > 1.55
+          ? 1.25
+          : curScale;
 
-      if (isCompact) {
-        const usableCenterY = Math.max(120, (availH - 184) * 0.46);
+      if (isCompactOrKeyboard) {
+        // Compute exact unobstructed middle between TopMinimalHUD (~72px) and Studio Dock + Keyboard
+        const topSafe = 72;
+        const bottomEdge = Math.max(topSafe + 90, availH - barH - 12);
+        const usableCenterY = Math.round((topSafe + bottomEdge) * 0.52);
         const endX = availW * 0.5 - node.x * desiredScale;
         const endY = usableCenterY - node.y * desiredScale;
         viewportRef.current.animateTo(
           { x: endX, y: endY, scale: desiredScale },
-          260
+          240
         );
         needsRedrawRef.current = true;
       } else {
@@ -532,7 +545,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
           sp.x < 140 ||
           sp.x > availW - 140 ||
           sp.y < 110 ||
-          sp.y > availH - 250
+          sp.y > availH - barH - 40
         ) {
           viewportRef.current.centerWorldPoint(
             node.x,
@@ -540,7 +553,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             availW,
             availH,
             desiredScale,
-            280
+            260
           );
           needsRedrawRef.current = true;
         } else {
@@ -555,18 +568,20 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       }
     };
 
-    centerAboveKeyboard();
+    // Slight delay allows ResizeObserver in KeyboardVisualBar to report accurate dock height
+    const initTimer = window.setTimeout(centerAboveKeyboard, 30);
     const vv = window.visualViewport;
     vv?.addEventListener('resize', centerAboveKeyboard);
     vv?.addEventListener('scroll', lockWindowScroll);
     window.addEventListener('scroll', lockWindowScroll);
     return () => {
+      window.clearTimeout(initTimer);
       vv?.removeEventListener('resize', centerAboveKeyboard);
       vv?.removeEventListener('scroll', lockWindowScroll);
       window.removeEventListener('scroll', lockWindowScroll);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingNodeId]);
+  }, [editingNodeId, selectedNodeId]);
 
   useEffect(() => {
     needsRedrawRef.current = true;
@@ -1405,7 +1420,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                       ? `0 0 0 2px ${node.branchColor}66, 0 6px 16px rgba(15,23,42,0.10)`
                       : 'none',
                   }}
-                  className={`relative flex min-w-[104px] max-w-[280px] flex-col items-center rounded-2xl px-3 py-1.5 text-center ${
+                  className={`relative flex min-w-[116px] max-w-[304px] flex-col items-center rounded-2xl px-3.5 py-1.5 text-center ${
                     linkingFromNodeId && !isLinkSource
                       ? 'hover:ring-2 hover:ring-violet-500'
                       : ''
@@ -1511,10 +1526,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                       ? `0 0 0 2.5px ${node.branchColor}55, 0 8px 20px -4px rgba(15,23,42,0.14)`
                       : '0 4px 14px rgba(15, 23, 42, 0.08)',
                   }}
-                  className={`animate-card-reveal relative flex flex-col items-center rounded-2xl border-2 px-3.5 py-2 text-center backdrop-blur-md ${
+                  className={`animate-card-reveal relative flex flex-col items-center rounded-2xl border-2 px-4 py-2 text-center backdrop-blur-md ${
                     isRoot
-                      ? 'min-w-[170px] max-w-[295px] px-5 py-2.5'
-                      : 'min-w-[114px] max-w-[280px]'
+                      ? 'min-w-[180px] max-w-[310px] px-5 py-2.5'
+                      : 'min-w-[122px] max-w-[304px]'
                   } ${
                     linkingFromNodeId && !isLinkSource
                       ? 'hover:ring-2 hover:ring-violet-500'
@@ -1554,10 +1569,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                         e.currentTarget.select();
                       }}
                       placeholder="Dal adını yazın..."
-                      className={`allow-text-input w-full min-w-[130px] bg-transparent text-center font-extrabold outline-none ${
-                        isRoot ? 'text-base sm:text-lg' : 'text-sm'
+                      className={`allow-text-input max-w-full min-w-[136px] bg-transparent text-center font-extrabold outline-none ${
+                        isRoot ? 'text-base sm:text-lg' : 'text-base sm:text-sm'
                       }`}
-                      style={{ color: 'var(--node-text)' }}
+                      style={{
+                        color: 'var(--node-text)',
+                        width: `${Math.min(28, Math.max(13, (node.title || '').length + 2))}ch`,
+                      }}
                     />
                   ) : (
                     <div

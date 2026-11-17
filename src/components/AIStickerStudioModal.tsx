@@ -28,6 +28,7 @@ import {
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
+import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface AIStickerStudioModalProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
   onClose,
   onApplySticker,
 }) => {
+  const kb = useKeyboardInset();
   const [conceptText, setConceptText] = useState(initialConcept);
   const [artStyle, setArtStyle] = useState<AIArtStyle>('hand_drawn');
   const [seedBase, setSeedBase] = useState<number>(() => Math.floor(Math.random() * 9000) + 100);
@@ -178,13 +180,19 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
+      onClick={onClose}
+    >
       <div
-        className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          paddingBottom: 'var(--safe-bottom)',
+          maxHeight: `${Math.max(280, kb.viewportH - 16)}px`,
+          paddingBottom: kb.isKeyboardOpen ? '4px' : 'var(--safe-bottom)',
         }}
       >
         {/* Header */}
@@ -315,7 +323,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
               value={conceptText}
               onChange={(e) => setConceptText(e.target.value)}
               placeholder="Çizilecek kavramı yazın (örn. Yük Dengeleyici, Mitral Kapak, İstinaf...)"
-              className="allow-text-input flex-1 rounded-xl border bg-transparent px-3.5 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-violet-500"
+              className="allow-text-input min-h-[42px] flex-1 rounded-xl border bg-transparent px-3.5 py-2 text-base font-bold outline-none focus:ring-2 focus:ring-violet-500 sm:text-sm"
               style={{ borderColor: 'var(--hud-border)' }}
             />
             <button

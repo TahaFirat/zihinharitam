@@ -24,6 +24,7 @@ import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligenc
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { normalizeTrToken } from '../core/visuals/SemanticTaxonomyTR';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
+import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   onToggleDefaultNodeStyle,
 }) => {
   useEntitlements();
+  const kb = useKeyboardInset();
   const [query, setQuery] = useState('');
   const [offlineHits, setOfflineHits] = useState<VisualSearchResult[]>([]);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
@@ -76,9 +78,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     if (isOpen) {
       setQuery('');
       setCreateAsNewBranch(false);
-      setTimeout(() => inputRef.current?.focus(), 20);
+      if (!kb.isTouchDevice) {
+        setTimeout(() => inputRef.current?.focus(), 20);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, kb.isTouchDevice]);
 
   const matchingNodes = useMemo(() => {
     const all = Object.values(nodes);
@@ -145,14 +149,19 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/55 px-3 pt-12 backdrop-blur-xs sm:pt-20"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/55 px-3 pt-10 backdrop-blur-xs sm:pt-18"
+      style={{
+        paddingTop: 'max(16px, calc(var(--safe-top) + 12px))',
+        paddingBottom: `${kb.keyboardHeight + 12}px`,
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
+        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
+          maxHeight: `${Math.max(240, kb.viewportH - 36)}px`,
         }}
       >
         {/* Top Command Search Input */}
@@ -179,8 +188,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                 }
               }
             }}
-            placeholder="Dala atla veya 25.000+ çevrimdışı ikondan ara (örn. mikroorganizma, çip, ekokardiyografi)..."
-            className="allow-text-input min-w-0 flex-1 bg-transparent text-sm font-bold outline-none sm:text-base"
+            placeholder="Dala atla veya 25.000+ çevrimdışı ikondan ara..."
+            className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-bold outline-none sm:text-base"
           />
           {elapsedMs !== null && (
             <span className="hidden shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10.5px] font-extrabold text-emerald-700 sm:inline-flex dark:text-emerald-300">

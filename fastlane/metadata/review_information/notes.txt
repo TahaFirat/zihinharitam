@@ -1,9 +1,9 @@
 Dear Apple App Review Team,
 
-Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA build: Version 1.0.0 (Build 7), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
+Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA build: Version 1.0.0 (Build 8), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
 
-1. Physical Device Testing & Scope (TestFlight Builds 1–7):
-- Tested via TestFlight on physical iPhone hardware (iPhone 12, latest iOS) across Builds 1–7 verifying safe-area margins, 60 FPS canvas navigation, StoreKit 2 Sandbox flows, and crash-free offline execution. Build 7 unifies support contact (tafifirat@gmail.com) and StoreKit currency fallback.
+1. Physical Device Testing & Scope (TestFlight Builds 1–8):
+- Tested via TestFlight on physical iPhone hardware (iPhone 12, latest iOS) across Builds 1–8 verifying keyboard-above sticker/title dock positioning, safe-area margins, 60 FPS canvas navigation, StoreKit 2 Sandbox flows, and crash-free offline execution. Build 8 adds native UIKit keyboard inset docking for effortless mobile/iPad icon & title editing.
 - Confirmations:
   * Account login/deletion: NONE (no sign-in; stored locally on-device in IndexedDB).
   * User-generated content: NONE (no public feed, social sharing, or chat).
