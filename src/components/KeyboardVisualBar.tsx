@@ -166,9 +166,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
   const activeBranchColor = activeNode?.branchColor ?? '#0EA5E9';
 
   useEffect(() => {
-    setShowTechBadgeInput(Boolean(activeNode?.techBadge));
+    setShowTechBadgeInput(false);
     setBrokenIds(new Set());
-  }, [activeNode?.id, activeNode?.techBadge]);
+  }, [activeNode?.id]);
 
   // V3 Search Pipeline: 0ms Built-In Atlas -> 16ms Offline 25,209-icon Shard Search -> 185ms Online Enrichment
   useEffect(() => {
@@ -269,6 +269,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
 
   // Compact vertical layout if small phone landscape has keyboard open
   const isTightAboveKeyboard = kb.isKeyboardOpen && kb.viewportH < 360;
+  // Ultra-slim 2-line keyboard-accessory mode (~94px) on phone/tablet while OS keyboard is visible
+  const isSlimKeyboardMode = kb.isKeyboardOpen && (kb.isPhone || kb.isTablet);
 
   const handleSelectVisual = async (item: VisualSearchResult, idx: number) => {
     const isFree = EntitlementManager.isStickerFree(item, idx, 'keyboard_bar');
@@ -311,7 +313,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
       bottom: `${kb.keyboardHeight}px`,
       width: '100vw',
       maxWidth: '100vw',
-      maxHeight: `${Math.max(185, kb.viewportH - 64)}px`,
+      maxHeight: `${
+        isSlimKeyboardMode
+          ? Math.min(126, Math.max(94, kb.viewportH - 56))
+          : Math.min(315, Math.max(200, kb.viewportH - 64))
+      }px`,
       transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
   } else if (useCenteredTabletDock) {
@@ -324,7 +330,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
       bottom: `${bottomGap}px`,
       width: `${cardWidth}px`,
       maxWidth: 'calc(100vw - 24px)',
-      maxHeight: `${Math.max(210, kb.viewportH - 72)}px`,
+      maxHeight: `${
+        isSlimKeyboardMode
+          ? Math.min(132, Math.max(98, kb.viewportH - 64))
+          : Math.min(325, Math.max(210, kb.viewportH - 72))
+      }px`,
       transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
   } else {
@@ -379,41 +389,52 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
     >
       <div
         className={`flex max-h-full w-full flex-col overflow-hidden border shadow-2xl backdrop-blur-xl ${
-          useFullWidthBottomSheet
-            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-1.5'
-            : 'rounded-3xl px-3.5 py-2.5'
+          isSlimKeyboardMode
+            ? useFullWidthBottomSheet
+              ? 'rounded-t-2xl border-x-0 border-b-0 px-2.5 pt-1.5'
+              : 'rounded-2xl px-3 py-1.5'
+            : useFullWidthBottomSheet
+            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-1'
+            : 'rounded-3xl px-3.5 py-2'
         }`}
         style={{
           backgroundColor: 'var(--hud-bg)',
           borderColor: 'var(--hud-border)',
-          paddingBottom:
-            useFullWidthBottomSheet && !kb.isKeyboardOpen
-              ? 'max(10px, var(--safe-bottom))'
-              : useFullWidthBottomSheet
-              ? '8px'
-              : undefined,
+          paddingBottom: isSlimKeyboardMode
+            ? '6px'
+            : useFullWidthBottomSheet && !kb.isKeyboardOpen
+            ? 'max(8px, var(--safe-bottom))'
+            : useFullWidthBottomSheet
+            ? '8px'
+            : undefined,
         }}
       >
-        {/* Top Swipe Handle */}
-        {useFullWidthBottomSheet && (
+        {/* Top Swipe Handle (hidden during active mobile keyboard to maximize canvas space) */}
+        {useFullWidthBottomSheet && !isSlimKeyboardMode && (
           <button
             type="button"
             onClick={onOpenGalleryDrawer}
             title="Tam 25K Görsel Galerisi İçin Yukarı Kaydırın"
-            className="mx-auto mb-1.5 flex w-full items-center justify-center py-0.5"
+            className="mx-auto mb-1 flex w-full items-center justify-center py-0.5"
           >
-            <span className="h-1 w-11 rounded-full bg-slate-400/45" />
+            <span className="h-1 w-10 rounded-full bg-slate-400/45" />
           </button>
         )}
 
-        {/* ROW 0: Synced Node Title Input + Add Child + Keyboard Toggle + Done */}
-        <div className="mb-2 flex items-center gap-1.5">
+        {/* ROW 0: Synced Node Title Input + Quick Actions + Done */}
+        <div
+          className={`flex items-center gap-1.5 ${
+            isSlimKeyboardMode ? 'mb-1' : 'mb-1.5'
+          }`}
+        >
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border bg-white/75 px-2.5 py-1.5 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/75"
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-2xl border bg-white/75 px-2.5 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/75 ${
+              isSlimKeyboardMode ? 'h-9 py-1' : 'h-10 py-1'
+            }`}
             style={{ borderColor: 'var(--hud-border)' }}
           >
             <span
-              className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white/80 dark:ring-slate-900"
+              className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white/80 dark:ring-slate-900"
               style={{ backgroundColor: activeBranchColor }}
             />
             <input
@@ -432,7 +453,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                   onCloseEdit();
                 }
               }}
-              placeholder="Dal başlığını yazın veya aşağıdan ikon seçin..."
+              placeholder={
+                isSlimKeyboardMode
+                  ? 'Dal başlığı yazın...'
+                  : 'Dal başlığını yazın veya aşağıdan ikon seçin...'
+              }
               className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-extrabold outline-none sm:text-sm"
               style={{ color: 'var(--node-text)' }}
               data-testid="studio-title-input"
@@ -461,11 +486,38 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
               onAddChildBranch(activeNode.id);
             }}
             title="Bu dala yeni alt dal ekle"
-            className="inline-flex h-10 shrink-0 items-center gap-1 rounded-2xl border border-emerald-500/35 bg-emerald-500/12 px-2.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-300"
+            className={`inline-flex shrink-0 items-center gap-1 rounded-2xl border border-emerald-500/35 bg-emerald-500/12 font-extrabold text-emerald-700 hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-300 ${
+              isSlimKeyboardMode ? 'h-9 px-2 text-[11px]' : 'h-10 px-2.5 text-xs'
+            }`}
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden xs:inline sm:inline">Alt Dal</span>
+            {!isSlimKeyboardMode && (
+              <span className="hidden xs:inline sm:inline">Alt Dal</span>
+            )}
           </button>
+
+          {isSlimKeyboardMode && (
+            <>
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={onOpenGalleryDrawer}
+                title="25.000+ Görsel Galerisi"
+                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-2xl border border-sky-500/40 bg-sky-500/15 px-2 text-[11px] font-extrabold text-sky-700 active:scale-95 dark:text-sky-300"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={onOpenAIStudio}
+                title="AI Çiz"
+                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2 text-[11px] font-extrabold text-white active:scale-95"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
 
           {kb.isTouchDevice && (
             <button
@@ -480,8 +532,14 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                   setTimeout(() => titleInputRef.current?.focus(), 30);
                 }
               }}
-              title={kb.isKeyboardOpen ? 'Klavyeyi Gizle (Görsellere Odaklan)' : 'Metni Düzenle (Klavye Aç)'}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border active:scale-95 ${
+              title={
+                kb.isKeyboardOpen
+                  ? 'Klavyeyi Gizle (Görsellere ve Araçlara Geç)'
+                  : 'Metni Düzenle (Klavye Aç)'
+              }
+              className={`flex shrink-0 items-center justify-center rounded-2xl border active:scale-95 ${
+                isSlimKeyboardMode ? 'h-9 w-9' : 'h-10 w-10'
+              } ${
                 kb.isKeyboardOpen
                   ? 'border-sky-500/40 bg-sky-500/15 text-sky-600 dark:text-sky-300'
                   : 'hover:bg-slate-500/10'
@@ -500,7 +558,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
             }}
             title="Tamamlandı"
             data-testid="studio-done-btn"
-            className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-2xl bg-emerald-500 px-3 text-xs font-extrabold text-white shadow-xs active:scale-95"
+            className={`flex shrink-0 items-center justify-center gap-1 rounded-2xl bg-emerald-500 font-extrabold text-white shadow-xs active:scale-95 ${
+              isSlimKeyboardMode ? 'h-9 px-2.5 text-[11px]' : 'h-10 px-3 text-xs'
+            }`}
           >
             <Check className="h-4 w-4" />
             <span className="hidden sm:inline">Tamam</span>
@@ -508,7 +568,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
         </div>
 
         {/* Proactive Sub-Branch Quick Chips on newly created empty nodes */}
-        {!isTightAboveKeyboard &&
+        {!isSlimKeyboardMode &&
+          !isTightAboveKeyboard &&
           isFreshEmptyBranch &&
           proactiveSuggestions.length > 0 && (
             <div className="no-scrollbar mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
@@ -539,7 +600,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
           )}
 
         {/* Optional Inline Tech Badge Input */}
-        {showTechBadgeInput && !isFreshEmptyBranch && (
+        {!isSlimKeyboardMode && showTechBadgeInput && !isFreshEmptyBranch && (
           <div className="mb-1.5 flex items-center gap-2">
             <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-sky-500/15 px-2 py-1 text-[10.5px] font-extrabold text-sky-700 dark:text-sky-300">
               <Tag className="h-3 w-3" /> Rozet:
@@ -555,8 +616,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
           </div>
         )}
 
-        {/* ROW 1: Style Mode Tabs + Always-Visible Creation Tools (Horizontal Scrollable on narrow phones, Clean Row on iPad/Desktop) */}
-        <div className="no-scrollbar mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        {/* ROW 1: Style Mode Tabs + Always-Visible Creation Tools (hidden while OS keyboard open so screen stays clear) */}
+        {!isSlimKeyboardMode && (
+          <div className="no-scrollbar mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
           {/* Style Tabs */}
           <div className="flex shrink-0 items-center gap-0.5 rounded-xl bg-slate-500/10 p-0.5">
             {STYLE_TABS.map((tab) => {
@@ -626,6 +688,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
             <span>Karala</span>
           </button>
         </div>
+        )}
 
         {/* ROW 2: Live Horizontal Sticker Carousel (Prominent, Crisp, Never Obstructed) */}
         <div className="relative flex items-center">
@@ -650,11 +713,37 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                 e.currentTarget.scrollLeft += e.deltaY;
               }
             }}
-            className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto py-0.5"
+            className={`no-scrollbar flex w-full items-center overflow-x-auto ${
+              isSlimKeyboardMode ? 'gap-1.5 py-0' : 'gap-2 py-0.5'
+            }`}
             style={{ touchAction: 'pan-x' }}
           >
+            {isSlimKeyboardMode &&
+              isFreshEmptyBranch &&
+              proactiveSuggestions.length > 0 &&
+              searchQuery.trim().length === 0 &&
+              proactiveSuggestions.slice(0, 3).map((sug) => (
+                <button
+                  key={sug.id}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    void hapticSuccess();
+                    onApplyProactiveSuggestion(activeNode.id, sug);
+                  }}
+                  className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-xl border border-violet-500/35 bg-violet-500/10 px-2.5 text-[11px] font-extrabold whitespace-nowrap active:scale-95"
+                >
+                  <img
+                    src={sug.sticker.url}
+                    alt=""
+                    className="h-6 w-6 object-contain"
+                  />
+                  <span>{sug.title}</span>
+                </button>
+              ))}
+
             {filteredCarousel.length === 0 && searchQuery.trim().length > 0 ? (
-              <div className="flex h-17 w-full items-center justify-between gap-2 rounded-2xl border border-dashed px-3 py-2 text-xs">
+              <div className="flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-dashed px-3 py-1.5 text-xs">
                 <span className="truncate opacity-75">
                   “<strong>{searchQuery}</strong>” için hazır ikon bulunamadı.
                 </span>
@@ -696,10 +785,12 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                     onPointerDown={(e) => e.preventDefault()}
                     onClick={() => void handleSelectVisual(item, idx)}
                     title={`${item.title} (${item.providerName})${isProLocked ? ' • PRO' : ''}`}
-                    className={`group relative flex shrink-0 flex-col items-center justify-center overflow-hidden rounded-2xl border p-1.5 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                      isTightAboveKeyboard
-                        ? 'h-14 w-14'
-                        : 'h-[66px] w-[66px] sm:h-[74px] sm:w-[74px]'
+                    className={`group relative flex shrink-0 flex-col items-center justify-center overflow-hidden border transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                      isSlimKeyboardMode
+                        ? 'h-12 w-12 rounded-xl p-1'
+                        : isTightAboveKeyboard
+                        ? 'h-14 w-14 rounded-2xl p-1.5'
+                        : 'h-[58px] w-[58px] rounded-2xl p-1.5 sm:h-[68px] sm:w-[68px]'
                     } ${
                       isSelected
                         ? 'border-sky-500 bg-sky-500/12 ring-2 ring-sky-500/45'
@@ -717,7 +808,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                         setBrokenIds((prev) => new Set(prev).add(item.id));
                       }}
                       className={`${
-                        isTightAboveKeyboard ? 'h-10 w-10' : 'h-12 w-12 sm:h-13 sm:w-13'
+                        isSlimKeyboardMode
+                          ? 'h-9 w-9'
+                          : isTightAboveKeyboard
+                          ? 'h-10 w-10'
+                          : 'h-11 w-11 sm:h-12 sm:w-12'
                       } object-contain group-hover:scale-106`}
                     />
                     {isProLocked && (
@@ -759,8 +854,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
           )}
         </div>
 
-        {/* ROW 3: Accessible Size / Style / Branch Colors / Link / Delete Strip (Never hidden on mobile!) */}
-        {!isTightAboveKeyboard && (
+        {/* ROW 3: Accessible Size / Style / Branch Colors / Link / Delete Strip (hidden while OS keyboard is open) */}
+        {!isSlimKeyboardMode && !isTightAboveKeyboard && (
           <div
             className="no-scrollbar mt-1.5 flex items-center justify-between gap-2 overflow-x-auto border-t pt-1.5 text-[11px]"
             style={{ borderColor: 'var(--hud-border)' }}

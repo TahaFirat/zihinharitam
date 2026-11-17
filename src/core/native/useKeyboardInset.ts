@@ -42,10 +42,11 @@ function computeSnapshot(): ViewportKeyboardState {
   const vvKbHeight = Math.max(0, winH - vvBottomY);
 
   const effectiveKbHeight = Math.max(nativeKeyboardHeight, vvKbHeight);
-  const isKeyboardOpen = effectiveKbHeight > 85;
+  const isKeyboardOpen = effectiveKbHeight > 120;
+  const keyboardOffsetBottom = effectiveKbHeight > 40 ? effectiveKbHeight : 0;
   const visibleBottomY = Math.max(
     180,
-    isKeyboardOpen
+    keyboardOffsetBottom > 0
       ? Math.min(winH - nativeKeyboardHeight, vvBottomY)
       : winH
   );
@@ -57,7 +58,7 @@ function computeSnapshot(): ViewportKeyboardState {
     viewportW: vv ? Math.round(vv.width) : winW,
     viewportH: visibleBottomY,
     visibleBottomY,
-    keyboardHeight: isKeyboardOpen ? effectiveKbHeight : 0,
+    keyboardHeight: keyboardOffsetBottom,
     isKeyboardOpen,
     isPhone,
     isTablet,

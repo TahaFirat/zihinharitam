@@ -19,6 +19,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     private let keychainService = "com.tahafirat.zihinharitam.entitlements"
     private let keychainAccount = "pro_lifetime_unlock"
     private var updatesTask: Task<Void, Never>?
+    private var cachedProducts: [String: Product] = [:]
 
     override public func load() {
         updatesTask = Task.detached { [weak self] in
@@ -32,17 +33,42 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
+        // Best-effort prefetch of lifetime IAP product metadata on launch
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.fetchProductsWithRetry(ids: [self.lifetimeProductId], allowSyncRetry: false)
+        }
     }
 
     deinit {
         updatesTask?.cancel()
     }
 
+    private func fetchProductsWithRetry(ids: [String], allowSyncRetry: Bool = true) async throws -> [Product] {
+        let initial = try await Product.products(for: Set(ids))
+        for p in initial {
+            cachedProducts[p.id] = p
+        }
+        if !initial.isEmpty || !allowSyncRetry {
+            return initial
+        }
+
+        // Sandbox/TestFlight sessions occasionally return empty before AppStore sync warms up
+        try? await AppStore.sync()
+        try? await Task.sleep(nanoseconds: 350_000_000)
+
+        let retried = try await Product.products(for: Set(ids))
+        for p in retried {
+            cachedProducts[p.id] = p
+        }
+        return retried
+    }
+
     @objc func getProducts(_ call: CAPPluginCall) {
         let ids = call.getArray("productIds", String.self) ?? [lifetimeProductId]
         Task {
             do {
-                let products = try await Product.products(for: Set(ids))
+                let products = try await fetchProductsWithRetry(ids: ids)
                 let mapped = products.map { p in
                     return [
                         "id": p.id,
@@ -66,9 +92,13 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         Task {
             do {
-                let products = try await Product.products(for: [productId])
-                guard let product = products.first else {
-                    call.reject("Urun App Store'da bulunamadi: \(productId)")
+                var product = cachedProducts[productId]
+                if product == nil {
+                    let products = try await fetchProductsWithRetry(ids: [productId])
+                    product = products.first
+                }
+                guard let product = product else {
+                    call.reject("App Store urunu (\(productId)) su anda Apple sunucularindan alinamadi. TestFlight/inceleme asamasinda App Store Connect -> Isletme (Ucretli Uygulamalar Sozlesmesi / Vergi ve Banka onayi) tamamlanip aktif olana kadar satin alma test urunu donmeyebilir.")
                     return
                 }
                 let result = try await product.purchase()

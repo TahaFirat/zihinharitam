@@ -35,7 +35,7 @@ import {
 } from '../core/canvas/RadialAutoLayout';
 import { resolveStarterStickerForConcept } from '../data/academicTemplates';
 import { hapticLight, hapticMedium, hapticSuccess } from '../core/native/NativeBridge';
-import { getViewportKeyboardSnapshot } from '../core/native/useKeyboardInset';
+import { getViewportKeyboardSnapshot, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface CanvasStageProps {
   nodes: Record<string, MindNode>;
@@ -265,6 +265,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   } | null>(null);
   const lastTapRef = useRef<{ nodeId: string; time: number } | null>(null);
   const penActiveRef = useRef<boolean>(false);
+  const kbSnap = useKeyboardInset();
 
   const setInteractingAttr = useCallback((active: boolean) => {
     isInteractingRef.current = active;
@@ -272,6 +273,19 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       containerRef.current.dataset.interacting = active ? 'true' : 'false';
     }
   }, []);
+
+  // Hard reset for any iOS WKWebView orphaned pointers/captures (prevents pan lock after branch add/focus steal)
+  const resetAllGestureStates = useCallback(() => {
+    activeTouchesRef.current.clear();
+    pinchStateRef.current = null;
+    panStateRef.current = null;
+    nodeDragRef.current = null;
+    branchDragRef.current = null;
+    dragPreviewRef.current = null;
+    penActiveRef.current = false;
+    setActiveDragIds([]);
+    setInteractingAttr(false);
+  }, [setInteractingAttr]);
 
   // Shared ResizeObserver measuring real rendered widths/heights of node cards (fixes long Turkish word branch anchors)
   useEffect(() => {
@@ -532,13 +546,20 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         const topSafe = 72;
         const bottomEdge = Math.max(topSafe + 90, availH - barH - 12);
         const usableCenterY = Math.round((topSafe + bottomEdge) * 0.52);
+        const curT = viewportRef.current.getTransform();
         const endX = availW * 0.5 - node.x * desiredScale;
         const endY = usableCenterY - node.y * desiredScale;
-        viewportRef.current.animateTo(
-          { x: endX, y: endY, scale: desiredScale },
-          240
-        );
-        needsRedrawRef.current = true;
+        if (
+          Math.abs(curT.x - endX) > 4 ||
+          Math.abs(curT.y - endY) > 4 ||
+          Math.abs(curT.scale - desiredScale) > 0.015
+        ) {
+          viewportRef.current.animateTo(
+            { x: endX, y: endY, scale: desiredScale },
+            220
+          );
+          needsRedrawRef.current = true;
+        }
       } else {
         const sp = viewportRef.current.worldToScreen(node.x, node.y);
         if (
@@ -568,15 +589,24 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       }
     };
 
+    let lastObservedKbHeight = getViewportKeyboardSnapshot().keyboardHeight;
+    const handleViewportResize = () => {
+      const nextKbHeight = getViewportKeyboardSnapshot().keyboardHeight;
+      if (Math.abs(nextKbHeight - lastObservedKbHeight) > 20) {
+        lastObservedKbHeight = nextKbHeight;
+        centerAboveKeyboard();
+      }
+    };
+
     // Slight delay allows ResizeObserver in KeyboardVisualBar to report accurate dock height
-    const initTimer = window.setTimeout(centerAboveKeyboard, 30);
+    const initTimer = window.setTimeout(centerAboveKeyboard, 35);
     const vv = window.visualViewport;
-    vv?.addEventListener('resize', centerAboveKeyboard);
+    vv?.addEventListener('resize', handleViewportResize);
     vv?.addEventListener('scroll', lockWindowScroll);
     window.addEventListener('scroll', lockWindowScroll);
     return () => {
       window.clearTimeout(initTimer);
-      vv?.removeEventListener('resize', centerAboveKeyboard);
+      vv?.removeEventListener('resize', handleViewportResize);
       vv?.removeEventListener('scroll', lockWindowScroll);
       window.removeEventListener('scroll', lockWindowScroll);
     };
@@ -714,8 +744,44 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     };
 
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
+
+    // Authoritative iOS/iPadOS physical touch count sync: clears any ghost pointers dropped during <input>/modal focus shifts
+    const onNativeTouchStart = (ev: TouchEvent) => {
+      if (ev.touches.length === 1 && activeTouchesRef.current.size > 0) {
+        activeTouchesRef.current.clear();
+        pinchStateRef.current = null;
+        if (!branchDragRef.current && !nodeDragRef.current) {
+          panStateRef.current = null;
+        }
+        penActiveRef.current = false;
+      }
+    };
+    const onNativeTouchEndOrCancel = (ev: TouchEvent) => {
+      if (ev.touches.length === 0) {
+        window.setTimeout(() => {
+          if (activeTouchesRef.current.size > 0 && !nodeDragRef.current && !branchDragRef.current && !panStateRef.current) {
+            resetAllGestureStates();
+          }
+        }, 50);
+      }
+    };
+    const onWindowBlur = () => {
+      resetAllGestureStates();
+    };
+
+    el.addEventListener('touchstart', onNativeTouchStart, { passive: true });
+    el.addEventListener('touchend', onNativeTouchEndOrCancel, { passive: true });
+    el.addEventListener('touchcancel', onNativeTouchEndOrCancel, { passive: true });
+    window.addEventListener('blur', onWindowBlur);
+
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onNativeTouchStart);
+      el.removeEventListener('touchend', onNativeTouchEndOrCancel);
+      el.removeEventListener('touchcancel', onNativeTouchEndOrCancel);
+      window.removeEventListener('blur', onWindowBlur);
+    };
+  }, [resetAllGestureStates]);
 
   // True RBush Spatial Viewport Virtualization (`<0.4ms` query, `+260px` buffer):
   // Ensures 1,000+ node maps render ONLY visible DOM nodes (+ selected/editing/dragged subtree),
@@ -765,7 +831,18 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       }
       penActiveRef.current = true;
     } else if (e.pointerType === 'touch' && penActiveRef.current) {
-      return;
+      penActiveRef.current = false;
+    }
+
+    // Clear any stale ghost touches/drags before beginning a fresh primary touch/mouse gesture
+    if (e.isPrimary) {
+      if (activeTouchesRef.current.size > 0 && !activeTouchesRef.current.has(e.pointerId)) {
+        activeTouchesRef.current.clear();
+        pinchStateRef.current = null;
+      }
+      branchDragRef.current = null;
+      nodeDragRef.current = null;
+      dragPreviewRef.current = null;
     }
 
     const rect = containerRef.current!.getBoundingClientRect();
@@ -777,7 +854,11 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       y: sy,
       pointerType: e.pointerType,
     });
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore synthetic/mobile capture failures
+    }
     viewportRef.current.stopMomentum();
     setInteractingAttr(true);
 
@@ -983,6 +1064,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     }
 
     activeTouchesRef.current.delete(e.pointerId);
+    try {
+      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // Ignore release errors
+    }
     if (activeTouchesRef.current.size < 2) {
       pinchStateRef.current = null;
     }
@@ -1117,13 +1205,19 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   };
 
   const startNodePointerDown = (e: React.PointerEvent, node: MindNode) => {
-    if (e.pointerType === 'touch' && penActiveRef.current) return;
+    if (e.pointerType === 'touch' && penActiveRef.current) {
+      penActiveRef.current = false;
+    }
     // Space + Drag anywhere (even on top of a node) pans the canvas cleanly!
     if (spacePressed) return;
-    if (editingNodeId === node.id) return;
+    if (editingNodeId === node.id && !kbSnap.isTouchDevice) return;
 
     e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore capture errors
+    }
     viewportRef.current.stopMomentum();
 
     const singleOnly = e.altKey || singleNodeDragMode;
@@ -1154,10 +1248,16 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     parentNode: MindNode,
     directionBias?: 1 | -1
   ) => {
-    if (e.pointerType === 'touch' && penActiveRef.current) return;
+    if (e.pointerType === 'touch' && penActiveRef.current) {
+      penActiveRef.current = false;
+    }
     if (spacePressed) return;
     e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore capture errors
+    }
     viewportRef.current.stopMomentum();
     setInteractingAttr(true);
     void hapticLight();
@@ -1541,7 +1641,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     style={{ backgroundColor: node.branchColor }}
                   />
 
-                  {isEditing ? (
+                  {isEditing && !kbSnap.isTouchDevice ? (
                     <input
                       type="text"
                       value={node.title}
