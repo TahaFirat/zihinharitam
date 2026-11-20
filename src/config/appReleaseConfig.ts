@@ -9,10 +9,10 @@ export const APP_RELEASE_CONFIG = {
   bundleId: 'com.tahafirat.zihinharitam',
 
   appStore: {
-    trTitle: 'ZihinHaritam: Görsel Not & İkon',
-    trSubtitle: 'Renkli Zihin Haritası & Sınav',
-    enTitle: 'MindSticker: Visual Mind Maps',
-    enSubtitle: 'Study Notes, Diagrams & Icons',
+    trTitle: 'Zihin Haritası: ZihinHaritam',
+    trSubtitle: 'Kavram Haritası & Görsel Not',
+    enTitle: 'Mind Map: MindSticker Notes',
+    enSubtitle: 'Concept Map, Diagrams & Icons',
     primaryCategory: 'Education',
     secondaryCategory: 'Productivity',
     ageRating: '4+',

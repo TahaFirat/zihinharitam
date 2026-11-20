@@ -320,9 +320,13 @@ async function syncAppInfosAndCategories(client, appId, baseUrl) {
   }
 
   const infos = await client.request('GET', `/v1/apps/${appId}/appInfos`);
-  const editableInfo =
-    infos?.data?.find((i) => i.attributes?.appStoreState !== 'READY_FOR_SALE') || infos?.data?.[0];
-  if (!editableInfo) return;
+  const editableInfo = infos?.data?.find(
+    (i) => i.attributes?.appStoreState !== 'READY_FOR_SALE'
+  );
+  if (!editableInfo) {
+    console.log(`  -> AppInfo zaten yayında (READY_FOR_SALE); kilitli alanlar atlandı.`);
+    return;
+  }
 
   try {
     await client.request('PATCH', `/v1/appInfos/${editableInfo.id}`, {
@@ -946,7 +950,7 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
     const prId = b.relationships?.preReleaseVersion?.data?.id;
     return preRelById.get(prId) === TARGET_VERSION;
   });
-  const latestBuild = matchingBuilds[0] || buildsResp?.data?.[0];
+  const latestBuild = matchingBuilds[0] || null;
 
   if (!latestBuild) {
     console.log(`  -> Henüz işlenmiş (VALID) bir .ipa derlemesi görünmüyor.`);
@@ -1150,8 +1154,8 @@ async function main() {
 
   await ensureBundleIdAndCapabilities(client);
   const app = await findAppRecord(client);
-  await syncAppInfosAndCategories(client, app.id, baseUrl);
   const { version, syncedLocIds } = await ensureVersionAndLocalizations(client, app.id, baseUrl);
+  await syncAppInfosAndCategories(client, app.id, baseUrl);
 
   if (!SKIP_SCREENSHOTS) {
     console.log(`\n[5/8] 15 Mağaza Ekran Görüntüsü App Store Connect'e yükleniyor...`);
@@ -1170,7 +1174,7 @@ async function main() {
   await attachBuildAndOptionallySubmit(client, app.id, version.id);
 
   console.log('\n✅ App Store Connect senkronizasyonu tamamlandı!');
-  console.log('   Not: IAP fiyat basamağını (₺199,99 / 200 TL) App Store Connect -> In-App Purchases -> Price Schedule menüsünden tek tıkla onaylamayı unutmayın.');
+  console.log('   Not: IAP fiyat basamağı ₺499,99 (499 TL / $9.99) olarak güncellendi.');
 }
 
 main().catch((err) => {
