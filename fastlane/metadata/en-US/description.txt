@@ -8,6 +8,8 @@ KEY HIGHLIGHTS
 • Print-Ready 300 DPI Export: Export crystal-clear A4/A3 PDF posters, scalable vector SVGs, or high-res PNGs for GoodNotes, Notability, or printing.
 • Local-First Privacy: No account or login required, zero tracking SDKs.
 
-FREE TIER & ONE-TIME LIFETIME PRO
+FREE TIER & FLEXIBLE PRO PLANS
 • Create up to 3 active mind maps (up to 45 nodes per map) with ~1,500 starter icons for free forever.
-• Upgrade once with Lifetime Pro (Non-Consumable one-time purchase—no subscriptions) to unlock unlimited maps, all 25,000+ specialist icons, unlimited note cropping, full exam mode, and 300 DPI PDF/SVG exports.
+• Upgrade with Monthly Pro ($4.99/mo), Yearly Pro ($29.99/yr — save 50%), or One-Time Lifetime Pro ($49.99) to unlock unlimited maps, all 25,000+ specialist icons, unlimited note cropping, full exam mode, and 300 DPI PDF/SVG exports.
+• Privacy Policy: https://tahafirat.github.io/zihinharitam/privacy.html
+• Terms of Use (EULA): https://tahafirat.github.io/zihinharitam/terms.html

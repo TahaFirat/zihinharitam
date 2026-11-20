@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react';
-import { APP_RELEASE_CONFIG } from '../../config/appReleaseConfig';
+import { APP_RELEASE_CONFIG, type ProPlanTier } from '../../config/appReleaseConfig';
 import type { VisualSearchResult } from '../../types/mindmap';
 import {
   BillingService,
   readCachedEntitlement,
   type PurchaseResult,
   type RestoreResult,
+  type StoreProductInfo,
 } from './BillingService';
 
 export interface UsageCounters {
@@ -17,6 +18,7 @@ export interface UsageCounters {
 export interface EntitlementSnapshot {
   isLifetimePro: boolean;
   localizedPrice: string;
+  plans: Record<ProPlanTier, StoreProductInfo>;
   productTitle: string;
   isBusy: boolean;
   usage: UsageCounters;
@@ -76,7 +78,33 @@ class EntitlementStore {
   private snapshot: EntitlementSnapshot = {
     isLifetimePro: false,
     localizedPrice: APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr,
-    productTitle: 'Ömür Boyu Pro Erişim',
+    plans: {
+      monthly: {
+        id: APP_RELEASE_CONFIG.iap.monthlyProductId,
+        tier: 'monthly',
+        title: APP_RELEASE_CONFIG.iap.plans.monthly.titleTr,
+        description: APP_RELEASE_CONFIG.iap.plans.monthly.subtextTr,
+        displayPrice: APP_RELEASE_CONFIG.iap.plans.monthly.displayPriceTr,
+        price: APP_RELEASE_CONFIG.iap.plans.monthly.trNumeric,
+      },
+      yearly: {
+        id: APP_RELEASE_CONFIG.iap.yearlyProductId,
+        tier: 'yearly',
+        title: APP_RELEASE_CONFIG.iap.plans.yearly.titleTr,
+        description: APP_RELEASE_CONFIG.iap.plans.yearly.subtextTr,
+        displayPrice: APP_RELEASE_CONFIG.iap.plans.yearly.displayPriceTr,
+        price: APP_RELEASE_CONFIG.iap.plans.yearly.trNumeric,
+      },
+      lifetime: {
+        id: APP_RELEASE_CONFIG.iap.lifetimeProductId,
+        tier: 'lifetime',
+        title: APP_RELEASE_CONFIG.iap.plans.lifetime.titleTr,
+        description: APP_RELEASE_CONFIG.iap.plans.lifetime.subtextTr,
+        displayPrice: APP_RELEASE_CONFIG.iap.plans.lifetime.displayPriceTr,
+        price: APP_RELEASE_CONFIG.iap.plans.lifetime.trNumeric,
+      },
+    },
+    productTitle: 'ZihinHaritam Pro',
     isBusy: false,
     usage: loadUsageCounters(),
   };
@@ -123,16 +151,17 @@ class EntitlementStore {
     if (this.initialized) return;
     this.initialized = true;
 
-    const [cachedUnlocked, product] = await Promise.all([
+    const [cachedUnlocked, plans] = await Promise.all([
       BillingService.syncEntitlementsOnLaunch(),
-      BillingService.fetchLifetimeProduct(),
+      BillingService.fetchAllProPlans(),
     ]);
 
     this.update({
       isLifetimePro: cachedUnlocked || this.snapshot.isLifetimePro,
+      plans,
       localizedPrice:
-        product.displayPrice || APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr,
-      productTitle: product.title || 'Ömür Boyu Pro Erişim',
+        plans.monthly.displayPrice || APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr,
+      productTitle: plans.yearly.title || 'ZihinHaritam Pro',
     });
   }
 
@@ -244,10 +273,10 @@ class EntitlementStore {
     return this.snapshot.isLifetimePro;
   }
 
-  public async purchaseLifetime(): Promise<PurchaseResult> {
+  public async purchasePlan(tier: ProPlanTier = 'yearly'): Promise<PurchaseResult> {
     this.update({ isBusy: true });
     try {
-      const res = await BillingService.purchaseLifetimePro();
+      const res = await BillingService.purchaseProPlan(tier);
       if (res.purchased) {
         this.update({ isLifetimePro: true, isBusy: false });
       } else {
@@ -262,6 +291,10 @@ class EntitlementStore {
           err instanceof Error ? err.message : 'Satın alma başlatılamadı.',
       };
     }
+  }
+
+  public async purchaseLifetime(): Promise<PurchaseResult> {
+    return this.purchasePlan('yearly');
   }
 
   public async restorePurchases(): Promise<RestoreResult> {

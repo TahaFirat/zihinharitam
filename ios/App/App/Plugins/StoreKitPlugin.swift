@@ -15,7 +15,13 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "checkEntitlements", returnType: CAPPluginReturnPromise)
     ]
 
+    private let monthlyProductId = "com.tahafirat.zihinharitam.pro_monthly"
+    private let yearlyProductId = "com.tahafirat.zihinharitam.pro_yearly"
     private let lifetimeProductId = "com.tahafirat.zihinharitam.lifetime_pro"
+    private var allProProductIds: Set<String> {
+        return [monthlyProductId, yearlyProductId, lifetimeProductId]
+    }
+
     private let keychainService = "com.tahafirat.zihinharitam.entitlements"
     private let keychainAccount = "pro_lifetime_unlock"
     private var updatesTask: Task<Void, Never>?
@@ -25,18 +31,19 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         updatesTask = Task.detached { [weak self] in
             for await result in Transaction.updates {
                 if case .verified(let transaction) = result {
-                    if transaction.productID == self?.lifetimeProductId {
-                        let active = (transaction.revocationDate == nil)
-                        self?.saveKeychainEntitlement(active)
+                    if let self = self, self.allProProductIds.contains(transaction.productID) {
+                        let notRevoked = (transaction.revocationDate == nil)
+                        let notExpired = (transaction.expirationDate == nil || transaction.expirationDate! > Date())
+                        self.saveKeychainEntitlement(notRevoked && notExpired)
                     }
                     await transaction.finish()
                 }
             }
         }
-        // Best-effort prefetch of lifetime IAP product metadata on launch
+        // Best-effort prefetch of Monthly, Yearly & Lifetime Pro product metadata on launch
         Task.detached { [weak self] in
             guard let self = self else { return }
-            _ = try? await self.fetchProductsWithRetry(ids: [self.lifetimeProductId], allowSyncRetry: false)
+            _ = try? await self.fetchProductsWithRetry(ids: Array(self.allProProductIds), allowSyncRetry: false)
         }
     }
 
@@ -65,7 +72,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func getProducts(_ call: CAPPluginCall) {
-        let ids = call.getArray("productIds", String.self) ?? [lifetimeProductId]
+        let ids = call.getArray("productIds", String.self) ?? Array(allProProductIds)
         Task {
             do {
                 let products = try await fetchProductsWithRetry(ids: ids)
@@ -86,10 +93,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func purchaseLifetime(_ call: CAPPluginCall) {
-        guard let productId = call.getString("productId") else {
-            call.reject("productId gerekli")
-            return
-        }
+        let productId = call.getString("productId") ?? yearlyProductId
         Task {
             do {
                 var product = cachedProducts[productId]
@@ -150,20 +154,23 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func hasVerifiedEntitlement() async -> Bool {
-        var sawRevoked = false
+        var sawRevokedOrExpired = false
+        let now = Date()
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
-                if transaction.productID == lifetimeProductId {
-                    if transaction.revocationDate == nil {
+                if allProProductIds.contains(transaction.productID) {
+                    let active = (transaction.revocationDate == nil) &&
+                        (transaction.expirationDate == nil || transaction.expirationDate! > now)
+                    if active {
                         saveKeychainEntitlement(true)
                         return true
                     } else {
-                        sawRevoked = true
+                        sawRevokedOrExpired = true
                     }
                 }
             }
         }
-        if sawRevoked {
+        if sawRevokedOrExpired {
             saveKeychainEntitlement(false)
             return false
         }

@@ -5,7 +5,7 @@
   ],
   "products" : [
     {
-      "displayPrice" : "499.99",
+      "displayPrice" : "2499.99",
       "familyShareable" : true,
       "internalID" : "6730002001",
       "localizations" : [
@@ -55,7 +55,76 @@
     ]
   },
   "subscriptionGroups" : [
-
+    {
+      "id" : "21590001",
+      "localizations" : [
+        {
+          "description" : "ZihinHaritam sınırsız görsel zihin haritası ve 25.000+ akademik çıkartma erişimi.",
+          "displayName" : "ZihinHaritam Pro",
+          "locale" : "tr"
+        },
+        {
+          "description" : "Unlimited visual mind maps and 25,000+ academic stickers.",
+          "displayName" : "MindSticker Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "ZihinHaritam Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "1499.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "6730002002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Yıllık %50 indirimli sınırsız zihin haritası, 25.000+ çıkartma, sınav modu ve 300 DPI PDF/SVG çıktısı.",
+              "displayName" : "Yıllık Pro (%50 Avantajlı)",
+              "locale" : "tr"
+            },
+            {
+              "description" : "Save 50% yearly with unlimited visual mind maps, 25,000+ stickers, exam recall mode, and 300 DPI PDF/SVG export.",
+              "displayName" : "Yearly Pro (Save 50%)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tahafirat.zihinharitam.pro_yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Yearly Pro Subscription (Yillik Pro)",
+          "subscriptionGroupID" : "21590001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "249.99",
+          "familyShareable" : true,
+          "groupNumber" : 2,
+          "internalID" : "6730002003",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Aylık esnek sınırsız zihin haritası, 25.000+ çıkartma, sınav modu ve 300 DPI PDF/SVG çıktısı.",
+              "displayName" : "Aylık Pro Abonelik",
+              "locale" : "tr"
+            },
+            {
+              "description" : "Flexible monthly access to unlimited mind maps, 25,000+ stickers, exam recall mode, and 300 DPI PDF/SVG export.",
+              "displayName" : "Monthly Pro Subscription",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tahafirat.zihinharitam.pro_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Monthly Pro Subscription (Aylik Pro)",
+          "subscriptionGroupID" : "21590001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
   ],
   "version" : {
     "major" : 4,

@@ -216,10 +216,14 @@ async function runGate3IosNativePrivacyAndCI() {
   );
   if (
     configTs.includes('com.tahafirat.zihinharitam') &&
+    configTs.includes('com.tahafirat.zihinharitam.pro_monthly') &&
+    configTs.includes('com.tahafirat.zihinharitam.pro_yearly') &&
     configTs.includes('com.tahafirat.zihinharitam.lifetime_pro') &&
-    configTs.includes('499 ₺')
+    configTs.includes('250 ₺') &&
+    configTs.includes('1.499 ₺') &&
+    configTs.includes('2.499 ₺')
   ) {
-    pass('Tek merkezli appReleaseConfig.ts kimlikleri', 'Bundle ID + IAP ID + 499 ₺ doğrulandı');
+    pass('Tek merkezli appReleaseConfig.ts kimlikleri', 'Bundle ID + Aylık(250₺) + Yıllık(1.499₺) + ÖmürBoyu(2.499₺) doğrulandı');
   } else {
     fail('Tek merkezli appReleaseConfig.ts kimlikleri', 'Eksik alan');
   }
@@ -435,12 +439,14 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
 
     if (
       countAtThree === 3 &&
-      paywallText.includes('499 ₺') &&
+      paywallText.includes('250 ₺') &&
+      paywallText.includes('1.499 ₺') &&
+      paywallText.includes('2.499 ₺') &&
       paywallText.includes('Satın Alımları Geri Yükle')
     ) {
       pass(
-        '3 Ücretsiz Harita limiti ve 4. haritada 499 ₺ Ömür Boyu Pro Paywall kilidi',
-        '3/3 korundu, 4. harita Paywall açtı'
+        '3 Ücretsiz Harita limiti ve 4. haritada 3-Katmanlı Pro Paywall (250₺/1.499₺/2.499₺)',
+        '3/3 korundu, Aylık + Yıllık + Ömür Boyu Paywall açtı'
       );
     } else {
       fail(

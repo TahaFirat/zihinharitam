@@ -8,6 +8,8 @@ Zihin Haritası: ZihinHaritam, iPhone ve iPad için tasarlanmış en hızlı ve 
 • Baskı Kalitesinde Poster Çıktısı: Haritalarınızı 300 DPI A4/A3 PDF, vektörel SVG veya yüksek çözünürlüklü PNG posteri olarak dışa aktarın ve paylaşın.
 • Tam Gizlilik: Hesap açma zorunluluğu ve izleyici (tracker) yoktur; tüm haritalarınız cihazınızda yerel olarak saklanır.
 
-ÜCRETSİZ KATMAN VE ÖMÜR BOYU PRO
+ÜCRETSİZ KATMAN VE ESNEK PRO PLANLARI
 • Ücretsiz olarak 3 aktif görsel zihin haritası, harita başına 45 düğüm ve ~1.500 başlangıç ikonu her zaman açıktır.
-• Aylık veya yıllık abonelik olmadan, tek seferlik "Ömür Boyu Pro Erişim" ile sınırsız harita, 25.000+ uzmanlık çıkartması, tam sınav modu ve 300 DPI PDF/SVG çıktısını sonsuza dek açabilirsiniz.
+• İhtiyacınıza göre esnek Aylık Pro (250 ₺/ay), %50 avantajlı Yıllık Pro (1.499 ₺/yıl — aylık 125 ₺'ye gelir) veya aboneliksiz tek seferlik Ömür Boyu Pro (2.499 ₺) planlarından birini seçerek sınırsız harita, 25.000+ uzmanlık çıkartması, tam sınav modu ve 300 DPI PDF/SVG çıktısını açabilirsiniz.
+• Gizlilik Politikası: https://tahafirat.github.io/zihinharitam/privacy.html
+• Kullanım Koşulları (EULA): https://tahafirat.github.io/zihinharitam/terms.html
