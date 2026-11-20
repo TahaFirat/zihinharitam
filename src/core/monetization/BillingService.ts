@@ -124,7 +124,7 @@ export const BillingService = {
       displayPrice: isTrLocale
         ? APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr
         : APP_RELEASE_CONFIG.iap.appStoreReferenceUsd,
-      price: isTrLocale ? 199.99 : 3.99,
+      price: isTrLocale ? 499.99 : 9.99,
     };
   },
 

@@ -421,14 +421,14 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
           </button>
         )}
 
-        {/* ROW 0: Synced Node Title Input + Quick Actions + Done */}
+        {/* ROW 0: Synced Node Title Input + Quick Actions + Delete + Done */}
         <div
-          className={`flex items-center gap-1.5 ${
-            isSlimKeyboardMode ? 'mb-1' : 'mb-1.5'
+          className={`flex items-center ${
+            isSlimKeyboardMode ? 'mb-1 gap-1' : 'mb-1.5 gap-1.5'
           }`}
         >
           <div
-            className={`flex min-w-0 flex-1 items-center gap-2 rounded-2xl border bg-white/75 px-2.5 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/75 ${
+            className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border bg-white/75 px-2.5 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/75 ${
               isSlimKeyboardMode ? 'h-9 py-1' : 'h-10 py-1'
             }`}
             style={{ borderColor: 'var(--hud-border)' }}
@@ -496,6 +496,27 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
             )}
           </button>
 
+          {/* Always-visible 1-tap Delete button in Row 0 for non-root branches (no horizontal scroll hunting!) */}
+          {!isRootNode && (
+            <button
+              type="button"
+              data-testid="studio-delete-btn"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => {
+                void dismissNativeKeyboard();
+                onDeleteNode(activeNode.id);
+              }}
+              title="Bu dalı sil (Geri Alınabilir)"
+              aria-label="Dalı sil"
+              className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-2xl border border-rose-500/35 bg-rose-500/12 font-extrabold text-rose-600 hover:bg-rose-500/20 active:scale-95 dark:text-rose-400 ${
+                isSlimKeyboardMode ? 'h-9 w-8.5' : 'h-10 px-2.5 text-xs'
+              }`}
+            >
+              <Trash2 className="h-4 w-4" />
+              {!isSlimKeyboardMode && <span className="hidden sm:inline">Sil</span>}
+            </button>
+          )}
+
           {isSlimKeyboardMode && (
             <>
               <button
@@ -503,7 +524,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={onOpenGalleryDrawer}
                 title="25.000+ Görsel Galerisi"
-                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-2xl border border-sky-500/40 bg-sky-500/15 px-2 text-[11px] font-extrabold text-sky-700 active:scale-95 dark:text-sky-300"
+                className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl border border-sky-500/40 bg-sky-500/15 text-sky-700 active:scale-95 dark:text-sky-300"
               >
                 <Search className="h-3.5 w-3.5" />
               </button>
@@ -512,7 +533,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={onOpenAIStudio}
                 title="AI Çiz"
-                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2 text-[11px] font-extrabold text-white active:scale-95"
+                className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white active:scale-95"
               >
                 <Sparkles className="h-3.5 w-3.5" />
               </button>
@@ -538,7 +559,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                   : 'Metni Düzenle (Klavye Aç)'
               }
               className={`flex shrink-0 items-center justify-center rounded-2xl border active:scale-95 ${
-                isSlimKeyboardMode ? 'h-9 w-9' : 'h-10 w-10'
+                isSlimKeyboardMode ? 'h-9 w-8.5' : 'h-10 w-10'
               } ${
                 kb.isKeyboardOpen
                   ? 'border-sky-500/40 bg-sky-500/15 text-sky-600 dark:text-sky-300'

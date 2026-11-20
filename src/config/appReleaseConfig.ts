@@ -5,7 +5,7 @@
 export const APP_RELEASE_CONFIG = {
   appName: 'ZihinHaritam',
   appSubtitle: 'Görsel Zihin Haritası & Not',
-  version: '1.0.0',
+  version: '1.0.1',
   bundleId: 'com.tahafirat.zihinharitam',
 
   appStore: {
@@ -22,9 +22,9 @@ export const APP_RELEASE_CONFIG = {
     lifetimeProductId: 'com.tahafirat.zihinharitam.lifetime_pro',
     entitlementId: 'pro_lifetime_unlock',
     productType: 'Non-Consumable' as const,
-    defaultDisplayPriceTr: '200 ₺',
-    appStorePriceTierTr: '₺199,99',
-    appStoreReferenceUsd: '$3.99',
+    defaultDisplayPriceTr: '499 ₺',
+    appStorePriceTierTr: '₺499,99',
+    appStoreReferenceUsd: '$9.99',
   },
 
   quotas: {

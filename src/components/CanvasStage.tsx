@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useCallback,
 } from 'react';
-import { Plus, Eye, Sparkles, ChevronRight, X, Link2 } from 'lucide-react';
+import { Plus, Eye, Sparkles, ChevronRight, X, Link2, Trash2, Move } from 'lucide-react';
 import type {
   AcademicDepartment,
   CollaboratorPresence,
@@ -55,11 +55,13 @@ interface CanvasStageProps {
   revealedExamIds: Set<string>;
   collaborators: CollaboratorPresence[];
   fitTrigger: number;
+  zoomRequest?: { factor: number; seq: number } | null;
   radarJumpRequest: { x: number; y: number; seq: number } | null;
   onSelectNode: (nodeId: string | null) => void;
   onStartEditing: (nodeId: string) => void;
   onFinishEditing: () => void;
   onUpdateNodeTitle: (nodeId: string, title: string) => void;
+  onDeleteNode?: (nodeId: string) => void;
   onCommitBatchNodePositions: (updates: Record<string, { x: number; y: number }>) => void;
   onCreateChildBranch: (
     parentId: string,
@@ -175,11 +177,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   revealedExamIds,
   collaborators,
   fitTrigger,
+  zoomRequest,
   radarJumpRequest,
   onSelectNode,
   onStartEditing,
   onFinishEditing,
   onUpdateNodeTitle,
+  onDeleteNode,
   onCommitBatchNodePositions,
   onCreateChildBranch,
   onCompleteCrossLink,
@@ -248,11 +252,24 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   const nodeDragRef = useRef<{
     pointerId: number;
     nodeId: string;
+    pointerType: string;
+    isLongPressArmed: boolean;
     startClientX: number;
     startClientY: number;
+    startStageX: number;
+    startStageY: number;
     initialPositions: Map<string, { x: number; y: number }>;
     moved: boolean;
   } | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const [liftingNodeId, setLiftingNodeId] = useState<string | null>(null);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
 
   const branchDragRef = useRef<{
     pointerId: number;
@@ -276,6 +293,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
 
   // Hard reset for any iOS WKWebView orphaned pointers/captures (prevents pan lock after branch add/focus steal)
   const resetAllGestureStates = useCallback(() => {
+    clearLongPressTimer();
     activeTouchesRef.current.clear();
     pinchStateRef.current = null;
     panStateRef.current = null;
@@ -283,9 +301,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     branchDragRef.current = null;
     dragPreviewRef.current = null;
     penActiveRef.current = false;
+    setLiftingNodeId(null);
     setActiveDragIds([]);
     setInteractingAttr(false);
-  }, [setInteractingAttr]);
+  }, [clearLongPressTimer, setInteractingAttr]);
 
   // Shared ResizeObserver measuring real rendered widths/heights of node cards (fixes long Turkish word branch anchors)
   useEffect(() => {
@@ -512,6 +531,17 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     );
     needsRedrawRef.current = true;
   }, [radarJumpRequest, stageSize.w, stageSize.h]);
+
+  useEffect(() => {
+    if (!zoomRequest) return;
+    const cur = viewportRef.current.getTransform();
+    viewportRef.current.zoomAtScreenPoint(
+      cur.scale * zoomRequest.factor,
+      stageSize.w * 0.5,
+      stageSize.h * 0.5
+    );
+    needsRedrawRef.current = true;
+  }, [zoomRequest, stageSize.w, stageSize.h]);
 
   useEffect(() => {
     const activeTargetId = editingNodeId ?? selectedNodeId;
@@ -745,38 +775,32 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
 
     el.addEventListener('wheel', onWheel, { passive: false });
 
-    // Authoritative iOS/iPadOS physical touch count sync: clears any ghost pointers dropped during <input>/modal focus shifts
-    const onNativeTouchStart = (ev: TouchEvent) => {
-      if (ev.touches.length === 1 && activeTouchesRef.current.size > 0) {
-        activeTouchesRef.current.clear();
-        pinchStateRef.current = null;
-        if (!branchDragRef.current && !nodeDragRef.current) {
-          panStateRef.current = null;
-        }
-        penActiveRef.current = false;
-      }
-    };
+    // Clean up orphaned pointers ONLY when all physical fingers have lifted (never wipe on touchstart,
+    // because iOS WebKit fires pointerdown BEFORE touchstart!)
     const onNativeTouchEndOrCancel = (ev: TouchEvent) => {
       if (ev.touches.length === 0) {
         window.setTimeout(() => {
-          if (activeTouchesRef.current.size > 0 && !nodeDragRef.current && !branchDragRef.current && !panStateRef.current) {
+          if (
+            activeTouchesRef.current.size > 0 &&
+            !nodeDragRef.current &&
+            !branchDragRef.current &&
+            !panStateRef.current
+          ) {
             resetAllGestureStates();
           }
-        }, 50);
+        }, 120);
       }
     };
     const onWindowBlur = () => {
       resetAllGestureStates();
     };
 
-    el.addEventListener('touchstart', onNativeTouchStart, { passive: true });
     el.addEventListener('touchend', onNativeTouchEndOrCancel, { passive: true });
     el.addEventListener('touchcancel', onNativeTouchEndOrCancel, { passive: true });
     window.addEventListener('blur', onWindowBlur);
 
     return () => {
       el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('touchstart', onNativeTouchStart);
       el.removeEventListener('touchend', onNativeTouchEndOrCancel);
       el.removeEventListener('touchcancel', onNativeTouchEndOrCancel);
       window.removeEventListener('blur', onWindowBlur);
@@ -840,6 +864,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         activeTouchesRef.current.clear();
         pinchStateRef.current = null;
       }
+      clearLongPressTimer();
+      setLiftingNodeId(null);
       branchDragRef.current = null;
       nodeDragRef.current = null;
       dragPreviewRef.current = null;
@@ -862,7 +888,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     viewportRef.current.stopMomentum();
     setInteractingAttr(true);
 
-    if (activeTouchesRef.current.size === 2) {
+    if (activeTouchesRef.current.size >= 2) {
+      // Second finger arrived anywhere on stage: cancel any 1-finger pan/node-press and enter pinch-zoom!
+      clearLongPressTimer();
+      setLiftingNodeId(null);
+      nodeDragRef.current = null;
+      branchDragRef.current = null;
       panStateRef.current = null;
       const pts = Array.from(activeTouchesRef.current.values());
       pinchStateRef.current = {
@@ -954,59 +985,96 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     }
 
     // 2. V3 Transient Subtree Drag Engine (ZERO React setState, ZERO cumulative rounding drift!)
+    // On Touch screens: immediate 1-finger swipe over ANY node smoothly pans the map;
+    // holding still (~260ms) arms long-press haptic node dragging so users never get stuck!
     if (nodeDragRef.current && nodeDragRef.current.pointerId === e.pointerId) {
       const nd = nodeDragRef.current;
-      const distPx = Math.hypot(
-        e.clientX - nd.startClientX,
-        e.clientY - nd.startClientY
-      );
-      if (distPx > 4 || nd.moved) {
-        if (!nd.moved) {
-          nd.moved = true;
+
+      // If a second finger joined, immediately upgrade to smooth pinch-zoom
+      if (activeTouchesRef.current.size >= 2) {
+        clearLongPressTimer();
+        setLiftingNodeId(null);
+        nodeDragRef.current = null;
+        setActiveDragIds([]);
+      } else if (nd.pointerType === 'touch' && !nd.isLongPressArmed) {
+        const distPx = Math.hypot(
+          e.clientX - nd.startClientX,
+          e.clientY - nd.startClientY
+        );
+        if (distPx > 6) {
+          // Seamless handoff to 60 FPS canvas panning!
+          clearLongPressTimer();
+          setLiftingNodeId(null);
+          nodeDragRef.current = null;
+          setActiveDragIds([]);
+          const initDx = sx - nd.startStageX;
+          const initDy = sy - nd.startStageY;
+          viewportRef.current.panBy(initDx, initDy);
+          panStateRef.current = {
+            pointerId: e.pointerId,
+            lastX: sx,
+            lastY: sy,
+            vx: initDx,
+            vy: initDy,
+            moved: true,
+          };
           setInteractingAttr(true);
+          needsRedrawRef.current = true;
         }
-        const scale = viewportRef.current.getTransform().scale;
-        const dxWorld = (e.clientX - nd.startClientX) / scale;
-        const dyWorld = (e.clientY - nd.startClientY) / scale;
-
-        nd.initialPositions.forEach((initPos, id) => {
-          const nx = initPos.x + dxWorld;
-          const ny = initPos.y + dyWorld;
-          transientPositionsRef.current.set(id, { x: nx, y: ny });
-
-          const domEl = nodeDomRefs.current.get(id);
-          if (domEl) {
-            domEl.style.transform = `translate3d(${nx}px, ${ny}px, 0) translate(-50%, -50%)`;
+        return;
+      } else {
+        const distPx = Math.hypot(
+          e.clientX - nd.startClientX,
+          e.clientY - nd.startClientY
+        );
+        if (distPx > 4 || nd.moved) {
+          if (!nd.moved) {
+            nd.moved = true;
+            setInteractingAttr(true);
           }
-        });
+          const scale = viewportRef.current.getTransform().scale;
+          const dxWorld = (e.clientX - nd.startClientX) / scale;
+          const dyWorld = (e.clientY - nd.startClientY) / scale;
 
-        // Synchronize any CrossLink mid-curve pill DOM elements attached to moved nodes
-        const curLinks = renderDataRef.current.crossLinks;
-        if (curLinks && curLinks.length > 0) {
-          for (const link of curLinks) {
-            if (
-              transientPositionsRef.current.has(link.fromNodeId) ||
-              transientPositionsRef.current.has(link.toNodeId)
-            ) {
-              const pillEl = crossLinkDomRefs.current.get(link.id);
-              const baseFrom = nodes[link.fromNodeId];
-              const baseTo = nodes[link.toNodeId];
-              if (pillEl && baseFrom && baseTo) {
-                const trFrom = transientPositionsRef.current.get(link.fromNodeId);
-                const trTo = transientPositionsRef.current.get(link.toNodeId);
-                const geom = computeCrossLinkGeometry(
-                  trFrom ? { ...baseFrom, x: trFrom.x, y: trFrom.y } : baseFrom,
-                  trTo ? { ...baseTo, x: trTo.x, y: trTo.y } : baseTo
-                );
-                pillEl.style.transform = `translate3d(${geom.midX}px, ${geom.midY}px, 0) translate(-50%, -50%)`;
+          nd.initialPositions.forEach((initPos, id) => {
+            const nx = initPos.x + dxWorld;
+            const ny = initPos.y + dyWorld;
+            transientPositionsRef.current.set(id, { x: nx, y: ny });
+
+            const domEl = nodeDomRefs.current.get(id);
+            if (domEl) {
+              domEl.style.transform = `translate3d(${nx}px, ${ny}px, 0) translate(-50%, -50%)`;
+            }
+          });
+
+          // Synchronize any CrossLink mid-curve pill DOM elements attached to moved nodes
+          const curLinks = renderDataRef.current.crossLinks;
+          if (curLinks && curLinks.length > 0) {
+            for (const link of curLinks) {
+              if (
+                transientPositionsRef.current.has(link.fromNodeId) ||
+                transientPositionsRef.current.has(link.toNodeId)
+              ) {
+                const pillEl = crossLinkDomRefs.current.get(link.id);
+                const baseFrom = nodes[link.fromNodeId];
+                const baseTo = nodes[link.toNodeId];
+                if (pillEl && baseFrom && baseTo) {
+                  const trFrom = transientPositionsRef.current.get(link.fromNodeId);
+                  const trTo = transientPositionsRef.current.get(link.toNodeId);
+                  const geom = computeCrossLinkGeometry(
+                    trFrom ? { ...baseFrom, x: trFrom.x, y: trFrom.y } : baseFrom,
+                    trTo ? { ...baseTo, x: trTo.x, y: trTo.y } : baseTo
+                  );
+                  pillEl.style.transform = `translate3d(${geom.midX}px, ${geom.midY}px, 0) translate(-50%, -50%)`;
+                }
               }
             }
           }
-        }
 
-        needsRedrawRef.current = true;
+          needsRedrawRef.current = true;
+        }
+        return;
       }
-      return;
     }
 
     // 3. Multi-Touch Pinch-Zoom
@@ -1112,6 +1180,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
 
     if (nodeDragRef.current && nodeDragRef.current.pointerId === e.pointerId) {
       const nd = nodeDragRef.current;
+      clearLongPressTimer();
+      setLiftingNodeId(null);
       nodeDragRef.current = null;
       setInteractingAttr(false);
       setActiveDragIds([]);
@@ -1137,6 +1207,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       }
 
       transientPositionsRef.current.clear();
+
+      // If touch long-press lifted node without dragging, just select it cleanly without triggering edit/collapse
+      if (nd.pointerType === 'touch' && nd.isLongPressArmed) {
+        onSelectNode(nd.nodeId);
+        return;
+      }
 
       // CrossLink target selection (`🔗 İlişki Çek`)
       if (linkingFromNodeId) {
@@ -1213,12 +1289,46 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     if (editingNodeId === node.id && !kbSnap.isTouchDevice) return;
 
     e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
+    const sx = rect ? e.clientX - rect.left : e.clientX;
+    const sy = rect ? e.clientY - rect.top : e.clientY;
+
+    // Track touch pointer on stage so 2-finger pinch-zoom works even when fingers land on top of nodes!
+    if (e.pointerType === 'touch') {
+      if (e.isPrimary && activeTouchesRef.current.size > 0 && !activeTouchesRef.current.has(e.pointerId)) {
+        activeTouchesRef.current.clear();
+        pinchStateRef.current = null;
+      }
+      activeTouchesRef.current.set(e.pointerId, {
+        x: sx,
+        y: sy,
+        pointerType: 'touch',
+      });
+    }
+
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
     } catch {
       // Ignore capture errors
     }
     viewportRef.current.stopMomentum();
+
+    // If a second touch finger landed on a node, enter 2-finger pinch-zoom immediately!
+    if (e.pointerType === 'touch' && activeTouchesRef.current.size >= 2) {
+      clearLongPressTimer();
+      setLiftingNodeId(null);
+      nodeDragRef.current = null;
+      panStateRef.current = null;
+      branchDragRef.current = null;
+      const pts = Array.from(activeTouchesRef.current.values());
+      pinchStateRef.current = {
+        lastDist: Math.max(10, Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)),
+        lastMidX: (pts[0].x + pts[1].x) * 0.5,
+        lastMidY: (pts[0].y + pts[1].y) * 0.5,
+      };
+      setInteractingAttr(true);
+      return;
+    }
 
     const singleOnly = e.altKey || singleNodeDragMode;
     const affectedIds = collectSubtreeIds(node.id, nodes, rootNodeId, singleOnly);
@@ -1233,14 +1343,42 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       setActiveDragIds(affectedIds);
     }
 
+    const isTouch = e.pointerType === 'touch';
+    clearLongPressTimer();
+    setLiftingNodeId(null);
+
     nodeDragRef.current = {
       pointerId: e.pointerId,
       nodeId: node.id,
+      pointerType: e.pointerType,
+      isLongPressArmed: !isTouch,
       startClientX: e.clientX,
       startClientY: e.clientY,
+      startStageX: sx,
+      startStageY: sy,
       initialPositions,
       moved: false,
     };
+
+    // On touch screens, holding a node for 260ms arms haptic subtree repositioning;
+    // swiping immediately pans the map smoothly instead!
+    if (isTouch) {
+      const capturedPointerId = e.pointerId;
+      longPressTimerRef.current = window.setTimeout(() => {
+        const cur = nodeDragRef.current;
+        if (
+          cur &&
+          cur.pointerId === capturedPointerId &&
+          !cur.moved &&
+          activeTouchesRef.current.size === 1
+        ) {
+          cur.isLongPressArmed = true;
+          setLiftingNodeId(node.id);
+          setInteractingAttr(true);
+          void hapticMedium();
+        }
+      }, 260);
+    }
   };
 
   const startBranchHandlePointerDown = (
@@ -1584,6 +1722,37 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     </button>
                   )}
 
+                  {examMode === 'off' &&
+                    !linkingFromNodeId &&
+                    !isRoot &&
+                    (isSelected || isEditing) &&
+                    onDeleteNode && (
+                      <button
+                        type="button"
+                        data-testid="node-quick-delete-btn"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticMedium();
+                          onDeleteNode(node.id);
+                        }}
+                        title="Bu dalı sil (Geri Alınabilir)"
+                        aria-label="Dalı sil"
+                        className={`hit-slop-44 absolute top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-rose-500 text-white shadow-md transition hover:scale-115 active:scale-95 ${
+                          outwardRight ? '-left-3.5' : '-right-3.5'
+                        }`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                      </button>
+                    )}
+
+                  {liftingNodeId === node.id && (
+                    <span className="pointer-events-none absolute -top-7 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-sky-600 px-2.5 py-0.5 text-[10px] font-extrabold whitespace-nowrap text-white shadow-md">
+                      <Move className="h-2.5 w-2.5" />
+                      Taşınıyor
+                    </span>
+                  )}
+
                   {descendantCount > 0 && examMode === 'off' && (
                     <button
                       type="button"
@@ -1747,6 +1916,37 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     >
                       <Plus className="h-3.5 w-3.5 stroke-[2.8]" />
                     </button>
+                  )}
+
+                  {examMode === 'off' &&
+                    !linkingFromNodeId &&
+                    !isRoot &&
+                    (isSelected || isEditing) &&
+                    onDeleteNode && (
+                      <button
+                        type="button"
+                        data-testid="node-quick-delete-btn"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticMedium();
+                          onDeleteNode(node.id);
+                        }}
+                        title="Bu dalı sil (Geri Alınabilir)"
+                        aria-label="Dalı sil"
+                        className={`hit-slop-44 absolute top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-rose-500 text-white shadow-md transition hover:scale-115 active:scale-95 ${
+                          outwardRight ? '-left-3.5' : '-right-3.5'
+                        }`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                      </button>
+                    )}
+
+                  {liftingNodeId === node.id && (
+                    <span className="pointer-events-none absolute -top-7 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-sky-600 px-2.5 py-0.5 text-[10px] font-extrabold whitespace-nowrap text-white shadow-md">
+                      <Move className="h-2.5 w-2.5" />
+                      Taşınıyor
+                    </span>
                   )}
 
                   {/* COLLAPSE / EXPAND `+N` DESCENDANT BADGE */}

@@ -1,4 +1,4 @@
-Welcome to MindSticker (ZihinHaritam) 1.0.0!
-• 25,000+ instant offline academic & system design stickers (under 8ms search)
-• 60/120 FPS organic infinite canvas, Apple Pencil sketch stickers & textbook diagram cropping
-• Active Recall Exam Mode & 300 DPI A4/A3 poster exports
+• Smooth Mobile Map Navigation: Pan effortlessly from anywhere on the screen—including over cards and stickers—with seamless two-finger pinch-to-zoom. Long-press any node to reposition it with haptic feedback.
+• One-Tap Branch Deletion & Instant Undo: Added an immediately visible Delete button right on selected branches and on the main row of the editor bar, backed by a 5-second one-tap Undo toast.
+• One-Handed Canvas Controls: Quick Undo, Fit-to-Screen, and Zoom (+/-) controls for effortless phone and tablet navigation.
+• Full Responsive Polish: Refined layouts and touch targets across all iPhone and iPad screen sizes.

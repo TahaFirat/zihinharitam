@@ -27,7 +27,7 @@ const ROOT = path.resolve(__dirname, '..');
 const BUNDLE_ID = 'com.tahafirat.zihinharitam';
 const APP_SKU = 'ZIHINHARITAM2026V4';
 const IAP_PRODUCT_ID = 'com.tahafirat.zihinharitam.lifetime_pro';
-const TARGET_VERSION = process.env.MARKETING_VERSION || '1.0.0';
+const TARGET_VERSION = process.env.MARKETING_VERSION || '1.0.1';
 const DRY_RUN = process.argv.includes('--dry-run');
 const SUBMIT_FOR_REVIEW = process.argv.includes('--submit');
 const SKIP_SCREENSHOTS = process.argv.includes('--skip-screenshots');
@@ -482,6 +482,7 @@ async function ensureVersionAndLocalizations(client, appId, baseUrl) {
       description: readMeta('tr/description.txt'),
       keywords: readMeta('tr/keywords.txt').slice(0, 100),
       promotionalText: readMeta('tr/promotional_text.txt').slice(0, 170),
+      ...(readMeta('tr/release_notes.txt') ? { whatsNew: readMeta('tr/release_notes.txt') } : {}),
       supportUrl: `${baseUrl}/support.html`,
       marketingUrl: `${baseUrl}/`,
     },
@@ -490,6 +491,7 @@ async function ensureVersionAndLocalizations(client, appId, baseUrl) {
       description: readMeta('en-US/description.txt'),
       keywords: readMeta('en-US/keywords.txt').slice(0, 100),
       promotionalText: readMeta('en-US/promotional_text.txt').slice(0, 170),
+      ...(readMeta('en-US/release_notes.txt') ? { whatsNew: readMeta('en-US/release_notes.txt') } : {}),
       supportUrl: `${baseUrl}/support.html`,
       marketingUrl: `${baseUrl}/`,
     },
@@ -747,15 +749,15 @@ async function ensureLifetimeProIap(client, appId) {
     // Availability already configured
   }
 
-  // Ensure ₺199,99 (200 TL tier) Price Schedule on TUR base territory
+  // Ensure ₺499,99 (499 TL tier) Price Schedule on TUR base territory
   try {
     let url = `/v2/inAppPurchases/${iap.id}/pricePoints?filter[territory]=TUR&limit=200`;
     let targetPricePoint = null;
     while (url && !targetPricePoint) {
       const ppResp = await client.request('GET', url);
       targetPricePoint =
-        (ppResp?.data || []).find((p) => String(p.attributes?.customerPrice) === '199.99') ||
-        (ppResp?.data || []).find((p) => String(p.attributes?.customerPrice) === '200.0');
+        (ppResp?.data || []).find((p) => String(p.attributes?.customerPrice) === '499.99') ||
+        (ppResp?.data || []).find((p) => String(p.attributes?.customerPrice) === '499.0');
       url = ppResp?.links?.next || null;
     }
     if (targetPricePoint) {
@@ -930,12 +932,21 @@ async function syncReviewDetail(client, versionId) {
 }
 
 async function attachBuildAndOptionallySubmit(client, appId, versionId) {
-  console.log(`\n[8/8] Yüklenen en güncel VALID iOS Build (.ipa) kontrol ediliyor...`);
+  console.log(`\n[8/8] Yüklenen en güncel VALID iOS Build (.ipa) kontrol ediliyor (${TARGET_VERSION})...`);
   const buildsResp = await client.request(
     'GET',
-    `/v1/builds?filter[app]=${appId}&filter[processingState]=VALID&sort=-uploadedDate&limit=5`
+    `/v1/builds?filter[app]=${appId}&filter[processingState]=VALID&include=preReleaseVersion&sort=-uploadedDate&limit=10`
   );
-  const latestBuild = buildsResp?.data?.[0];
+  const preRelById = new Map(
+    (buildsResp?.included || [])
+      .filter((x) => x.type === 'preReleaseVersions')
+      .map((x) => [x.id, x.attributes?.version])
+  );
+  const matchingBuilds = (buildsResp?.data || []).filter((b) => {
+    const prId = b.relationships?.preReleaseVersion?.data?.id;
+    return preRelById.get(prId) === TARGET_VERSION;
+  });
+  const latestBuild = matchingBuilds[0] || buildsResp?.data?.[0];
 
   if (!latestBuild) {
     console.log(`  -> Henüz işlenmiş (VALID) bir .ipa derlemesi görünmüyor.`);

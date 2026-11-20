@@ -1,13 +1,13 @@
 Dear Apple App Review Team,
 
-Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA build: Version 1.0.0 (Build 9), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
+Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA update: Version 1.0.1 (Build 10), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
 
-1. Physical Device Testing & Scope (TestFlight Builds 1–9):
-- Tested via TestFlight on physical iPhone hardware (iPhone 12, latest iOS) across Builds 1–9 verifying compact 2-row keyboard-above sticker/title accessory bar, uninterrupted 1-finger panning after adding branches, safe-area margins, StoreKit 2 Sandbox retry handling, and crash-free offline execution. Build 9 slims the active-keyboard accessory bar so the mind-map canvas stays clearly visible while typing and ensures instant panning after node creation.
+1. Physical Device Testing & Scope (Version 1.0.1 — Build 10):
+- Tested on physical iPhone hardware verifying uninterrupted touch panning from anywhere on the canvas (including over nodes, with long-press to move nodes), instant 1-tap branch deletion right on the selected node and editor bar with 1-tap Undo toast, 1-handed zoom/center controls, compact keyboard accessory bar, and StoreKit 2 flows.
 - Confirmations:
   * Account login/deletion: NONE (no sign-in; stored locally on-device in IndexedDB).
   * User-generated content: NONE (no public feed, social sharing, or chat).
-  * Paid content: Non-Consumable "Lifetime Pro" (com.tahafirat.zihinharitam.lifetime_pro, 175 regions: TRY 199.99 / USD $3.99) submitted with 1.0.0 + "Restore Purchases" (AppStore.sync()).
+  * Paid content: Non-Consumable "Lifetime Pro" (com.tahafirat.zihinharitam.lifetime_pro, 175 regions: TRY 499.99 / USD $9.99) + "Restore Purchases" (AppStore.sync()).
 
 2. Purpose, Audience, Value & Portfolio Distinction:
 - Audience & Value: Visual dual-coding mind mapping & Active Recall study studio for university students, exam candidates, and educators. Combines tapered Bezier mind maps, 25,200+ instant (<8ms) offline academic icons, on-device textbook diagram cropping into die-cut stickers, Apple Pencil sketching, one-tap Exam Recall, and 300 DPI PDF/SVG export.
@@ -28,7 +28,7 @@ Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physi
 - Optional Online APIs (user-triggered): Open-license search (Wikimedia Commons, Openverse, ARASAAC) & optional "AI Çiz" (Pollinations.ai Flux or local BYOK keys for Gemini/OpenAI/Fal/Together) sending only non-personal concept keywords.
 
 5. Regional Differences:
-- None. Identical across all 175 App Store regions, zero geo-restrictions. Primary UI is Turkish (any text supported); StoreKit 2 localizes Lifetime Pro pricing per storefront (TRY 199.99 TR / USD $3.99 US).
+- None. Identical across all 175 App Store regions, zero geo-restrictions. Primary UI is Turkish (any text supported); StoreKit 2 localizes Lifetime Pro pricing per storefront (TRY 499.99 TR / USD $9.99 US).
 
 6. Regulated Industry & Third-Party Material:
 - Non-Regulated Student Utility: Sample Cardiology/Law templates are study outlines only—NOT medical or legal advice.

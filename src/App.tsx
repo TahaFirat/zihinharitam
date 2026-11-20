@@ -4,7 +4,12 @@ import {
   Plus,
   Sparkles,
   Maximize2,
+  ZoomIn,
+  ZoomOut,
+  Undo2,
+  Trash2,
 } from 'lucide-react';
+import { useKeyboardInset } from './core/native/useKeyboardInset';
 import type {
   AcademicDepartment,
   CollaboratorPresence,
@@ -187,9 +192,13 @@ export const App: React.FC = () => {
     previewSticker: null,
   });
 
-  // Undo / Redo History
+  // Undo / Redo History & Mobile Ergonomics
   const [pastDocs, setPastDocs] = useState<MindMapDocument[]>([]);
   const [futureDocs, setFutureDocs] = useState<MindMapDocument[]>([]);
+  const [zoomRequest, setZoomRequest] = useState<{ factor: number; seq: number } | null>(null);
+  const [deletedToast, setDeletedToast] = useState<{ label: string; count: number; seq: number } | null>(null);
+  const deleteToastTimerRef = useRef<number | null>(null);
+  const kbInset = useKeyboardInset();
 
   // Realtime Collaboration & Latest Document Ref for Atomic Lifecycle Flush
   const collabRef = useRef<RealtimeCollabSession | null>(null);
@@ -1039,21 +1048,25 @@ export const App: React.FC = () => {
   const handleDeleteNode = useCallback(
     (targetId: string) => {
       if (targetId === doc.rootNodeId) return;
+      const targetNode = doc.nodes[targetId];
+      if (!targetNode) return;
+
       pushHistory(doc);
       void hapticMedium();
 
-      setDoc((prev) => {
-        const toRemove = new Set<string>([targetId]);
-        let added = true;
-        while (added) {
-          added = false;
-          for (const n of Object.values(prev.nodes)) {
-            if (n.parentId && toRemove.has(n.parentId) && !toRemove.has(n.id)) {
-              toRemove.add(n.id);
-              added = true;
-            }
+      const toRemove = new Set<string>([targetId]);
+      let added = true;
+      while (added) {
+        added = false;
+        for (const n of Object.values(doc.nodes)) {
+          if (n.parentId && toRemove.has(n.parentId) && !toRemove.has(n.id)) {
+            toRemove.add(n.id);
+            added = true;
           }
         }
+      }
+
+      setDoc((prev) => {
         const nextNodes: Record<string, MindNode> = {};
         for (const [id, n] of Object.entries(prev.nodes)) {
           if (!toRemove.has(id)) nextNodes[id] = n;
@@ -1071,6 +1084,20 @@ export const App: React.FC = () => {
 
       setSelectedNodeId(null);
       setEditingNodeId(null);
+
+      // Show instant 5-second 1-tap Undo toast so branch deletion is effortless & worry-free
+      if (deleteToastTimerRef.current !== null) {
+        window.clearTimeout(deleteToastTimerRef.current);
+      }
+      setDeletedToast((prev) => ({
+        label: targetNode.title?.trim() || 'Dal',
+        count: toRemove.size,
+        seq: (prev?.seq ?? 0) + 1,
+      }));
+      deleteToastTimerRef.current = window.setTimeout(() => {
+        setDeletedToast(null);
+        deleteToastTimerRef.current = null;
+      }, 5000);
     },
     [doc, pushHistory]
   );
@@ -1737,6 +1764,7 @@ export const App: React.FC = () => {
             revealedExamIds={revealedExamIds}
             collaborators={collaborators}
             fitTrigger={fitTrigger}
+            zoomRequest={zoomRequest}
             radarJumpRequest={radarJump}
             onSelectNode={setSelectedNodeId}
             onStartEditing={(id) => {
@@ -1745,6 +1773,7 @@ export const App: React.FC = () => {
             }}
             onFinishEditing={handleFinishEditing}
             onUpdateNodeTitle={handleUpdateNodeTitle}
+            onDeleteNode={handleDeleteNode}
             onCommitBatchNodePositions={handleCommitBatchNodePositions}
             onCreateChildBranch={handleCreateChildBranch}
             onCompleteCrossLink={handleCompleteCrossLink}
@@ -1840,6 +1869,100 @@ export const App: React.FC = () => {
               setSelectedNodeId(null);
             }}
           />
+
+          {/* Instant 1-Tap Undo Toast after Deleting a Branch */}
+          {deletedToast && (
+            <div
+              data-testid="delete-undo-toast"
+              className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3"
+              style={{ top: 'max(68px, calc(var(--safe-top) + 60px))' }}
+            >
+              <div className="pointer-events-auto inline-flex items-center gap-2.5 rounded-2xl border border-rose-500/30 bg-slate-900/95 px-3.5 py-2 text-xs font-extrabold text-white shadow-xl backdrop-blur-md">
+                <Trash2 className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                <span className="max-w-[200px] truncate">
+                  “{deletedToast.label}”
+                  {deletedToast.count > 1 ? ` (+${deletedToast.count - 1} alt dal)` : ''} silindi
+                </span>
+                <button
+                  type="button"
+                  data-testid="delete-undo-btn"
+                  onClick={() => {
+                    if (deleteToastTimerRef.current !== null) {
+                      window.clearTimeout(deleteToastTimerRef.current);
+                      deleteToastTimerRef.current = null;
+                    }
+                    setDeletedToast(null);
+                    handleUndo();
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl bg-sky-500 px-2.5 py-1 text-xs font-black text-white shadow-xs active:scale-95"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  <span>Geri Al</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Compact 1-Handed Mobile/Tablet Right-Edge Zoom (+/-) & Quick Undo Controls */}
+          {!kbInset.isKeyboardOpen && examMode === 'off' && (
+            <div
+              className="pointer-events-auto fixed right-2.5 z-20 flex flex-col items-center gap-1 rounded-2xl border p-1 shadow-lg backdrop-blur-xl lg:hidden"
+              style={{
+                backgroundColor: 'var(--hud-bg)',
+                borderColor: 'var(--hud-border)',
+                bottom: activeStudioNode
+                  ? `${Math.max(210, kbInset.studioBarHeight + 16)}px`
+                  : 'calc(var(--safe-bottom) + 76px)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setZoomRequest((prev) => ({ factor: 1.24, seq: (prev?.seq ?? 0) + 1 }))
+                }
+                title="Yakınlaştır"
+                aria-label="Yakınlaştır"
+                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/12 active:scale-95"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setZoomRequest((prev) => ({ factor: 0.8, seq: (prev?.seq ?? 0) + 1 }))
+                }
+                title="Uzaklaştır"
+                aria-label="Uzaklaştır"
+                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/12 active:scale-95"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <div className="h-px w-5 bg-slate-400/25" />
+              <button
+                type="button"
+                onClick={() => setFitTrigger((n) => n + 1)}
+                title="Haritayı Ortala"
+                aria-label="Haritayı Ortala"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-emerald-600 hover:bg-emerald-500/12 active:scale-95 dark:text-emerald-400"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+              {pastDocs.length > 0 && (
+                <>
+                  <div className="h-px w-5 bg-slate-400/25" />
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    title="Geri Al"
+                    aria-label="Geri Al"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-sky-600 hover:bg-sky-500/12 active:scale-95 dark:text-sky-400"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Mobile & Tablet Thumb-Reachable Bottom Quick-Action Pill (When idle) */}
           {!selectedNodeId &&

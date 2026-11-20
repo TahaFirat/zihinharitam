@@ -6,7 +6,7 @@ on:
       marketing_version:
         description: 'Uygulama Sürümü (CFBundleShortVersionString)'
         required: false
-        default: '1.0.0'
+        default: '1.0.1'
         type: string
       build_number:
         description: 'Özel Build Numarası (boş bırakılırsa github.run_number kullanılır)'
@@ -167,8 +167,9 @@ jobs:
           fi
           MARKETING_VER="${{ inputs.marketing_version }}"
           if [ -z "$MARKETING_VER" ]; then
-            MARKETING_VER="1.0.0"
+            MARKETING_VER="$(node -p "require('./package.json').version")"
           fi
+          echo "MARKETING_VERSION=$MARKETING_VER" >> "$GITHUB_ENV"
 
           cd ios/App
           xcrun agvtool new-marketing-version "$MARKETING_VER"
@@ -319,7 +320,7 @@ jobs:
             --apiKey "$APPSTORE_KEY_ID" \
             --apiIssuer "$APPSTORE_ISSUER_ID"
 
-      - name: Sync TR/EN Store Metadata, 15 Screenshots & 200 TL IAP via ASC API
+      - name: Sync TR/EN Store Metadata, 15 Screenshots & 499 TL IAP via ASC API
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.sync_store_metadata == true }}
         continue-on-error: true
         env:
@@ -327,6 +328,7 @@ jobs:
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APPSTORE_PRIVATE_KEY_P8: ${{ secrets.APPSTORE_PRIVATE_KEY_P8 }}
           APPSTORE_PUBLIC_BASE_URL: ${{ vars.APPSTORE_PUBLIC_BASE_URL }}
+          MARKETING_VERSION: ${{ env.MARKETING_VERSION }}
         run: |
           node scripts/appstore-connect-api-submit.mjs --skip-screenshots
 

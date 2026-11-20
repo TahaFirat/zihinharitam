@@ -217,9 +217,9 @@ async function runGate3IosNativePrivacyAndCI() {
   if (
     configTs.includes('com.tahafirat.zihinharitam') &&
     configTs.includes('com.tahafirat.zihinharitam.lifetime_pro') &&
-    configTs.includes('200 ₺')
+    configTs.includes('499 ₺')
   ) {
-    pass('Tek merkezli appReleaseConfig.ts kimlikleri', 'Bundle ID + IAP ID + 200 ₺ doğrulandı');
+    pass('Tek merkezli appReleaseConfig.ts kimlikleri', 'Bundle ID + IAP ID + 499 ₺ doğrulandı');
   } else {
     fail('Tek merkezli appReleaseConfig.ts kimlikleri', 'Eksik alan');
   }
@@ -435,11 +435,11 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
 
     if (
       countAtThree === 3 &&
-      paywallText.includes('200 ₺') &&
+      paywallText.includes('499 ₺') &&
       paywallText.includes('Satın Alımları Geri Yükle')
     ) {
       pass(
-        '3 Ücretsiz Harita limiti ve 4. haritada 200 ₺ Ömür Boyu Pro Paywall kilidi',
+        '3 Ücretsiz Harita limiti ve 4. haritada 499 ₺ Ömür Boyu Pro Paywall kilidi',
         '3/3 korundu, 4. harita Paywall açtı'
       );
     } else {
@@ -543,6 +543,100 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
           `homeOverflow=${homeOverflow}, canvasOverflow=${canvasOverflow}`
         );
       }
+    }
+
+    // 5.4 Mobile Touch-on-Node Canvas Panning & 1-Tap Quick Delete + Undo Toast Verification
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(
+      `${baseUrl}/?view=canvas&tpl=tpl_tip_kardiyoloji&edit=m1&no_onboard=1`,
+      { waitUntil: 'domcontentloaded' }
+    );
+    await page.waitForTimeout(550);
+
+    // Verify 1-tap on-node delete button & studio delete button exist, delete node, verify Undo toast restores it
+    const quickDeleteVisible = await page
+      .locator('[data-testid="node-quick-delete-btn"]')
+      .first()
+      .isVisible();
+    const studioDeleteVisible = await page
+      .locator('[data-testid="studio-delete-btn"]')
+      .isVisible();
+    await page.click('[data-testid="node-quick-delete-btn"]');
+    await page.waitForTimeout(250);
+    const undoToastVisible = await page
+      .locator('[data-testid="delete-undo-toast"]')
+      .isVisible();
+    await page.click('[data-testid="delete-undo-btn"]');
+    await page.waitForTimeout(250);
+    const nodeRestoredVisible = await page
+      .locator('[data-node-card-id="m1"]')
+      .isVisible();
+
+    if (quickDeleteVisible && studioDeleteVisible && undoToastVisible && nodeRestoredVisible) {
+      pass(
+        'Mobil tek dokunuş Dal Silme & 5sn Geri Al (Undo) akışı',
+        'Dal üzeri Sil + Panel Sil + Geri Al doğrulandı'
+      );
+    } else {
+      fail(
+        'Mobil tek dokunuş Dal Silme & Geri Al akışı',
+        `quickDel=${quickDeleteVisible}, studioDel=${studioDeleteVisible}, toast=${undoToastVisible}, restored=${nodeRestoredVisible}`
+      );
+    }
+
+    // Verify touch pointer drag starting ON TOP of a node smoothly pans the canvas
+    const panResult = await page.evaluate(async () => {
+      const card = document.querySelector('[data-node-card-id="m1"]');
+      const stage = document.querySelector('.canvas-stage');
+      const world = stage?.querySelector('.will-change-transform');
+      if (!card || !stage || !world) return { ok: false, reason: 'missing dom' };
+      const before = getComputedStyle(world).transform;
+      const r = card.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      card.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 77,
+          pointerType: 'touch',
+          isPrimary: true,
+          clientX: cx,
+          clientY: cy,
+        })
+      );
+      for (let i = 1; i <= 5; i++) {
+        stage.dispatchEvent(
+          new PointerEvent('pointermove', {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 77,
+            pointerType: 'touch',
+            isPrimary: true,
+            clientX: cx + i * 16,
+            clientY: cy + i * 10,
+          })
+        );
+      }
+      stage.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 77,
+          pointerType: 'touch',
+          isPrimary: true,
+          clientX: cx + 80,
+          clientY: cy + 50,
+        })
+      );
+      await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      const after = getComputedStyle(world).transform;
+      return { ok: before !== after, before, after };
+    });
+    if (panResult.ok) {
+      pass('Mobil dokunmatik kaydırma (kart üzerinden harita pan)', 'Sorunsuz kaydırıldı');
+    } else {
+      fail('Mobil dokunmatik kaydırma (kart üzerinden harita pan)', JSON.stringify(panResult));
     }
 
     if (pageErrors.length === 0) {
