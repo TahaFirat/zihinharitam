@@ -943,12 +943,12 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
         {
           locale: 'tr',
           name: 'Yıllık Pro (%50 Avantajlı)',
-          description: 'Sınırsız harita, 25.000+ çıkartma, sınav modu ve 300 DPI PDF.',
+          description: 'Sınırsız harita, 25.000+ ikon ve 300 DPI PDF.',
         },
         {
           locale: 'en-US',
           name: 'Yearly Pro (Save 50%)',
-          description: 'Unlimited mind maps, 25,000+ stickers, exam mode & PDF export.',
+          description: 'Unlimited maps, 25,000+ stickers & PDF export.',
         },
       ],
     },
@@ -963,12 +963,12 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
         {
           locale: 'tr',
           name: 'Aylık Pro Abonelik',
-          description: 'Esnek aylık sınırsız harita, 25.000+ çıkartma ve 300 DPI PDF.',
+          description: 'Esnek aylık sınırsız harita ve 25.000+ ikon.',
         },
         {
           locale: 'en-US',
           name: 'Monthly Pro Subscription',
-          description: 'Flexible monthly unlimited maps, 25,000+ stickers & PDF export.',
+          description: 'Monthly unlimited maps & 25,000+ stickers.',
         },
       ],
     },
