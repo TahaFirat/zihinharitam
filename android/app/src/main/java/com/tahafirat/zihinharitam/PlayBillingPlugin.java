@@ -169,7 +169,8 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder()
                 .setProductList(subProducts)
                 .build();
-            billingClient.queryProductDetailsAsync(params, (billingResult, list) -> {
+            billingClient.queryProductDetailsAsync(params, (billingResult, queryResult) -> {
+                List<ProductDetails> list = queryResult != null ? queryResult.getProductDetailsList() : null;
                 if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
                     synchronized (results) {
                         for (ProductDetails pd : list) {
@@ -186,7 +187,8 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder()
                 .setProductList(inappProducts)
                 .build();
-            billingClient.queryProductDetailsAsync(params, (billingResult, list) -> {
+            billingClient.queryProductDetailsAsync(params, (billingResult, queryResult) -> {
+                List<ProductDetails> list = queryResult != null ? queryResult.getProductDetailsList() : null;
                 if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
                     synchronized (results) {
                         for (ProductDetails pd : list) {
@@ -265,7 +267,8 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
 
             billingClient.queryProductDetailsAsync(
                 QueryProductDetailsParams.newBuilder().setProductList(single).build(),
-                (res, list) -> {
+                (res, queryResult) -> {
+                    List<ProductDetails> list = queryResult != null ? queryResult.getProductDetailsList() : null;
                     if (res.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null && !list.isEmpty()) {
                         ProductDetails pd = list.get(0);
                         productCache.put(pd.getProductId(), pd);
