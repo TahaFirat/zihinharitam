@@ -1,5 +1,5 @@
-• YENİ: Dal altına uzun, çok satırlı ders açıklamaları, ☑️ görev kutuları ve 🔥 Önem / Sınavda Çıkar etiketleri eklendi!
-• YENİ: Hiyerarşik Anahat (Liste) görünümü ile tüm ağacı tek ekranda görüntüleyip düzenleme özelliği (%100 Ücretsiz).
-• YENİ: Telefon ve iPad galerinizden doğrudan fotoğraf / şema ekleme ("🖼️ Foto Ekle") ve gelişmiş 3D özel ikon stüdyosu!
-• YENİ: "🎁 Ücretsiz" ikon filtresi ve hassas S / M / L / XL ikon boyutlandırma kontrolleri.
-• İYİLEŞTİRME: Uzun açıklamalarda ve büyük ikonlarda ağaçların birbirine karışmasını önleyen akıllı yerleşim motoru ile tek seferlik karşılama ekranı.
+- YENİ: Dal altına uzun, çok satırlı ders açıklamaları, görev onay kutuları ve Önem / Sınavda Çıkar etiketleri eklendi.
+- YENİ: Hiyerarşik Anahat (Liste) görünümü ile tüm ağacı tek ekranda görüntüleyip düzenleme özelliği (%100 Ücretsiz).
+- YENİ: Telefon ve iPad galerinizden doğrudan fotoğraf / şema ekleme ("Foto Ekle") ve gelişmiş 3D özel ikon stüdyosu.
+- YENİ: "Ücretsiz" ikon filtresi ve hassas S / M / L / XL ikon boyutlandırma kontrolleri.
+- İYİLEŞTİRME: Uzun açıklamalarda ve büyük ikonlarda ağaçların birbirine karışmasını önleyen akıllı yerleşim motoru ile tek seferlik karşılama ekranı.
