@@ -71,11 +71,12 @@ jobs:
       - name: Build Signed Play Store AAB & Universal APK
         working-directory: android
         env:
-          ZH_UPLOAD_STORE_FILE: ../keystore/upload-keystore.jks
+          ZH_UPLOAD_STORE_FILE: ${{ github.workspace }}/android/keystore/upload-keystore.jks
           ZH_UPLOAD_STORE_PASSWORD: ${{ env.STORE_PASSWORD }}
           ZH_UPLOAD_KEY_ALIAS: ${{ env.KEY_ALIAS }}
           ZH_UPLOAD_KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         run: |
+          sed -i 's/\r$//' gradlew
           chmod +x gradlew
           ./gradlew bundleRelease assembleRelease --no-daemon
 
