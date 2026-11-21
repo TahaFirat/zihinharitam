@@ -285,17 +285,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span className="text-[11.5px] opacity-70">
                   Daha önce satın aldıysanız Apple kimliğinizle ücretsiz geri yükleyin:
                 </span>
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => void handleRestorePurchases()}
-                  data-testid="settings-restore-purchases-btn"
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-extrabold text-sky-600 hover:bg-sky-500/10 dark:text-sky-400"
-                  style={{ borderColor: 'var(--hud-border)' }}
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isBusy ? 'animate-spin' : ''}`} />
-                  <span>Satın Alımları Geri Yükle</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void hapticSuccess();
+                      EntitlementManager.resetUsageCounters();
+                      setStatusMessage('Ücretsiz kullanım ve deneme sayaçları sıfırlandı.');
+                    }}
+                    data-testid="settings-reset-counters-btn"
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/12 px-3 py-1.5 text-xs font-extrabold text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span>Sayaçları Sıfırla</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void handleRestorePurchases()}
+                    data-testid="settings-restore-purchases-btn"
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-extrabold text-sky-600 hover:bg-sky-500/10 dark:text-sky-400"
+                    style={{ borderColor: 'var(--hud-border)' }}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isBusy ? 'animate-spin' : ''}`} />
+                    <span>Satın Alımları Geri Yükle</span>
+                  </button>
+                </div>
               </div>
             </div>
 

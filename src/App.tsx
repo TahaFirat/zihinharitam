@@ -1653,6 +1653,22 @@ export const App: React.FC = () => {
             setSettingsOpen(true);
           }}
           onTriggerPaywall={(reason) => openPaywall(reason, null)}
+          onResetMapCounter={() => {
+            void (async () => {
+              void hapticSuccess();
+              EntitlementManager.resetUsageCounters();
+              const all = await LocalStore.listMaps();
+              const active = all
+                .filter((m) => !m.deletedAt)
+                .sort((a, b) => b.updatedAt - a.updatedAt);
+              if (active.length > 1) {
+                for (let i = 1; i < active.length; i++) {
+                  await LocalStore.moveToTrash(active[i].id);
+                }
+              }
+              setSavedMaps(await LocalStore.listMaps());
+            })();
+          }}
         />
       ) : (
         <>

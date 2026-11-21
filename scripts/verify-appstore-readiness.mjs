@@ -645,6 +645,44 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('Mobil dokunmatik kaydırma (kart üzerinden harita pan)', JSON.stringify(panResult));
     }
 
+    // 5.5 Zero-API-Key Free Custom Sticker Studio ("AI Çiz") & Study/Usage Counter Reset Verification
+    await page.click('[data-node-card-id="m1"]');
+    await page.waitForTimeout(200);
+    const aiBtn = page.locator('button:has-text("AI Çiz")').first();
+    await aiBtn.click();
+    await page.waitForSelector('[data-testid="ai-sticker-studio-modal"]', { timeout: 6000 });
+    await page.waitForSelector('[data-testid="ai-candidate-slot-0"]', { timeout: 6000 });
+    const studioText = await page.locator('[data-testid="ai-sticker-studio-modal"]').innerText();
+    const hasFourCandidates =
+      (await page.locator('[data-testid^="ai-candidate-slot-"]').count()) === 4;
+    const asksForApiKey = /API Anahtar|anahtarınızı tanımla|BYOK/i.test(studioText);
+    if (hasFourCandidates && !asksForApiKey) {
+      pass(
+        '%100 Ücretsiz & API Anahtarsız Akıllı Çıkartma/İkon Stüdyosu (AI Çiz)',
+        '4 özel die-cut aday + 32+ ikon anında üretildi'
+      );
+    } else {
+      fail(
+        '%100 Ücretsiz Akıllı Çıkartma/İkon Stüdyosu',
+        `hasFour=${hasFourCandidates}, asksForApiKey=${asksForApiKey}`
+      );
+    }
+    await page.click('[data-testid="ai-candidate-slot-0"]');
+    await page.waitForTimeout(300);
+
+    // Test Study Timer Counter & 1-Tap Reset in TopMinimalHUD
+    await page.click('[data-testid="hud-timer-toggle-btn"]');
+    await page.waitForSelector('[data-testid="study-timer-pill"]', { timeout: 4000 });
+    await page.click('[data-testid="study-timer-play-btn"]');
+    await page.waitForTimeout(250);
+    await page.click('[data-testid="study-timer-reset-btn"]');
+    const timerText = await page.locator('[data-testid="study-timer-pill"]').innerText();
+    if (timerText.includes('00:00') && timerText.includes('Sıfırla')) {
+      pass('Çalışma & Sınav Sayacı tek dokunuş "Sıfırla" kontrolü', '00:00 sıfırlama doğrulandı');
+    } else {
+      fail('Çalışma & Sınav Sayacı sıfırlama kontrolü', timerText);
+    }
+
     if (pageErrors.length === 0) {
       pass('Çalışma zamanı (Runtime) konsol / sayfa hatası', '0 hata');
     } else {

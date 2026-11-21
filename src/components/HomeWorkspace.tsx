@@ -56,6 +56,7 @@ interface HomeWorkspaceProps {
   onImportZihinFile: (rawJson: string) => void;
   onOpenSettings: () => void;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
+  onResetMapCounter?: () => void;
 }
 
 function formatRelativeDateTr(ts: number): string {
@@ -90,6 +91,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onImportZihinFile,
   onOpenSettings,
   onTriggerPaywall,
+  onResetMapCounter,
 }) => {
   const { isLifetimePro, localizedPrice } = useEntitlements();
   const [searchQuery, setSearchQuery] = useState('');
@@ -320,34 +322,49 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 Hızlı Başlangıç & Akademik Şablonlar
               </h2>
 
-              {/* Free Tier Transparent Map Counter */}
+              {/* Free Tier Transparent Map Counter + 1-Tap Counter Reset */}
               {!isLifetimePro && (
-                <button
-                  type="button"
-                  onClick={() => onTriggerPaywall('map_limit')}
-                  data-testid="free-map-quota-badge"
-                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-bold hover:bg-slate-500/5"
-                  style={{
-                    backgroundColor: 'var(--hud-bg)',
-                    borderColor: 'var(--hud-border)',
-                  }}
-                >
-                  <span>
-                    Ücretsiz Harita:{' '}
-                    <strong>
-                      {Math.min(activeMapsCount, freeLimit)} / {freeLimit}
-                    </strong>{' '}
-                    Kullanıldı
-                  </span>
-                  <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-400/25">
-                    <span
-                      className="block h-full rounded-full bg-amber-500 transition-all"
-                      style={{
-                        width: `${Math.min(100, (activeMapsCount / freeLimit) * 100)}%`,
-                      }}
-                    />
-                  </span>
-                </button>
+                <div className="inline-flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onTriggerPaywall('map_limit')}
+                    data-testid="free-map-quota-badge"
+                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-bold hover:bg-slate-500/5"
+                    style={{
+                      backgroundColor: 'var(--hud-bg)',
+                      borderColor: 'var(--hud-border)',
+                    }}
+                  >
+                    <span>
+                      Ücretsiz Harita:{' '}
+                      <strong>
+                        {Math.min(activeMapsCount, freeLimit)} / {freeLimit}
+                      </strong>{' '}
+                      Kullanıldı
+                    </span>
+                    <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-400/25">
+                      <span
+                        className="block h-full rounded-full bg-amber-500 transition-all"
+                        style={{
+                          width: `${Math.min(100, (activeMapsCount / freeLimit) * 100)}%`,
+                        }}
+                      />
+                    </span>
+                  </button>
+
+                  {onResetMapCounter && (
+                    <button
+                      type="button"
+                      data-testid="reset-map-counter-btn"
+                      onClick={onResetMapCounter}
+                      title="Harita ve ücretsiz kullanım sayacını sıfırla"
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/35 bg-sky-500/12 px-2.5 py-1 text-[11px] font-extrabold text-sky-700 transition hover:bg-sky-500/20 active:scale-95 dark:text-sky-300"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Sayacı Sıfırla</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 

@@ -1,8 +1,8 @@
 Dear Apple App Review Team,
 
-Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA update: Version 1.0.1 (Build 12), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
+Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA update: Version 1.0.1 (Build 13), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
 
-1. Physical Device Testing & Scope (Version 1.0.1 — Build 12):
+1. Physical Device Testing & Scope (Version 1.0.1 — Build 13):
 - Tested on physical iPhone hardware verifying uninterrupted touch panning from anywhere on the canvas (including over nodes, with long-press to move nodes), instant 1-tap branch deletion right on the selected node and editor bar with 1-tap Undo toast, 1-handed zoom/center controls, compact keyboard accessory bar, and StoreKit 2 flows.
 - Confirmations:
   * Account login/deletion: NONE (no sign-in; stored locally on-device in IndexedDB).

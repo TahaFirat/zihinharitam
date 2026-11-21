@@ -20,6 +20,9 @@ import {
   Layers,
   Settings,
   Zap,
+  Timer,
+  Play,
+  Pause,
 } from 'lucide-react';
 import {
   DEPARTMENT_LABELS,
@@ -100,6 +103,21 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
   const [offlineTotal, setOfflineTotal] = useState(0);
+  const [showStudyTimer, setShowStudyTimer] = useState(false);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const id = window.setInterval(() => {
+      setTimerSeconds((s) => s + 1);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [timerRunning]);
+
+  const formattedTimer = `${String(Math.floor(timerSeconds / 60)).padStart(2, '0')}:${String(
+    timerSeconds % 60
+  ).padStart(2, '0')}`;
 
   const examRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -213,21 +231,79 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
         )}
       </div>
 
-      {/* Center Active Exam Recall Pill */}
-      {examMode !== 'off' && (
-        <div className="pointer-events-auto hidden items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-sm backdrop-blur-md lg:flex dark:text-amber-300">
-          <Eye className="h-3.5 w-3.5" />
-          <span>
-            Sınav Modu: {examStats.revealed} / {examStats.total} Açıldı
-          </span>
-          <button
-            type="button"
-            onClick={onResetExamReveals}
-            className="ml-1 inline-flex items-center gap-1 rounded-lg bg-amber-500/20 px-2 py-0.5 hover:bg-amber-500/30"
-          >
-            <RotateCcw className="h-3 w-3" />
-            Sıfırla
-          </button>
+      {/* Center / Sub-Header Active Exam Counter & Study Timer Pill (Visible on Mobile, Tablet & Desktop!) */}
+      {(examMode !== 'off' || showStudyTimer || timerRunning || timerSeconds > 0) && (
+        <div
+          className="pointer-events-none fixed inset-x-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-3 lg:static lg:w-auto lg:px-0"
+          style={{ top: 'max(64px, calc(var(--safe-top) + 56px))' }}
+        >
+          {examMode !== 'off' && (
+            <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/15 px-3 py-1.5 text-xs font-extrabold text-amber-800 shadow-md backdrop-blur-md dark:text-amber-200">
+              <Eye className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Sınav Sayacı: {examStats.revealed} / {examStats.total}
+              </span>
+              <button
+                type="button"
+                data-testid="exam-counter-reset-btn"
+                onClick={onResetExamReveals}
+                className="ml-0.5 inline-flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-0.5 text-[11px] font-black text-slate-950 shadow-2xs transition hover:bg-amber-400 active:scale-95"
+              >
+                <RotateCcw className="h-3 w-3" />
+                <span>Sıfırla</span>
+              </button>
+            </div>
+          )}
+
+          {(showStudyTimer || timerRunning || timerSeconds > 0) && (
+            <div
+              data-testid="study-timer-pill"
+              className="pointer-events-auto flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-xs font-extrabold shadow-md backdrop-blur-md"
+              style={{
+                backgroundColor: 'var(--hud-bg)',
+                borderColor: 'var(--hud-border)',
+              }}
+            >
+              <Timer className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+              <span className="font-mono text-xs font-black tabular-nums">
+                {formattedTimer}
+              </span>
+              <button
+                type="button"
+                data-testid="study-timer-play-btn"
+                onClick={() => setTimerRunning((r) => !r)}
+                title={timerRunning ? 'Duraklat' : 'Başlat'}
+                className={`inline-flex items-center gap-1 rounded-xl px-2 py-0.5 text-[11px] font-black text-white shadow-2xs active:scale-95 ${
+                  timerRunning ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500'
+                }`}
+              >
+                {timerRunning ? (
+                  <>
+                    <Pause className="h-3 w-3" />
+                    <span>Durdur</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3 w-3" />
+                    <span>Başlat</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                data-testid="study-timer-reset-btn"
+                onClick={() => {
+                  setTimerRunning(false);
+                  setTimerSeconds(0);
+                }}
+                title="Sayacı Sıfırla"
+                className="inline-flex items-center gap-1 rounded-xl border border-rose-500/35 bg-rose-500/12 px-2 py-0.5 text-[11px] font-black text-rose-600 hover:bg-rose-500/20 active:scale-95 dark:text-rose-300"
+              >
+                <RotateCcw className="h-3 w-3" />
+                <span>Sıfırla</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -315,6 +391,26 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
         >
           <Target className="h-4 w-4" />
           <span className="hidden 2xl:inline">Odak</span>
+        </button>
+
+        {/* Study Timer / Counter Toggle Button */}
+        <button
+          type="button"
+          data-testid="hud-timer-toggle-btn"
+          onClick={() => setShowStudyTimer((v) => !v)}
+          title="Çalışma Sayacı & Kronometre (Başlat / Sıfırla)"
+          className={`flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-bold active:scale-95 ${
+            showStudyTimer || timerRunning || timerSeconds > 0
+              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+              : 'hover:bg-slate-500/10'
+          }`}
+        >
+          <Timer className="h-4 w-4" />
+          {(timerRunning || timerSeconds > 0) && (
+            <span className="font-mono text-[10.5px] font-black tabular-nums">
+              {formattedTimer}
+            </span>
+          )}
         </button>
 
         {/* Active Recall / Exam Mode Dropdown */}

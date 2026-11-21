@@ -248,11 +248,7 @@ class EntitlementStore {
   }
 
   public canUseAiSticker(): boolean {
-    if (this.snapshot.isLifetimePro) return true;
-    return (
-      this.snapshot.usage.aiStickersUsed <
-      APP_RELEASE_CONFIG.quotas.freeAiStickerDrawsLimit
-    );
+    return true;
   }
 
   public recordAiStickerUsed(): void {
@@ -263,6 +259,16 @@ class EntitlementStore {
     };
     saveUsageCounters(next);
     this.update({ usage: next });
+  }
+
+  public resetUsageCounters(): void {
+    const cleared: UsageCounters = {
+      noteCropsUsed: 0,
+      smartMapsUsed: 0,
+      aiStickersUsed: 0,
+    };
+    saveUsageCounters(cleared);
+    this.update({ usage: cleared });
   }
 
   public canUseProExport(): boolean {
