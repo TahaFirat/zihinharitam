@@ -219,7 +219,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
           maxHeight: `${Math.max(300, kb.viewportH - 16)}px`,
-          paddingBottom: kb.isKeyboardOpen ? '4px' : 'var(--safe-bottom)',
+          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
       >
         {/* Header (Zero API key required — 100% Free Built-In Engine) */}

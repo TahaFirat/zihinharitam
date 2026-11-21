@@ -26,15 +26,25 @@ export interface OfflineEngineStatus {
 const PACK_DISPLAY_NAMES: Record<string, string> = {
   'fluent-emoji-flat': 'Fluent Emoji (Offline)',
   'fluent-color': 'Fluent 3D Color (Offline)',
+  'streamline-color': 'Streamline Renkli (Offline)',
+  'streamline-emojis': 'Streamline Sticker (Offline)',
+  twemoji: 'Twemoji Renkli (Offline)',
   openmoji: 'OpenMoji El Çizimi (Offline)',
   'icon-park': 'IconPark Renkli (Offline)',
   'flat-color-icons': 'Flat Color (Offline)',
+  meteocons: 'Meteocons Doğa (Offline)',
+  'circle-flags': 'Dünya Bayrakları (Offline)',
+  'vscode-icons': 'VSCode Geliştirici (Offline)',
   logos: 'Teknoloji Logosu (Offline)',
   devicon: 'Devicon (Offline)',
   'skill-icons': 'Skill Icons (Offline)',
+  'simple-icons': 'Marka & Uygulama (Offline)',
   healthicons: 'HealthIcons Tıp (Offline)',
   'medical-icon': 'Medical Atlas (Offline)',
   'game-icons': 'Ansiklopedik Vektör (Offline)',
+  mdi: 'Material Design (Offline)',
+  lucide: 'Lucide Modern (Offline)',
+  'fa6-solid': 'FontAwesome (Offline)',
   ph: 'Phosphor Duotone (Offline)',
   carbon: 'IBM Carbon Mimarisi (Offline)',
   tabler: 'Tabler Teknik (Offline)',
@@ -44,10 +54,20 @@ function mapHitToCategoryAndMode(hit: HydratedOfflineHit): {
   category: Exclude<GalleryCategoryFilter, 'all'>;
   mode: VisualStyleMode;
 } {
-  if (hit.pack === 'fluent-color' || hit.pack === 'fluent-emoji-flat') {
+  if (
+    hit.pack === 'fluent-color' ||
+    hit.pack === 'fluent-emoji-flat' ||
+    hit.pack === 'streamline-color' ||
+    hit.pack === 'meteocons'
+  ) {
     return { category: '3d_color', mode: '3d' };
   }
-  if (hit.pack === 'openmoji') {
+  if (
+    hit.pack === 'openmoji' ||
+    hit.pack === 'twemoji' ||
+    hit.pack === 'streamline-emojis' ||
+    hit.pack === 'circle-flags'
+  ) {
     return { category: 'hand_drawn', mode: 'illustration' };
   }
   if (hit.pack === 'healthicons' || hit.pack === 'medical-icon') {
@@ -57,6 +77,8 @@ function mapHitToCategoryAndMode(hit: HydratedOfflineHit): {
     hit.pack === 'logos' ||
     hit.pack === 'devicon' ||
     hit.pack === 'skill-icons' ||
+    hit.pack === 'vscode-icons' ||
+    hit.pack === 'simple-icons' ||
     hit.pack === 'carbon'
   ) {
     return {

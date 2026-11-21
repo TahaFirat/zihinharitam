@@ -51,14 +51,14 @@ Tüm teknik gereksinimler (**Android API 35 / Target SDK 35**, **Google Play Bil
 ---
 
 ## 5. Google Play Faturalandırma (Abonelikler ve Ömür Boyu Pro Ürün ID'leri)
-`.aab` dosyasını ilk kez **Dahili Test (Internal Testing)** veya **Kapalı Test** kanalına yüklediğinizde Google Play `PlayBillingPlugin` (`com.android.billingclient:billing:7.1.1`) kütüphanesini otomatik algılayacak ve **Para Kazanma → Ürünler** menüsünü açacaktır. Aynı ID'leri birebir tanımlayın:
+`.aab` dosyasını ilk kez **Dahili Test (Internal Testing)** veya **Kapalı Test** kanalına yüklediğinizde Google Play `PlayBillingPlugin` (`com.android.billingclient:billing:8.0.0`) kütüphanesini otomatik algılayacak ve **Para Kazanma → Ürünler** menüsünü açacaktır. Aynı ID'leri birebir tanımlayın:
 
 1. **Abonelik 1 — Aylık Pro**
    - **Ürün Kimliği (Product ID)**: `com.tahafirat.zihinharitam.pro_monthly`
-   - **Fiyat**: Türkiye `249,99 ₺ / ay` | Global `$4.99 / mo`
+   - **Fiyat**: Türkiye `499,99 ₺ / ay` | Global `$9.99 / mo`
 2. **Abonelik 2 — Yıllık Pro**
    - **Ürün Kimliği (Product ID)**: `com.tahafirat.zihinharitam.pro_yearly`
-   - **Fiyat**: Türkiye `1.499,99 ₺ / yıl` | Global `$29.99 / yr`
+   - **Fiyat**: Türkiye `2.999,99 ₺ / yıl` | Global `$59.99 / yr`
 3. **Uygulama İçi Ürün (Tek Seferlik) — Ömür Boyu Pro**
    - **Ürün Kimliği (Product ID)**: `com.tahafirat.zihinharitam.lifetime_pro`
-   - **Fiyat**: Türkiye `2.499,99 ₺` | Global `$49.99`
+   - **Fiyat**: Türkiye `4.999,99 ₺` | Global `$99.99`

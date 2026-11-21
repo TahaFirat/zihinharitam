@@ -1,5 +1,4 @@
-- NEW: Multi-line branch descriptions, interactive task checkboxes, and study priority tags.
-- NEW: Hierarchical Outliner view to browse and edit your entire mind map as a structured list (100% Free).
-- NEW: Import photos and textbook figures directly from your device gallery, plus an upgraded 3D custom sticker studio.
-- NEW: 1-tap Free Icons filter and responsive S / M / L / XL sticker sizing controls.
-- IMPROVED: Collision-free smart tree layout engine and one-time first-launch onboarding.
+- PERFORMANCE: Zero-idle on-demand rendering engine, cached vector paths, and hardware-accelerated 60/120 FPS canvas for ultra-cool battery life and zero lag.
+- MASSIVE ICON LIBRARY: 43,000+ bundled offline icons plus 540,000+ live online vector icons with automatic multilingual matching.
+- TABLET & PHONE POLISH: Full system-bar and tablet taskbar safe-area clearance with enlarged S/M/L/XL sizing touch targets.
+- NEW: Multi-line branch notes, task checkboxes, Hierarchical Outliner view, gallery photo import, and one-time onboarding.

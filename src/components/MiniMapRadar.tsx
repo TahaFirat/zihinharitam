@@ -13,7 +13,7 @@ interface MiniMapRadarProps {
   onJumpToWorldPoint: (worldX: number, worldY: number) => void;
 }
 
-export const MiniMapRadar: React.FC<MiniMapRadarProps> = ({
+export const MiniMapRadar: React.FC<MiniMapRadarProps> = React.memo(({
   nodes,
   rootNodeId,
   hiddenNodeIds,
@@ -84,7 +84,7 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = ({
         style={{
           backgroundColor: 'var(--hud-bg)',
           borderColor: 'var(--hud-border)',
-          bottom: 'calc(var(--safe-bottom) + 14px)',
+          bottom: 'max(24px, calc(var(--safe-bottom) + 22px))',
           right: 'calc(var(--safe-right) + 14px)',
         }}
         className="fixed z-20 hidden items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md transition-transform hover:scale-103 active:scale-95 sm:flex"
@@ -100,7 +100,7 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = ({
       style={{
         backgroundColor: 'var(--hud-bg)',
         borderColor: 'var(--hud-border)',
-        bottom: 'calc(var(--safe-bottom) + 14px)',
+        bottom: 'max(24px, calc(var(--safe-bottom) + 22px))',
         right: 'calc(var(--safe-right) + 14px)',
       }}
       className="fixed z-20 hidden flex-col overflow-hidden rounded-2xl border p-2 shadow-xl backdrop-blur-md sm:flex"
@@ -175,4 +175,4 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = ({
       </svg>
     </div>
   );
-};
+});

@@ -1,5 +1,4 @@
-- YENİ: Dal altına uzun, çok satırlı ders açıklamaları, görev onay kutuları ve Önem / Sınavda Çıkar etiketleri eklendi.
-- YENİ: Hiyerarşik Anahat (Liste) görünümü ile tüm ağacı tek ekranda görüntüleyip düzenleme özelliği (%100 Ücretsiz).
-- YENİ: Telefon ve iPad galerinizden doğrudan fotoğraf / şema ekleme ("Foto Ekle") ve gelişmiş 3D özel ikon stüdyosu.
-- YENİ: "Ücretsiz" ikon filtresi ve hassas S / M / L / XL ikon boyutlandırma kontrolleri.
-- İYİLEŞTİRME: Uzun açıklamalarda ve büyük ikonlarda ağaçların birbirine karışmasını önleyen akıllı yerleşim motoru ile tek seferlik karşılama ekranı.
+- PERFORMANS: Sıfır bekleme CPU/GPU motoru, önbellekli vektör dallar ve donanım hızlandırmalı 60/120 FPS akıcı tuval (ısınma ve kasma tamamen giderildi).
+- YENİ İKON MOTORU: 43.000+ çevrimdışı vektör ikon ve 540.000+ çevrimiçi ikon araması ile otomatik Türkçe-İngilizce eşleştirme.
+- TABLET VE TELEFON UYUMU: Android tablet görev çubuğu ve iPad alt alanı için tam güvenli kenar boşlukları ve büyütülmüş dokunmatik S/M/L/XL boyut kontrolleri.
+- YENİ: Dal altı uzun açıklamalar, görev kutuları, Hiyerarşik Liste (Anahat) görünümü, galeriden fotoğraf ekleme ve tek seferlik karşılama ekranı.

@@ -48,7 +48,7 @@ export const MapGalleryModal: React.FC<MapGalleryModalProps> = ({
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          paddingBottom: 'var(--safe-bottom)',
+          paddingBottom: 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
       >
         {/* Header */}

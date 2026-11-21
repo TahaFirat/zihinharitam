@@ -35,7 +35,12 @@ export function computeSafeCanvasDimensions(
   const safeH = Math.max(1, Math.round(cssHeight));
   const rawDpr =
     requestedDpr ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
-  const maxAllowedDpr = isMobileOrTabletDevice() ? 2.0 : 2.5;
+  // Mobile/Tablet GPU Fill-Rate & Thermal Guard:
+  // DOM cards & vector stickers still render at native 3x Retina; capping the background
+  // dot-grid/branch <canvas> to 1.5x on phones and 1.75x on tablets cuts GPU fill by ~45-55%
+  // with zero visible softness!
+  const isPhoneScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+  const maxAllowedDpr = isPhoneScreen ? 1.5 : isMobileOrTabletDevice() ? 1.75 : 2.0;
 
   let dpr = Math.min(Math.max(1, rawDpr), maxAllowedDpr);
   const projectedArea = safeW * dpr * (safeH * dpr);

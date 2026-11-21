@@ -12,20 +12,30 @@ const SHARDS_DIR = path.join(OUT_DIR, 'shards');
 const MANIFEST_PATH = path.join(OUT_DIR, 'search-manifest.json');
 const HASH_PATH = path.join(OUT_DIR, '.build-hash');
 
-const SHARD_COUNT = 24;
+const SHARD_COUNT = 40;
 
 const PACK_CONFIGS = [
-  { prefix: 'fluent-emoji-flat', defaultMultiColor: true, qualityBoost: 1.32 },
-  { prefix: 'fluent-color', defaultMultiColor: true, qualityBoost: 1.28 },
-  { prefix: 'openmoji', defaultMultiColor: true, qualityBoost: 1.25 },
+  { prefix: 'fluent-emoji-flat', defaultMultiColor: true, qualityBoost: 1.34 },
+  { prefix: 'fluent-color', defaultMultiColor: true, qualityBoost: 1.30 },
+  { prefix: 'streamline-color', defaultMultiColor: true, qualityBoost: 1.30 },
+  { prefix: 'streamline-emojis', defaultMultiColor: true, qualityBoost: 1.28 },
+  { prefix: 'twemoji', defaultMultiColor: true, qualityBoost: 1.26 },
+  { prefix: 'openmoji', defaultMultiColor: true, qualityBoost: 1.24 },
   { prefix: 'icon-park', defaultMultiColor: true, qualityBoost: 1.22 },
   { prefix: 'flat-color-icons', defaultMultiColor: true, qualityBoost: 1.22 },
-  { prefix: 'logos', defaultMultiColor: true, qualityBoost: 1.15 },
+  { prefix: 'meteocons', defaultMultiColor: true, qualityBoost: 1.24 },
+  { prefix: 'circle-flags', defaultMultiColor: true, qualityBoost: 1.22 },
+  { prefix: 'vscode-icons', defaultMultiColor: true, qualityBoost: 1.18 },
+  { prefix: 'logos', defaultMultiColor: true, qualityBoost: 1.16 },
   { prefix: 'devicon', defaultMultiColor: true, qualityBoost: 1.16 },
   { prefix: 'skill-icons', defaultMultiColor: true, qualityBoost: 1.16 },
   { prefix: 'healthicons', defaultMultiColor: false, qualityBoost: 1.26 },
   { prefix: 'medical-icon', defaultMultiColor: false, qualityBoost: 1.24 },
   { prefix: 'game-icons', defaultMultiColor: false, qualityBoost: 1.20 },
+  { prefix: 'mdi', defaultMultiColor: false, qualityBoost: 1.16 },
+  { prefix: 'lucide', defaultMultiColor: false, qualityBoost: 1.15 },
+  { prefix: 'fa6-solid', defaultMultiColor: false, qualityBoost: 1.14 },
+  { prefix: 'simple-icons', defaultMultiColor: false, qualityBoost: 1.12 },
   { prefix: 'ph', defaultMultiColor: false, qualityBoost: 1.12 },
   { prefix: 'carbon', defaultMultiColor: false, qualityBoost: 1.12 },
   { prefix: 'tabler', defaultMultiColor: false, qualityBoost: 1.08 },
@@ -73,10 +83,48 @@ function shouldKeepIcon(packPrefix, iconName, allKeysSet) {
 
   // Emoji skin-tone deduplication
   if (
-    (packPrefix === 'fluent-emoji-flat' || packPrefix === 'openmoji') &&
+    (packPrefix === 'fluent-emoji-flat' ||
+      packPrefix === 'openmoji' ||
+      packPrefix === 'twemoji') &&
     SKIN_TONE_SUFFIX.test(iconName)
   ) {
     const base = iconName.replace(SKIN_TONE_SUFFIX, '');
+    if (allKeysSet.has(base)) return false;
+  }
+
+  if (
+    packPrefix === 'twemoji' &&
+    (/^(flag-|keycap-|regional-indicator|input-)/i.test(iconName) ||
+      /-(light|medium-light|medium|medium-dark|dark)-skin-tone/.test(iconName))
+  ) {
+    return false;
+  }
+
+  // MDI: skip `-outline` / `-off` when solid base exists to keep 5,000+ distinct concepts ultra-compact
+  if (packPrefix === 'mdi') {
+    if (iconName.endsWith('-outline')) {
+      const base = iconName.replace(/-outline$/, '');
+      if (allKeysSet.has(base)) return false;
+    }
+    if (iconName.endsWith('-off') || /^alpha-[a-z]|^numeric-[0-9]|^format-|^border-/.test(iconName)) {
+      return false;
+    }
+  }
+
+  // VSCode Icons: skip redundant `folder-type-*-opened` duplicates
+  if (packPrefix === 'vscode-icons' && iconName.endsWith('-opened')) {
+    return false;
+  }
+
+  // Streamline-color: skip `-flat` duplicate when full gradient color base exists
+  if (packPrefix === 'streamline-color' && iconName.endsWith('-flat')) {
+    const base = iconName.replace(/-flat$/, '');
+    if (allKeysSet.has(base)) return false;
+  }
+
+  // Meteocons: keep crisp static SVGs (skip `-fill` duplicates when base exists)
+  if (packPrefix === 'meteocons' && iconName.endsWith('-fill')) {
+    const base = iconName.replace(/-fill$/, '');
     if (allKeysSet.has(base)) return false;
   }
 
@@ -181,7 +229,7 @@ function buildShards() {
   const shardMaps = Array.from({ length: SHARD_COUNT }, () => ({}));
   const manifestItems = [];
   let freeTierCounter = 0;
-  const TARGET_FREE_STARTER_CAP = 1520;
+  const TARGET_FREE_STARTER_CAP = 3600;
 
   for (const cfg of PACK_CONFIGS) {
     const jsonPath = path.join(
@@ -260,16 +308,25 @@ function buildShards() {
         cfg.prefix === 'devicon' ||
         cfg.prefix === 'skill-icons' ||
         cfg.prefix === 'logos' ||
+        cfg.prefix === 'vscode-icons' ||
+        cfg.prefix === 'simple-icons' ||
         cfg.prefix === 'ph' ||
         cfg.prefix === 'game-icons' ||
         cfg.prefix === 'tabler';
 
       const isStarterCandidate =
         !isSpecialistPack &&
-        isMultiColor &&
+        (isMultiColor || cfg.prefix === 'lucide' || cfg.prefix === 'mdi') &&
         (cfg.prefix === 'flat-color-icons' ||
+          cfg.prefix === 'streamline-emojis' ||
+          cfg.prefix === 'meteocons' ||
+          cfg.prefix === 'circle-flags' ||
           (cfg.prefix === 'fluent-emoji-flat' && keptInPack % 2 === 0) ||
           (cfg.prefix === 'fluent-color' && keptInPack % 2 === 0) ||
+          (cfg.prefix === 'streamline-color' && keptInPack % 3 === 0) ||
+          (cfg.prefix === 'twemoji' && keptInPack % 3 === 0) ||
+          (cfg.prefix === 'lucide' && keptInPack % 3 === 0) ||
+          (cfg.prefix === 'mdi' && keptInPack % 6 === 0) ||
           (cfg.prefix === 'openmoji' && domain === 'general' && keptInPack % 8 === 0));
 
       let tier = 'pro';

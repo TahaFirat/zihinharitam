@@ -69,7 +69,7 @@ interface TopMinimalHUDProps {
   zoomPercent: number;
 }
 
-export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
+export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   mapTitle,
   department,
   contextEmoji,
@@ -131,10 +131,17 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
   }, [mapTitle]);
 
   useEffect(() => {
-    return OfflineVisualSearchClient.subscribeStatus((st) => {
-      setOfflineReady(st.ready);
-      setOfflineTotal(st.totalIndexed);
-    });
+    let unsub: (() => void) | null = null;
+    const timer = window.setTimeout(() => {
+      unsub = OfflineVisualSearchClient.subscribeStatus((st) => {
+        setOfflineReady(st.ready);
+        setOfflineTotal(st.totalIndexed);
+      });
+    }, 350);
+    return () => {
+      window.clearTimeout(timer);
+      unsub?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -173,7 +180,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
     >
       {/* Left Minimal Pill: ← Haritalarım + Map Name + Offline Ready Badge */}
       <div
-        className="pointer-events-auto flex min-w-0 items-center gap-1.5 rounded-2xl border px-2 py-1 shadow-sm backdrop-blur-md"
+        className="pointer-events-auto flex min-w-0 items-center gap-1.5 rounded-2xl border px-2 py-1 shadow-sm"
         style={{
           backgroundColor: 'var(--hud-bg)',
           borderColor: 'var(--hud-border)',
@@ -187,7 +194,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl px-2 text-xs font-extrabold hover:bg-slate-500/10 active:scale-95"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Haritalarım</span>
+          <span className="hidden lg:inline">Haritalarım</span>
         </button>
 
         <div className="h-4 w-px shrink-0 bg-slate-400/25" />
@@ -206,7 +213,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
               }
             }}
             autoFocus
-            className="allow-text-input w-32 rounded-lg bg-sky-500/10 px-2 py-0.5 text-base font-bold outline-none ring-1 ring-sky-500 sm:w-48 sm:text-sm"
+            className="allow-text-input w-28 rounded-lg bg-sky-500/10 px-2 py-0.5 text-base font-bold outline-none ring-1 ring-sky-500 sm:w-44 sm:text-sm"
           />
         ) : (
           <button
@@ -219,7 +226,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
             <span className="text-sm leading-none" aria-hidden="true">
               {contextEmoji || deptMeta.emoji}
             </span>
-            <span className="max-w-[96px] truncate text-xs font-extrabold tracking-tight sm:max-w-[170px] sm:text-sm md:max-w-[230px]">
+            <span className="max-w-[92px] truncate text-xs font-extrabold tracking-tight sm:max-w-[140px] md:max-w-[168px] lg:max-w-[220px] sm:text-sm">
               {mapTitle}
             </span>
             <Pencil className="h-3 w-3 shrink-0 text-sky-500 opacity-75 transition group-hover:scale-110 group-hover:opacity-100" />
@@ -228,11 +235,11 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
 
         {offlineReady && (
           <span
-            title={`${offlineTotal.toLocaleString('tr-TR')} Vektör Çıkartma %100 Çevrimdışı Hazır`}
+            title={`${offlineTotal.toLocaleString('tr-TR')} Çevrimdışı + 540.000+ Online Vektör İkon Hazır`}
             className="hidden shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 xl:inline-flex dark:text-emerald-300"
           >
             <Zap className="h-2.5 w-2.5" />
-            <span>25K Offline</span>
+            <span>{Math.max(25, Math.floor(offlineTotal / 1000))}K+ Offline</span>
           </span>
         )}
       </div>
@@ -315,17 +322,17 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
 
       {/* Right Minimal Pill */}
       <div
-        className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-2xl border px-1.5 py-1.5 shadow-sm backdrop-blur-md sm:gap-1.5 sm:px-2"
+        className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-2xl border px-1.5 py-1.5 shadow-sm sm:gap-1.5 sm:px-2"
         style={{
           backgroundColor: 'var(--hud-bg)',
           borderColor: 'var(--hud-border)',
         }}
       >
-        {/* Quick Search & 25K Command Palette (`Cmd/Ctrl + K`) */}
+        {/* Quick Search & 540K+ Command Palette (`Cmd/Ctrl + K`) */}
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          title="Hızlı Dal & 25.000+ İkon Arama Paleti (Ctrl+K)"
+          title="Hızlı Dal & 540.000+ İkon Arama Paleti (Ctrl+K)"
           className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-500/10 px-2.5 text-xs font-extrabold hover:bg-sky-500/15 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
         >
           <Search className="h-4 w-4" />
@@ -341,14 +348,14 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           data-testid="hud-outline-btn"
           onClick={onOpenOutline}
           title="Hiyerarşik Anahat & Uzun Notlar Görünümü"
-          className="hidden h-9 items-center gap-1.5 rounded-xl bg-indigo-500/12 px-2.5 text-xs font-extrabold text-indigo-700 hover:bg-indigo-500/20 active:scale-95 sm:flex dark:text-indigo-300"
+          className="hidden h-9 items-center gap-1.5 rounded-xl bg-indigo-500/12 px-2.5 text-xs font-extrabold text-indigo-700 hover:bg-indigo-500/20 active:scale-95 md:flex dark:text-indigo-300"
         >
           <ListTree className="h-4 w-4" />
           <span className="hidden xl:inline">Anahat</span>
         </button>
 
-        {/* Desktop & iPad Undo/Redo */}
-        <div className="hidden items-center gap-0.5 md:flex">
+        {/* Desktop & Landscape Tablet Undo/Redo (Phones/Portrait Tablets use right zoom rail & More menu) */}
+        <div className="hidden items-center gap-0.5 lg:flex">
           <button
             type="button"
             onClick={onUndo}
@@ -385,12 +392,12 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           <span>{defaultNodeStyle === 'organic' ? 'Organik' : 'Kart'}</span>
         </button>
 
-        {/* Smart Text-to-Map Generator (`sm+`) */}
+        {/* Smart Text-to-Map Generator (`lg+`; portrait tablets use More menu) */}
         <button
           type="button"
           onClick={onOpenSmartGenerator}
           title="Metinden / Konudan Otomatik Görsel Harita Üret"
-          className="hidden h-8 items-center gap-1.5 rounded-xl bg-amber-500/15 px-2.5 text-xs font-extrabold text-amber-700 hover:bg-amber-500/25 active:scale-95 sm:flex dark:text-amber-300"
+          className="hidden h-8 items-center gap-1.5 rounded-xl bg-amber-500/15 px-2.5 text-xs font-extrabold text-amber-700 hover:bg-amber-500/25 active:scale-95 lg:flex dark:text-amber-300"
         >
           <Wand2 className="h-3.5 w-3.5" />
           <span className="hidden 2xl:inline">Metinden Harita</span>
@@ -695,7 +702,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
         </div>
 
         {/* Live Collaborator Avatars Stack */}
-        <div className="hidden items-center -space-x-1.5 pl-1 sm:flex">
+        <div className="hidden items-center -space-x-1.5 pl-1 xl:flex">
           {collaborators.slice(0, 4).map((peer) => (
             <div
               key={peer.id}
@@ -714,8 +721,8 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
             type="button"
             onClick={() => onTriggerPaywall('header_pill')}
             data-testid="hud-pro-pill"
-            title="Ömür Boyu Pro Erişimi Aç"
-            className="hidden h-8 items-center gap-1 rounded-xl border border-amber-500/35 bg-amber-500/12 px-2.5 text-[11.5px] font-extrabold text-amber-700 hover:bg-amber-500/20 active:scale-95 sm:inline-flex dark:text-amber-300"
+            title="ZihinHaritam Pro Planlarını Gör"
+            className="hidden h-8 items-center gap-1 rounded-xl border border-amber-500/35 bg-amber-500/12 px-2 text-[11px] font-extrabold text-amber-700 hover:bg-amber-500/20 active:scale-95 md:inline-flex dark:text-amber-300"
           >
             <Crown className="h-3.5 w-3.5 text-amber-500" />
             <span>{localizedPrice}</span>
@@ -746,12 +753,12 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           type="button"
           onClick={onOpenExport}
           title="300 DPI PDF / PNG / SVG Çıktı ve Canlı Paylaşım"
-          className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 dark:bg-sky-500 dark:text-slate-950"
+          className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-900 px-2.5 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 lg:px-3 dark:bg-sky-500 dark:text-slate-950"
         >
           <Share2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Paylaş</span>
+          <span className="hidden lg:inline">Paylaş</span>
         </button>
       </div>
     </header>
   );
-};
+});

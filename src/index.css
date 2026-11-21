@@ -4,34 +4,38 @@
 :root {
   --canvas-bg: #FAF9F5;
   --canvas-dot: #E2E0D8;
-  --hud-bg: rgba(255, 255, 255, 0.88);
-  --hud-border: rgba(15, 23, 42, 0.08);
+  --hud-bg: rgba(255, 255, 255, 0.96);
+  --hud-border: rgba(15, 23, 42, 0.1);
   --hud-text: #0F172A;
   --hud-muted: #64748B;
   --text-primary: #0F172A;
   --text-secondary: #475569;
   --node-text: #0F172A;
   --node-subtext: #475569;
-  --node-pill-bg: rgba(255, 255, 255, 0.94);
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
+  --node-pill-bg: rgba(255, 255, 255, 0.98);
+  --native-safe-top: 0px;
+  --native-safe-right: 0px;
+  --native-safe-bottom: 0px;
+  --native-safe-left: 0px;
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--native-safe-right, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--native-safe-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--native-safe-left, 0px));
   --kb-inset: 0px;
 }
 
 .dark-study {
   --canvas-bg: #0F141D;
   --canvas-dot: #232C3D;
-  --hud-bg: rgba(19, 25, 37, 0.9);
-  --hud-border: rgba(255, 255, 255, 0.1);
+  --hud-bg: rgba(19, 25, 37, 0.96);
+  --hud-border: rgba(255, 255, 255, 0.12);
   --hud-text: #F8FAFC;
   --hud-muted: #94A3B8;
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
   --node-text: #F8FAFC;
   --node-subtext: #CBD5E1;
-  --node-pill-bg: rgba(22, 29, 43, 0.94);
+  --node-pill-bg: rgba(22, 29, 43, 0.97);
 }
 
 *,
@@ -180,11 +184,25 @@ body,
   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease !important;
 }
 
-/* Die-cut sticker paper elevation shadow when idle */
-.die-cut-shadow {
-  filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.14));
+/* Die-cut sticker paper elevation shadow ONLY on desktop fine-pointer devices (avoids per-sticker GPU Gaussian filter thrashing on mobile/tablet WebViews!) */
+@media (pointer: fine) {
+  .die-cut-shadow {
+    filter: drop-shadow(0 5px 12px rgba(15, 23, 42, 0.13));
+  }
+
+  .dark-study .die-cut-shadow {
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.42));
+  }
 }
 
-.dark-study .die-cut-shadow {
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.48));
+/* Disable expensive GPU backdrop-filter Gaussian blur passes on touch devices (phones/tablets) to keep 60/120 FPS silk-smooth & zero overheating */
+@media (pointer: coarse) {
+  .backdrop-blur-xs,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 }

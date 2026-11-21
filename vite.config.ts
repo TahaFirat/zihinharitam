@@ -41,21 +41,10 @@ export default defineConfig({
             urlPattern: /\/offline-packs\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'mindmap-offline-packs-v3',
+              cacheName: 'mindmap-offline-packs-v4',
               expiration: {
                 maxEntries: 40,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-            },
-          },
-          {
-            urlPattern: /\.wasm$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'mindmap-wasm-cache-v3',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 180,
               },
             },
           },
@@ -66,21 +55,30 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+  esbuild: {
+    drop: ['debugger'],
+    pure: ['console.debug', 'console.trace'],
+    legalComments: 'none',
+  },
   build: {
     target: 'es2022',
+    emptyOutDir: true,
+    minify: 'esbuild',
+    cssMinify: true,
+    cssCodeSplit: true,
     sourcemap: false,
-    chunkSizeWarningLimit: 1200,
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
+          icons: ['lucide-react'],
+          search: ['minisearch', 'rbush'],
           collab: ['yjs', 'y-indexeddb', 'dexie'],
           export: ['jspdf'],
         },
       },
     },
-  },
-  optimizeDeps: {
-    exclude: ['@imgly/background-removal'],
   },
 });

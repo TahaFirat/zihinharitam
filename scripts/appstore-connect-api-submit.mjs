@@ -753,7 +753,7 @@ async function ensureLifetimeProIap(client, appId) {
     // Availability already configured
   }
 
-  // Ensure Regional Pricing for Lifetime Pro: Global Base USA ($49.99) + Custom Regional TUR (₺2.499,99)
+  // Ensure Regional Pricing for Lifetime Pro: Global Base USA ($99.99) + Custom Regional TUR (₺4.999,99)
   try {
     const findIapPricePoint = async (territory, targetValues) => {
       let url = `/v2/inAppPurchases/${iap.id}/pricePoints?filter[territory]=${territory}&limit=200`;
@@ -768,8 +768,8 @@ async function ensureLifetimeProIap(client, appId) {
       return null;
     };
 
-    const usaPoint = await findIapPricePoint('USA', ['49.99', '49.9', '50.0']);
-    const turPoint = await findIapPricePoint('TUR', ['2499.99', '2499.0', '2500.0']);
+    const usaPoint = await findIapPricePoint('USA', ['99.99', '99.9', '100.0']);
+    const turPoint = await findIapPricePoint('TUR', ['4999.99', '4999.0', '5000.0', '4999.9']);
 
     if (usaPoint && turPoint) {
       await client.request('POST', '/v1/inAppPurchasePriceSchedules', {
@@ -863,7 +863,7 @@ async function ensureLifetimeProIap(client, appId) {
     }
   }
 
-  // Also configure Auto-Renewable Subscriptions: Monthly (₺249,99 / $4.99) & Yearly (₺1.499,99 / $29.99)
+  // Also configure Auto-Renewable Subscriptions: Monthly (₺499,99 / $9.99) & Yearly (₺2.999,99 / $59.99)
   try {
     await ensureAutoRenewableSubscriptions(client, appId, paywallShotPath);
   } catch (subErr) {
@@ -874,7 +874,7 @@ async function ensureLifetimeProIap(client, appId) {
 }
 
 async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) {
-  console.log(`\n[6b/8] Otomatik Yenilenen Abonelikler (Aylık 250 ₺ / $4.99 & Yıllık 1.499 ₺ / $29.99) yapılandırılıyor...`);
+  console.log(`\n[6b/8] Otomatik Yenilenen Abonelikler (Aylık 500 ₺ / $9.99 & Yıllık 2.999 ₺ / $59.99) yapılandırılıyor...`);
   const groupsResp = await client.request('GET', `/v1/apps/${appId}/subscriptionGroups`);
   let group = (groupsResp?.data || []).find(
     (g) => g.attributes?.referenceName === 'ZihinHaritam Pro'
@@ -937,18 +937,18 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
       name: 'Yearly Pro Subscription (Yillik Pro)',
       period: 'ONE_YEAR',
       groupLevel: 1,
-      usaTargets: ['29.99', '29.9', '30.0'],
-      turTargets: ['1499.99', '1499.0', '1500.0'],
+      usaTargets: ['59.99', '59.9', '60.0'],
+      turTargets: ['2999.99', '2999.0', '3000.0', '2999.9'],
       locs: [
         {
           locale: 'tr',
           name: 'Yıllık Pro (%50 Avantajlı)',
-          description: 'Sınırsız harita, 25.000+ ikon ve 300 DPI PDF.',
+          description: 'Sınırsız harita, 50.000+ ikon ve 300 DPI PDF.',
         },
         {
           locale: 'en-US',
           name: 'Yearly Pro (Save 50%)',
-          description: 'Unlimited maps, 25,000+ stickers & PDF export.',
+          description: 'Unlimited maps, 50,000+ stickers & PDF export.',
         },
       ],
     },
@@ -957,18 +957,18 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
       name: 'Monthly Pro Subscription (Aylik Pro)',
       period: 'ONE_MONTH',
       groupLevel: 2,
-      usaTargets: ['4.99', '4.9', '5.0'],
-      turTargets: ['249.99', '249.0', '250.0'],
+      usaTargets: ['9.99', '9.9', '10.0'],
+      turTargets: ['499.99', '499.0', '500.0', '499.9'],
       locs: [
         {
           locale: 'tr',
           name: 'Aylık Pro Abonelik',
-          description: 'Esnek aylık sınırsız harita ve 25.000+ ikon.',
+          description: 'Esnek aylık sınırsız harita ve 50.000+ ikon.',
         },
         {
           locale: 'en-US',
           name: 'Monthly Pro Subscription',
-          description: 'Monthly unlimited maps & 25,000+ stickers.',
+          description: 'Monthly unlimited maps & 50,000+ stickers.',
         },
       ],
     },
@@ -1059,13 +1059,26 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
 
       const existingPrices = await client.request(
         'GET',
-        `/v1/subscriptions/${sub.id}/prices?limit=5`
+        `/v1/subscriptions/${sub.id}/prices?include=subscriptionPricePoint&limit=200`
       );
       const usaPt = await findSubPricePoint('USA', plan.usaTargets);
       const turPt = await findSubPricePoint('TUR', plan.turTargets);
 
-      if ((existingPrices?.data || []).length === 0 && usaPt) {
-        // Equalize all territories from USA base first
+      // Check if existing USA/TUR price points already match our desired prices
+      const includedPts = new Map(
+        (existingPrices?.included || []).map((inc) => [inc.id, inc])
+      );
+      const hasMatchingUsa = (existingPrices?.data || []).some((pr) => {
+        const ptId = pr.relationships?.subscriptionPricePoint?.data?.id;
+        return ptId === usaPt?.id;
+      });
+      const hasMatchingTur = (existingPrices?.data || []).some((pr) => {
+        const ptId = pr.relationships?.subscriptionPricePoint?.data?.id;
+        return ptId === turPt?.id;
+      });
+
+      if ((!hasMatchingUsa || !hasMatchingTur) && usaPt) {
+        // Equalize all territories from USA base first, then override TUR custom regional price!
         let eqUrl = `/v1/subscriptionPricePoints/${encodeURIComponent(usaPt.id)}/equalizations?include=territory&limit=200`;
         const eqPoints = [{ territoryId: 'USA', pointId: usaPt.id }];
         while (eqUrl) {
@@ -1082,6 +1095,10 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
           eqPoints.push({ territoryId: 'TUR', pointId: turPt.id });
         }
 
+        // Tomorrow ISO date fallback if Apple requires a future startDate on already-active subs
+        const tomorrowIso = new Date(Date.now() + 86400 * 1000 * 2).toISOString().slice(0, 10);
+        let updatedCount = 0;
+
         for (const item of eqPoints) {
           try {
             await client.request('POST', '/v1/subscriptionPrices', {
@@ -1096,33 +1113,32 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
                 },
               },
             });
+            updatedCount++;
           } catch {
-            // Ignore individual territory conflict
-          }
-        }
-        console.log(
-          `  -> Abonelik Bölgesel Fiyatları ayarlandı (${plan.productId}): Global=$${usaPt.attributes.customerPrice} | Türkiye=₺${turPt?.attributes?.customerPrice} (${eqPoints.length} ülke).`
-        );
-      } else if (turPt && usaPt) {
-        // Ensure TUR & USA overrides are active
-        for (const pt of [usaPt, turPt]) {
-          try {
-            await client.request('POST', '/v1/subscriptionPrices', {
-              data: {
-                type: 'subscriptionPrices',
-                attributes: { startDate: null, preserveCurrentPrice: false },
-                relationships: {
-                  subscription: { data: { type: 'subscriptions', id: sub.id } },
-                  subscriptionPricePoint: {
-                    data: { type: 'subscriptionPricePoints', id: pt.id },
+            try {
+              await client.request('POST', '/v1/subscriptionPrices', {
+                data: {
+                  type: 'subscriptionPrices',
+                  attributes: { startDate: tomorrowIso, preserveCurrentPrice: false },
+                  relationships: {
+                    subscription: { data: { type: 'subscriptions', id: sub.id } },
+                    subscriptionPricePoint: {
+                      data: { type: 'subscriptionPricePoints', id: item.pointId },
+                    },
                   },
                 },
-              },
-            });
-          } catch {
-            // Already active
+              });
+              updatedCount++;
+            } catch {
+              // Ignore individual territory conflict
+            }
           }
         }
+        void includedPts;
+        console.log(
+          `  -> Abonelik Bölgesel Fiyatları güncellendi (${plan.productId}): Global=$${usaPt.attributes.customerPrice} | Türkiye=₺${turPt?.attributes?.customerPrice} (${updatedCount}/${eqPoints.length} ülke).`
+        );
+      } else if (turPt && usaPt) {
         console.log(
           `  -> Abonelik Bölgesel Fiyatı doğrulandı (${plan.productId}): Global=$${usaPt.attributes.customerPrice} | Türkiye=₺${turPt.attributes.customerPrice}`
         );

@@ -525,7 +525,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          paddingBottom: 'max(12px, var(--safe-bottom))',
+          paddingBottom: 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -312,7 +312,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       {/* Scrollable Workspace Content */}
       <div
         className="flex-1 overflow-y-auto px-4 py-5 sm:px-6"
-        style={{ paddingBottom: 'max(28px, env(safe-area-inset-bottom))' }}
+        style={{ paddingBottom: 'max(36px, calc(var(--safe-bottom) + 28px))' }}
       >
         <div className="mx-auto max-w-6xl space-y-6">
           {/* Quick Start Actions + Academic Templates Strip */}

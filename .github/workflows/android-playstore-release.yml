@@ -83,8 +83,8 @@ jobs:
       - name: Stage Play Store Submission Package
         run: |
           mkdir -p playstore-dist
-          cp android/app/build/outputs/bundle/release/app-release.aab playstore-dist/ZihinHaritam-v1.0.2-b18-release.aab
-          cp android/app/build/outputs/apk/release/app-release.apk playstore-dist/ZihinHaritam-v1.0.2-b18-release.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab playstore-dist/ZihinHaritam-v1.0.2-b20-release.aab
+          cp android/app/build/outputs/apk/release/app-release.apk playstore-dist/ZihinHaritam-v1.0.2-b20-release.apk
           cp -r playstore-submission/* playstore-dist/ || true
           ls -lh playstore-dist/
 
@@ -95,14 +95,14 @@ jobs:
           path: playstore-dist/
           retention-days: 90
 
-      - name: Publish Signed .aab & .apk to GitHub Release v1.0.2-build15
+      - name: Publish Signed .aab & .apk to GitHub Release v1.0.2-build16
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.2-build15
-          name: ZihinHaritam v1.0.2 (Build 15/18 — iOS & Android Play Store)
+          tag_name: v1.0.2-build16
+          name: ZihinHaritam v1.0.2 (Build 16/20 — Ultra-Smooth iOS & Android Play Store)
           files: |
-            playstore-dist/ZihinHaritam-v1.0.2-b18-release.aab
-            playstore-dist/ZihinHaritam-v1.0.2-b18-release.apk
+            playstore-dist/ZihinHaritam-v1.0.2-b20-release.aab
+            playstore-dist/ZihinHaritam-v1.0.2-b20-release.apk
 
       - name: Upload directly to Google Play Console (when Service Account Secret is set)
         if: env.PLAY_SA_JSON != ''
@@ -110,7 +110,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.tahafirat.zihinharitam
-          releaseFiles: playstore-dist/ZihinHaritam-v1.0.2-b18-release.aab
+          releaseFiles: playstore-dist/ZihinHaritam-v1.0.2-b20-release.aab
           track: internal
           status: completed
           whatsNewDirectory: playstore-submission/metadata/tr-TR/changelogs

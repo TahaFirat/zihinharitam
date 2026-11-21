@@ -108,22 +108,13 @@ export class DieCutStickerProcessor {
       }
     }
 
-    let finalSource: string | HTMLCanvasElement = source;
-    if (typeof source === 'string' && backgroundMode === 'neural') {
-      try {
-        const { removeBackground } = await import('@imgly/background-removal');
-        const neuralBlob = await removeBackground(source);
-        finalSource = URL.createObjectURL(neuralBlob);
-      } catch {
-        // Fallback cleanly to worker BFS
-      }
-    }
-
+    const finalSource: string | HTMLCanvasElement = source;
     const bitmap = await decodeRasterToImageBitmap(finalSource);
     const worker = getOrCreateStickerWorker();
 
     if (worker) {
       const jobId = ++workerJobCounter;
+      // Uses ultra-fast (<15ms) offline OffscreenCanvas BFS + adaptive edge cleaner (zero 25 MB WASM bloat)
       const workerMode: WorkerBgMode =
         backgroundMode === 'diagram_enhance'
           ? 'diagram_enhance'

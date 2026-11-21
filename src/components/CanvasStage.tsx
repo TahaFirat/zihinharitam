@@ -199,7 +199,7 @@ function resolveStickerSizePixels(
   }
 }
 
-export const CanvasStage: React.FC<CanvasStageProps> = ({
+export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   nodes,
   crossLinks,
   rootNodeId,
@@ -265,6 +265,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   const dragPreviewRef = useRef<SpringDragBranchState | null>(null);
   const pendingLinkTargetRef = useRef<{ x: number; y: number } | null>(null);
   const needsRedrawRef = useRef<boolean>(true);
+  const rafIdRef = useRef<number | null>(null);
+  const scheduleRenderRef = useRef<() => void>(() => {});
+  const requestRender = useCallback(() => {
+    needsRedrawRef.current = true;
+    scheduleRenderRef.current();
+  }, []);
 
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({
@@ -368,7 +374,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         }
       }
       if (changed) {
-        needsRedrawRef.current = true;
+        requestRender();
       }
     });
     cardResizeObserverRef.current = ro;
@@ -377,7 +383,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       ro.disconnect();
       cardResizeObserverRef.current = null;
     };
-  }, []);
+  }, [requestRender]);
 
   const bindNodeCardElement = useCallback((nodeId: string, el: HTMLElement | null) => {
     const prev = nodeCardElementsRef.current.get(nodeId);
@@ -411,9 +417,9 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
 
   useEffect(() => {
     spatialIndexRef.current.rebuild(nodes, rootNodeId, treeMeta.hiddenNodeIds);
-    needsRedrawRef.current = true;
+    requestRender();
     setCullTick((t) => t + 1);
-  }, [nodes, rootNodeId, treeMeta.hiddenNodeIds]);
+  }, [nodes, rootNodeId, treeMeta.hiddenNodeIds, requestRender]);
 
   const renderDataRef = useRef({
     nodes,
@@ -457,37 +463,58 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     h: number;
     hiddenCount: number;
   } | null>(null);
+  const lastSnapSentAtRef = useRef<number>(0);
+  const lastZoomSentRef = useRef<number>(100);
+  const lastZoomSentAtRef = useRef<number>(0);
   const lastScreenPosSentRef = useRef<{ x: number; y: number } | null>(null);
+  const lastScreenPosSentAtRef = useRef<number>(0);
+  const lastPointerBroadcastAtRef = useRef<number>(0);
 
-  const syncDomWorldLayer = useCallback(() => {
+  const syncDomWorldLayer = useCallback((forceFlush = false) => {
     const vp = viewportRef.current.getTransform();
     if (domWorldRef.current) {
       domWorldRef.current.style.transform = `translate3d(${vp.x}px, ${vp.y}px, 0) scale(${vp.scale})`;
     }
-    callbacksRef.current.onZoomChange(Math.round(vp.scale * 100));
+
+    const nowTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const nextZoomPct = Math.round(vp.scale * 100);
+    if (
+      nextZoomPct !== lastZoomSentRef.current &&
+      (forceFlush || nowTs - lastZoomSentAtRef.current >= 140)
+    ) {
+      lastZoomSentRef.current = nextZoomPct;
+      lastZoomSentAtRef.current = nowTs;
+      callbacksRef.current.onZoomChange(nextZoomPct);
+    }
 
     const w = renderDataRef.current.stageSize.w;
     const h = renderDataRef.current.stageSize.h;
-    const hiddenIds = renderDataRef.current.treeMeta.hiddenNodeIds;
-    const prevSnap = lastSnapSentRef.current;
-    if (
-      !prevSnap ||
-      Math.abs(prevSnap.x - vp.x) > 0.5 ||
-      Math.abs(prevSnap.y - vp.y) > 0.5 ||
-      Math.abs(prevSnap.scale - vp.scale) > 0.002 ||
-      prevSnap.w !== w ||
-      prevSnap.h !== h ||
-      prevSnap.hiddenCount !== hiddenIds.size
-    ) {
-      lastSnapSentRef.current = {
-        x: vp.x,
-        y: vp.y,
-        scale: vp.scale,
-        w,
-        h,
-        hiddenCount: hiddenIds.size,
-      };
-      callbacksRef.current.onViewportSnapshot(vp, w, h, hiddenIds);
+    // Skip MiniMapRadar React state updates completely on phones (<640px where Radar is CSS hidden!)
+    // and throttle on tablets/desktops so touch pan triggers ZERO 60-FPS root React re-renders!
+    if (w >= 640) {
+      const hiddenIds = renderDataRef.current.treeMeta.hiddenNodeIds;
+      const prevSnap = lastSnapSentRef.current;
+      const snapChanged =
+        !prevSnap ||
+        Math.abs(prevSnap.x - vp.x) > 4 ||
+        Math.abs(prevSnap.y - vp.y) > 4 ||
+        Math.abs(prevSnap.scale - vp.scale) > 0.01 ||
+        prevSnap.w !== w ||
+        prevSnap.h !== h ||
+        prevSnap.hiddenCount !== hiddenIds.size;
+
+      if (snapChanged && (forceFlush || nowTs - lastSnapSentAtRef.current >= 180)) {
+        lastSnapSentRef.current = {
+          x: vp.x,
+          y: vp.y,
+          scale: vp.scale,
+          w,
+          h,
+          hiddenCount: hiddenIds.size,
+        };
+        lastSnapSentAtRef.current = nowTs;
+        callbacksRef.current.onViewportSnapshot(vp, w, h, hiddenIds);
+      }
     }
 
     const editId = renderDataRef.current.editingNodeId;
@@ -497,11 +524,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       const sp = viewportRef.current.worldToScreen(tr ? tr.x : n.x, tr ? tr.y : n.y);
       const prevPos = lastScreenPosSentRef.current;
       if (
-        !prevPos ||
-        Math.abs(prevPos.x - sp.x) > 0.5 ||
-        Math.abs(prevPos.y - sp.y) > 0.5
+        (!prevPos ||
+          Math.abs(prevPos.x - sp.x) > 8 ||
+          Math.abs(prevPos.y - sp.y) > 8) &&
+        (forceFlush || nowTs - lastScreenPosSentAtRef.current >= 140)
       ) {
         lastScreenPosSentRef.current = sp;
+        lastScreenPosSentAtRef.current = nowTs;
         callbacksRef.current.onActiveNodeScreenPosition(sp);
       }
     } else if (lastScreenPosSentRef.current !== null) {
@@ -510,9 +539,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     }
 
     const prev = lastCullTransformRef.current;
-    if (
-      Math.hypot(vp.x - prev.x, vp.y - prev.y) > 72 ||
-      Math.abs(vp.scale - prev.scale) > 0.05
+    const crossedSemanticZoom = (prev.scale < 0.44) !== (vp.scale < 0.44);
+    const totalNodeCount = Object.keys(renderDataRef.current.nodes).length;
+    if (crossedSemanticZoom) {
+      lastCullTransformRef.current = vp;
+      setCurrentScale(vp.scale);
+    } else if (
+      totalNodeCount > 64 &&
+      (Math.hypot(vp.x - prev.x, vp.y - prev.y) > 260 ||
+        Math.abs(vp.scale - prev.scale) > 0.16)
     ) {
       lastCullTransformRef.current = vp;
       setCurrentScale(vp.scale);
@@ -536,14 +571,14 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         canvasRef.current.width = safe.width;
         canvasRef.current.height = safe.height;
       }
-      needsRedrawRef.current = true;
+      requestRender();
     };
 
     updateSize();
     const ro = new ResizeObserver(updateSize);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [requestRender]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -558,9 +593,9 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       isPhone ? 44 : 92,
       fitTrigger === 0 ? 1 : 360
     );
-    needsRedrawRef.current = true;
-    syncDomWorldLayer();
-  }, [fitTrigger, syncDomWorldLayer]);
+    requestRender();
+    syncDomWorldLayer(true);
+  }, [fitTrigger, syncDomWorldLayer, requestRender]);
 
   useEffect(() => {
     if (!radarJumpRequest) return;
@@ -573,8 +608,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       cur.scale,
       300
     );
-    needsRedrawRef.current = true;
-  }, [radarJumpRequest, stageSize.w, stageSize.h]);
+    requestRender();
+  }, [radarJumpRequest, stageSize.w, stageSize.h, requestRender]);
 
   useEffect(() => {
     if (!zoomRequest) return;
@@ -584,8 +619,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       stageSize.w * 0.5,
       stageSize.h * 0.5
     );
-    needsRedrawRef.current = true;
-  }, [zoomRequest, stageSize.w, stageSize.h]);
+    requestRender();
+  }, [zoomRequest, stageSize.w, stageSize.h, requestRender]);
 
   useEffect(() => {
     const activeTargetId = editingNodeId ?? selectedNodeId;
@@ -616,10 +651,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
           : curScale;
 
       if (isCompactOrKeyboard) {
-        // Compute exact unobstructed middle between TopMinimalHUD (~72px) and Studio Dock + Keyboard
-        const topSafe = 72;
-        const bottomEdge = Math.max(topSafe + 90, availH - barH - 12);
-        const usableCenterY = Math.round((topSafe + bottomEdge) * 0.52);
+        // Compute exact unobstructed middle between TopMinimalHUD (~72px) and lifted Studio Dock + Keyboard
+        const topSafe = 76;
+        const bottomEdge = Math.max(topSafe + 90, availH - barH - 42);
+        const usableCenterY = Math.round((topSafe + bottomEdge) * 0.5);
         const curT = viewportRef.current.getTransform();
         const endX = availW * 0.5 - node.x * desiredScale;
         const endY = usableCenterY - node.y * desiredScale;
@@ -632,7 +667,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             { x: endX, y: endY, scale: desiredScale },
             220
           );
-          needsRedrawRef.current = true;
+          requestRender();
         }
       } else {
         const sp = viewportRef.current.worldToScreen(node.x, node.y);
@@ -650,7 +685,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             desiredScale,
             260
           );
-          needsRedrawRef.current = true;
+          requestRender();
         } else {
           onActiveNodeScreenPosition(sp);
         }
@@ -688,36 +723,33 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   }, [editingNodeId, selectedNodeId]);
 
   useEffect(() => {
-    needsRedrawRef.current = true;
-  }, [nodes, crossLinks, darkMode, focusedMainBranchId, stageSize, treeMeta, linkingFromNodeId]);
+    requestRender();
+  }, [nodes, crossLinks, darkMode, focusedMainBranchId, stageSize, treeMeta, linkingFromNodeId, requestRender]);
 
-  // 60/120 FPS Main Canvas Render Loop (reads transientPositionsRef directly during drag!)
+  // True 0-Idle On-Demand 60/120 FPS Canvas Render Scheduler:
+  // Draws ONLY during active pan/pinch/drag/animation or state change -> 0 rAF callbacks/sec when idle (0% CPU/GPU, zero phone heating!).
   useEffect(() => {
-    let rafId = 0;
+    let unmounted = false;
 
     const frame = (now: number) => {
+      rafIdRef.current = null;
+      if (unmounted) return;
+
       const vpChanged = viewportRef.current.step(now);
       let springChanged = false;
       if (dragPreviewRef.current) {
         springChanged = stepSpringBranch(dragPreviewRef.current);
       }
 
-      const hasAnimatedCrossLinks =
-        Boolean(renderDataRef.current.crossLinks?.length) ||
-        Boolean(renderDataRef.current.linkingFromNodeId);
+      const isActivelyLinking = Boolean(renderDataRef.current.linkingFromNodeId);
 
-      if (
-        vpChanged ||
-        springChanged ||
-        needsRedrawRef.current ||
-        hasAnimatedCrossLinks
-      ) {
+      if (vpChanged || springChanged || needsRedrawRef.current || isActivelyLinking) {
         const shouldSyncDom = vpChanged || needsRedrawRef.current;
         needsRedrawRef.current = false;
 
         const canvas = canvasRef.current;
         if (canvas) {
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext('2d', { alpha: false });
           if (ctx) {
             const {
               nodes: baseNodes,
@@ -747,10 +779,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             ctx.save();
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            // 1. Paper-textured dot grid background
+            // 1. Paper-textured dot grid background (single GPU CanvasPattern draw call)
             viewportRef.current.renderPaperDotGrid(ctx, curSize.w, curSize.h, curDark);
 
-            // 2. Organic tapered Bezier branches
+            // 2. Organic tapered Bezier branches (cached Path2D, zero shadowBlur)
             const vp = viewportRef.current.getTransform();
             const visBounds = viewportRef.current.getVisibleWorldBounds(
               curSize.w,
@@ -770,10 +802,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
               curMeta.mainBranchMap,
               dragPreviewRef.current,
               nodeDimensionsRef.current,
-              isInteractingRef.current
+              true
             );
 
-            // 3. Animated Directional CrossLinks
+            // 3. Directional CrossLinks (static crisp dashed lines when idle, animated only while drawing new link)
             crossLinkRendererRef.current.renderInteractiveCrossLinks(
               ctx,
               curLinks,
@@ -789,16 +821,38 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
           }
         }
 
+        const stillAnimating =
+          viewportRef.current.isAnimating() ||
+          springChanged ||
+          needsRedrawRef.current ||
+          isActivelyLinking;
+
         if (shouldSyncDom) {
-          syncDomWorldLayer();
+          syncDomWorldLayer(!stillAnimating);
+        }
+
+        if (stillAnimating && !unmounted && rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(frame);
         }
       }
-
-      rafId = requestAnimationFrame(frame);
     };
 
-    rafId = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(rafId);
+    const schedule = () => {
+      if (unmounted || rafIdRef.current !== null) return;
+      rafIdRef.current = requestAnimationFrame(frame);
+    };
+
+    scheduleRenderRef.current = schedule;
+    schedule();
+
+    return () => {
+      unmounted = true;
+      scheduleRenderRef.current = () => {};
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
   }, [syncDomWorldLayer]);
 
   useEffect(() => {
@@ -814,7 +868,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       const cur = viewportRef.current.getTransform();
       const zoomFactor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.0085 : 0.0016));
       viewportRef.current.zoomAtScreenPoint(cur.scale * zoomFactor, sx, sy);
-      needsRedrawRef.current = true;
+      requestRender();
     };
 
     el.addEventListener('wheel', onWheel, { passive: false });
@@ -851,15 +905,19 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     };
   }, [resetAllGestureStates]);
 
-  // True RBush Spatial Viewport Virtualization (`<0.4ms` query, `+260px` buffer):
-  // Ensures 1,000+ node maps render ONLY visible DOM nodes (+ selected/editing/dragged subtree),
-  // holding steady 60 FPS on iPhone 12 and 120 FPS on iPad Pro!
+  // Smart Hybrid Spatial Virtualization:
+  // - Maps <= 64 nodes: keep all non-hidden nodes stably mounted (ZERO mid-pan React re-render or DOM churn!).
+  // - Giant maps > 64 nodes: RBush O(log N) viewport virtualization (+320px buffer) holding steady 60/120 FPS!
   const visibleNodeIds = useMemo(() => {
     void cullTick;
+    const allIds = Object.keys(nodes);
+    if (allIds.length <= 64) {
+      return allIds.filter((id) => !treeMeta.hiddenNodeIds.has(id));
+    }
     const bounds = viewportRef.current.getVisibleWorldBounds(
       stageSize.w,
       stageSize.h,
-      260
+      320
     );
     const ids = spatialIndexRef.current.queryViewport(bounds);
     const set = new Set<string>(ids);
@@ -977,11 +1035,17 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
     const sy = latestSample.clientY - rect.top;
 
     const worldPt = viewportRef.current.screenToWorld(sx, sy);
-    onPointerWorldMove(worldPt.x, worldPt.y);
+    if (collaborators.length > 1) {
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (nowMs - lastPointerBroadcastAtRef.current >= 100) {
+        lastPointerBroadcastAtRef.current = nowMs;
+        onPointerWorldMove(worldPt.x, worldPt.y);
+      }
+    }
 
     if (linkingFromNodeId) {
       pendingLinkTargetRef.current = worldPt;
-      needsRedrawRef.current = true;
+      requestRender();
     }
 
     if (activeTouchesRef.current.has(e.pointerId)) {
@@ -1022,7 +1086,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             dragPreviewRef.current.targetX = worldPt.x;
             dragPreviewRef.current.targetY = worldPt.y;
           }
-          needsRedrawRef.current = true;
+          requestRender();
         }
       }
       return;
@@ -1063,7 +1127,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             moved: true,
           };
           setInteractingAttr(true);
-          needsRedrawRef.current = true;
+          requestRender();
         }
         return;
       } else {
@@ -1115,7 +1179,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
             }
           }
 
-          needsRedrawRef.current = true;
+          requestRender();
         }
         return;
       }
@@ -1142,7 +1206,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         lastMidX: midX,
         lastMidY: midY,
       };
-      needsRedrawRef.current = true;
+      requestRender();
       return;
     }
 
@@ -1159,7 +1223,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       ps.lastX = sx;
       ps.lastY = sy;
       viewportRef.current.panBy(dx, dy);
-      needsRedrawRef.current = true;
+      requestRender();
     }
   };
 
@@ -1201,12 +1265,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
           const dropX = Math.round(dragPreviewRef.current.targetX);
           const dropY = Math.round(dragPreviewRef.current.targetY);
           dragPreviewRef.current = null;
-          needsRedrawRef.current = true;
+          requestRender();
           void hapticMedium();
           onCreateChildBranch(parent.id, dropX, dropY, bd.color);
         } else {
           dragPreviewRef.current = null;
-          needsRedrawRef.current = true;
+          requestRender();
           const autoPos = findBestOpenBranchPosition(parent, nodes, rootNodeId);
           const finalX =
             bd.directionBias && parent.id === rootNodeId
@@ -1217,7 +1281,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         }
       } else {
         dragPreviewRef.current = null;
-        needsRedrawRef.current = true;
+        requestRender();
       }
       return;
     }
@@ -1245,7 +1309,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
           }
         });
         transientPositionsRef.current.clear();
-        needsRedrawRef.current = true;
+        requestRender();
         onCommitBatchNodePositions(batchUpdates);
         return;
       }
@@ -1309,7 +1373,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       panStateRef.current = null;
       if (ps.moved) {
         viewportRef.current.setInertia(ps.vx, ps.vy);
-        needsRedrawRef.current = true;
+        requestRender();
       } else {
         if (linkingFromNodeId) {
           pendingLinkTargetRef.current = null;
@@ -1538,7 +1602,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                   )}px, 0) translate(-50%, -50%)`,
                   zIndex: isEditingThisLink ? 35 : 8,
                 }}
-                className="pointer-events-auto absolute top-0 left-0 will-change-transform"
+                className="pointer-events-auto absolute top-0 left-0"
               >
                 {isEditingThisLink ? (
                   <div
@@ -1574,7 +1638,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     onClick={() => setEditingLinkId(link.id)}
                     title="İlişki etiketini düzenlemek için dokunun"
                     style={{ borderColor: accent }}
-                    className="inline-flex items-center gap-1 rounded-full border bg-white/92 px-2.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap shadow-xs backdrop-blur-xs hover:scale-105 dark:bg-slate-900/92"
+                    className="inline-flex items-center gap-1 rounded-full border bg-white/95 px-2.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap shadow-xs hover:scale-105 dark:bg-slate-900/95"
                   >
                     <span
                       className="h-1.5 w-1.5 rounded-full"
@@ -1652,7 +1716,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                 opacity: isDimmedByFocus ? 0.2 : 1,
                 zIndex: isEditing ? 30 : isSelected ? 22 : isRoot ? 15 : 10,
               }}
-              className="mind-node-wrapper pointer-events-auto absolute top-0 left-0 flex flex-col items-center will-change-transform select-none"
+              className="mind-node-wrapper pointer-events-auto absolute top-0 left-0 flex flex-col items-center select-none"
             >
               {/* DIE-CUT VISUAL STICKER (`onError` Self-Healing Offline Fallback + Exact S/M/L/XL Pixel Sizing) */}
               {node.sticker && !hideVisualInExam && (
@@ -1671,6 +1735,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                   <img
                     src={node.sticker.url}
                     alt={node.title || 'Yeni Konu'}
+                    decoding="async"
                     draggable={false}
                     onError={(e) => {
                       const imgEl = e.currentTarget;
@@ -1936,7 +2001,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                       ? `0 0 0 2.5px ${node.branchColor}55, 0 8px 20px -4px rgba(15,23,42,0.14)`
                       : '0 4px 14px rgba(15, 23, 42, 0.08)',
                   }}
-                  className={`animate-card-reveal relative flex flex-col items-center rounded-2xl border-2 px-4 py-2 text-center backdrop-blur-md ${
+                  className={`animate-card-reveal relative flex flex-col items-center rounded-2xl border-2 px-4 py-2 text-center ${
                     isRoot
                       ? 'min-w-[180px] max-w-[316px] px-5 py-2.5'
                       : 'min-w-[122px] max-w-[312px]'
@@ -2218,7 +2283,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                       backgroundColor: 'var(--hud-bg)',
                       borderColor: 'var(--hud-border)',
                     }}
-                    className="absolute top-full left-1/2 z-30 mt-3.5 flex -translate-x-1/2 items-center gap-1 rounded-2xl border px-1.5 py-1 text-[10.5px] font-extrabold whitespace-nowrap shadow-xl backdrop-blur-xl"
+                    className="absolute top-full left-1/2 z-30 mt-3.5 flex -translate-x-1/2 items-center gap-1 rounded-2xl border px-1.5 py-1 text-[10.5px] font-extrabold whitespace-nowrap shadow-xl"
                   >
                     <button
                       type="button"
@@ -2317,4 +2382,4 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -243,7 +243,9 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             ? '90dvh'
             : '86dvh',
           maxHeight: `${Math.max(260, kb.viewportH - 16)}px`,
-          paddingBottom: kb.isKeyboardOpen ? '4px' : 'var(--safe-bottom)',
+          paddingBottom: kb.isKeyboardOpen
+            ? '6px'
+            : 'max(20px, calc(var(--safe-bottom) + 14px))',
         }}
       >
         {/* Header Bar */}

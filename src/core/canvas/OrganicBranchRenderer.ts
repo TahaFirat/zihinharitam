@@ -194,6 +194,70 @@ export function generateTaperedBranchSvgPath(
 }
 
 export class OrganicBranchRenderer {
+  private pathCache = new Map<string, Path2D>();
+
+  private getOrBuildTaperedPath(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    depth: number
+  ): Path2D | null {
+    const qsx = Math.round(startX);
+    const qsy = Math.round(startY);
+    const qex = Math.round(endX);
+    const qey = Math.round(endY);
+    const qd = depth <= 1 ? 1 : depth === 2 ? 2 : 3;
+    const key = `${qsx},${qsy},${qex},${qey},${qd}`;
+
+    const cached = this.pathCache.get(key);
+    if (cached) return cached;
+
+    const curve = computeOrganicCurve(qsx, qsy, qex, qey, qd <= 1);
+    const { startWidth, endWidth } = getBranchWidthsForDepth(qd);
+    const { left, right } = buildTaperedRibbonPoints(curve, startWidth, endWidth, 16);
+    if (left.length === 0) return null;
+
+    const path = new Path2D();
+    path.moveTo(left[0].x, left[0].y);
+    for (let i = 1; i < left.length; i++) {
+      path.lineTo(left[i].x, left[i].y);
+    }
+    const lastIdx = right.length - 1;
+    const endMidX = (left[lastIdx].x + right[lastIdx].x) * 0.5;
+    const endMidY = (left[lastIdx].y + right[lastIdx].y) * 0.5;
+    path.arc(
+      endMidX,
+      endMidY,
+      endWidth * 0.5,
+      Math.atan2(left[lastIdx].y - endMidY, left[lastIdx].x - endMidX),
+      Math.atan2(right[lastIdx].y - endMidY, right[lastIdx].x - endMidX),
+      false
+    );
+    for (let i = right.length - 1; i >= 0; i--) {
+      path.lineTo(right[i].x, right[i].y);
+    }
+    const startMidX = (left[0].x + right[0].x) * 0.5;
+    const startMidY = (left[0].y + right[0].y) * 0.5;
+    path.arc(
+      startMidX,
+      startMidY,
+      startWidth * 0.5,
+      Math.atan2(right[0].y - startMidY, right[0].x - startMidX),
+      Math.atan2(left[0].y - startMidY, left[0].x - startMidX),
+      false
+    );
+    path.closePath();
+
+    // Bounded cache prevents unbounded memory growth while giving O(1) zero-allocation pan/zoom
+    if (this.pathCache.size >= 500) {
+      const oldestKey = this.pathCache.keys().next().value;
+      if (oldestKey !== undefined) this.pathCache.delete(oldestKey);
+    }
+    this.pathCache.set(key, path);
+    return path;
+  }
+
   public drawTaperedBranch(
     ctx: CanvasRenderingContext2D,
     startX: number,
@@ -204,15 +268,13 @@ export class OrganicBranchRenderer {
     depth: number,
     opacity = 1,
     dashed = false,
-    skipShadow = false
+    _skipShadow = true
   ): void {
-    const curve = computeOrganicCurve(startX, startY, endX, endY, depth <= 1);
-    const { startWidth, endWidth } = getBranchWidthsForDepth(depth);
-
-    ctx.save();
-    ctx.globalAlpha = opacity;
-
     if (dashed) {
+      const curve = computeOrganicCurve(startX, startY, endX, endY, depth <= 1);
+      const { startWidth, endWidth } = getBranchWidthsForDepth(depth);
+      ctx.save();
+      ctx.globalAlpha = opacity;
       ctx.strokeStyle = color;
       ctx.lineWidth = (startWidth + endWidth) * 0.45;
       ctx.lineCap = 'round';
@@ -225,55 +287,15 @@ export class OrganicBranchRenderer {
       return;
     }
 
-    const { left, right } = buildTaperedRibbonPoints(curve, startWidth, endWidth, 24);
-    if (left.length === 0) {
-      ctx.restore();
-      return;
-    }
+    const path = this.getOrBuildTaperedPath(startX, startY, endX, endY, depth);
+    if (!path) return;
 
+    // Zero ctx.shadowBlur (major GPU/Skia bottleneck on mobile!) + cached Path2D fill
+    const prevAlpha = ctx.globalAlpha;
+    if (opacity !== prevAlpha) ctx.globalAlpha = opacity;
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(left[0].x, left[0].y);
-    for (let i = 1; i < left.length; i++) {
-      ctx.lineTo(left[i].x, left[i].y);
-    }
-    // Rounded end cap at tip
-    const lastIdx = right.length - 1;
-    const endMidX = (left[lastIdx].x + right[lastIdx].x) * 0.5;
-    const endMidY = (left[lastIdx].y + right[lastIdx].y) * 0.5;
-    ctx.arc(
-      endMidX,
-      endMidY,
-      endWidth * 0.5,
-      Math.atan2(left[lastIdx].y - endMidY, left[lastIdx].x - endMidX),
-      Math.atan2(right[lastIdx].y - endMidY, right[lastIdx].x - endMidX),
-      false
-    );
-
-    for (let i = right.length - 1; i >= 0; i--) {
-      ctx.lineTo(right[i].x, right[i].y);
-    }
-    // Rounded start cap at root
-    const startMidX = (left[0].x + right[0].x) * 0.5;
-    const startMidY = (left[0].y + right[0].y) * 0.5;
-    ctx.arc(
-      startMidX,
-      startMidY,
-      startWidth * 0.5,
-      Math.atan2(right[0].y - startMidY, right[0].x - startMidX),
-      Math.atan2(left[0].y - startMidY, left[0].x - startMidX),
-      false
-    );
-    ctx.closePath();
-
-    if (!skipShadow) {
-      ctx.shadowColor = 'rgba(15, 23, 42, 0.12)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 2;
-    }
-    ctx.fill();
-
-    ctx.restore();
+    ctx.fill(path);
+    if (opacity !== prevAlpha) ctx.globalAlpha = prevAlpha;
   }
 
   public renderAllBranches(

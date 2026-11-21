@@ -5,7 +5,7 @@
   ],
   "products" : [
     {
-      "displayPrice" : "2499.99",
+      "displayPrice" : "4999.99",
       "familyShareable" : true,
       "internalID" : "6730002001",
       "localizations" : [
@@ -74,7 +74,7 @@
         {
           "adHocOffers" : [],
           "codeOffers" : [],
-          "displayPrice" : "1499.99",
+          "displayPrice" : "2999.99",
           "familyShareable" : true,
           "groupNumber" : 1,
           "internalID" : "6730002002",
@@ -100,7 +100,7 @@
         {
           "adHocOffers" : [],
           "codeOffers" : [],
-          "displayPrice" : "249.99",
+          "displayPrice" : "499.99",
           "familyShareable" : true,
           "groupNumber" : 2,
           "internalID" : "6730002003",

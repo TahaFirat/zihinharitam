@@ -1,0 +1,4 @@
+• PERFORMANS: Sıfır bekleme CPU/GPU motoru, önbellekli vektör dallar ve 60/120 FPS akıcı tuval (kasma ve ısınma tamamen giderildi).
+• İKON MOTORU: 43.000+ çevrimdışı ve 540.000+ çevrimiçi ikon araması + otomatik Türkçe-İngilizce eşleştirme.
+• TABLET & TELEFON UYUMU: Tablet alt görev çubuğu ve sistem çubukları için tam güvenli boşluk + büyütülmüş S/M/L/XL boyut butonları.
+• OPTİMİZASYON: Android API 36, R8 Full Mode ve Google Play Billing 8.0.0 tam uyumu.

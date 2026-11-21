@@ -106,8 +106,7 @@ export class CrossLinkRenderer {
     ctx.scale(vp.scale, vp.scale);
 
     if (crossLinks && crossLinks.length > 0) {
-      const dashOffset = -((nowMs * 0.032) % 22);
-
+      // Static crisp dash pattern when idle so Canvas uses 0% CPU/GPU and never heats up phones!
       for (const link of crossLinks) {
         if (hiddenNodeIds.has(link.fromNodeId) || hiddenNodeIds.has(link.toNodeId)) {
           continue;
@@ -123,8 +122,8 @@ export class CrossLinkRenderer {
         // Soft glow under-stroke for high legibility on dot-grid paper
         ctx.save();
         ctx.strokeStyle = strokeColor;
-        ctx.globalAlpha = 0.16;
-        ctx.lineWidth = 6;
+        ctx.globalAlpha = 0.15;
+        ctx.lineWidth = 5.5;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(geom.startX, geom.startY);
@@ -139,7 +138,6 @@ export class CrossLinkRenderer {
         ctx.lineCap = 'round';
         if (!isSolid) {
           ctx.setLineDash([8, 6]);
-          ctx.lineDashOffset = dashOffset;
         }
         ctx.beginPath();
         ctx.moveTo(geom.startX, geom.startY);

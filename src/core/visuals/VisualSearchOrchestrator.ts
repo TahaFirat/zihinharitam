@@ -29,6 +29,7 @@ import {
 import type { MapContextAnalysis } from './TopicContextIntelligence';
 import { searchArasaacPictograms } from './providers/ArasaacPictogramAdapter';
 import { searchBuiltInAtlasV3 } from './providers/BuiltInMultiColorAtlas';
+import { searchIconifyLive } from './providers/IconifyLiveAdapter';
 import { searchOpenverseVisuals } from './providers/OpenverseAdapter';
 import { searchWikimediaAtlas } from './providers/WikimediaAtlasAdapter';
 
@@ -51,11 +52,7 @@ const DISCIPLINE_DEFAULT_OFFLINE_SEEDS: Record<DisciplineProfile, string> = {
 };
 
 const federatedCache = new Map<string, FederatedGalleryResponse>();
-
-// Warm up the 25,200+ Offline Web Worker engine immediately on app load
-if (typeof window !== 'undefined') {
-  OfflineVisualSearchClient.init();
-}
+// Lazy worker init: avoids parsing manifest/shards during cold startup to keep launch instant & device cool!
 
 export class VisualSearchOrchestrator {
   /**
@@ -252,6 +249,7 @@ export class VisualSearchOrchestrator {
 
     const settled = await Promise.race([
       Promise.allSettled([
+        searchIconifyLive(clean, enTerms, branchColor, signal),
         AIStickerDirector.searchSharedPool(clean, 4),
         searchArasaacPictograms(trTerms, enTerms, signal),
         searchWikimediaAtlas(
@@ -263,7 +261,7 @@ export class VisualSearchOrchestrator {
         searchOpenverseVisuals(primaryEn, signal),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
-        setTimeout(() => r([]), 950)
+        setTimeout(() => r([]), 1250)
       ),
     ]);
 
@@ -309,15 +307,29 @@ export class VisualSearchOrchestrator {
       }
     }
 
-    // Append remaining offline shard hits up to 160+ visuals
+    // Append remaining offline shard hits up to 180+ visuals
     for (const offItem of offlineWave.results.slice(36)) {
       pushUnique(offItem);
+    }
+
+    // Zero-Miss Safety Net: if a rare/unusual query still has < 6 icons, seamlessly append
+    // relevant discipline conceptual visuals so the user NEVER hits an empty dead-end!
+    if (combined.length < 6 && !signal?.aborted) {
+      const seedFallback = await OfflineVisualSearchClient.searchShards(
+        DISCIPLINE_DEFAULT_OFFLINE_SEEDS[mapContext.discipline] || 'fikir hedef kitap',
+        mapContext.discipline,
+        branchColor,
+        24
+      );
+      for (const fb of seedFallback.results) {
+        pushUnique({ ...fb, score: Math.min(fb.score, 0.35) });
+      }
     }
 
     combined.sort((a, b) => b.score - a.score);
 
     const response: FederatedGalleryResponse = {
-      results: combined.slice(0, 165),
+      results: combined.slice(0, 180),
       metaphorChips: offlineWave.metaphorChips,
       resolvedEnglish: primaryEn,
       elapsedMs: offlineWave.elapsedMs,

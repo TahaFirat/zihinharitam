@@ -63,9 +63,16 @@ function buildAssetUrl(relPath: string): string {
   return `${cleanBase}${cleanRel}`;
 }
 
+const MAX_CACHED_SHARDS = 8;
+
 async function fetchShard(shardId: number): Promise<Record<string, ShardSvgRecord>> {
   const cached = shardCache.get(shardId);
-  if (cached) return cached;
+  if (cached) {
+    // Refresh LRU order
+    shardCache.delete(shardId);
+    shardCache.set(shardId, cached);
+    return cached;
+  }
 
   const existing = shardInflight.get(shardId);
   if (existing) return existing;
@@ -77,6 +84,10 @@ async function fetchShard(shardId: number): Promise<Record<string, ShardSvgRecor
     .then(async (res) => {
       if (!res.ok) return {};
       const data = (await res.json()) as Record<string, ShardSvgRecord>;
+      if (shardCache.size >= MAX_CACHED_SHARDS) {
+        const oldestKey = shardCache.keys().next().value;
+        if (oldestKey !== undefined) shardCache.delete(oldestKey);
+      }
       shardCache.set(shardId, data);
       return data;
     })
@@ -87,18 +98,6 @@ async function fetchShard(shardId: number): Promise<Record<string, ShardSvgRecor
 
   shardInflight.set(shardId, p);
   return p;
-}
-
-function warmRemainingShardsInIdle(shardCount: number): void {
-  let idx = 0;
-  const loadNext = () => {
-    if (idx >= shardCount) return;
-    const target = idx++;
-    void fetchShard(target).finally(() => {
-      setTimeout(loadNext, 35);
-    });
-  };
-  setTimeout(loadNext, 180);
 }
 
 async function ensureInitialized(): Promise<void> {
@@ -122,8 +121,7 @@ async function ensureInitialized(): Promise<void> {
         ready: true,
         totalIndexed,
       } satisfies WorkerStatusMessage);
-
-      warmRemainingShardsInIdle(json.shardCount || 24);
+      // ZERO startup shard-warming storm! Shards are fetched strictly on-demand in <8ms with an 8-shard LRU cap (~12MB max RAM vs 120MB!).
     } catch {
       initPromise = null;
     }

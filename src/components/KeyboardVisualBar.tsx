@@ -115,7 +115,7 @@ const PRIORITY_LABELS: Record<NodePriorityTag, string> = {
   review: '❓ Tekrar',
 };
 
-export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
+export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   activeNode,
   isEditingText,
   isRootNode,
@@ -408,25 +408,27 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
       maxWidth: '100vw',
       maxHeight: `${
         isSlimKeyboardMode
-          ? Math.min(130, Math.max(96, kb.viewportH - 56))
-          : Math.min(365, Math.max(210, kb.viewportH - 60))
+          ? Math.min(138, Math.max(96, kb.viewportH - 56))
+          : Math.min(410, Math.max(220, kb.viewportH - 64))
       }px`,
       transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
   } else if (useCenteredTabletDock) {
-    const cardWidth = Math.min(820, kb.viewportW - 24);
+    const cardWidth = Math.min(840, kb.viewportW - 28);
     const leftPx = Math.round((kb.viewportW - cardWidth) * 0.5);
-    const bottomGap = kb.isKeyboardOpen ? kb.keyboardHeight + 8 : 14;
     containerStyle = {
       position: 'fixed',
       left: `${leftPx}px`,
-      bottom: `${bottomGap}px`,
+      // Lifted well clear of Android tablet taskbars/docks & iPadOS Home Indicator!
+      bottom: kb.isKeyboardOpen
+        ? `${kb.keyboardHeight + 10}px`
+        : 'max(28px, calc(var(--safe-bottom) + 24px))',
       width: `${cardWidth}px`,
       maxWidth: 'calc(100vw - 24px)',
       maxHeight: `${
         isSlimKeyboardMode
-          ? Math.min(136, Math.max(98, kb.viewportH - 64))
-          : Math.min(380, Math.max(220, kb.viewportH - 68))
+          ? Math.min(140, Math.max(98, kb.viewportH - 68))
+          : Math.min(420, Math.max(230, kb.viewportH - 88))
       }px`,
       transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
@@ -441,8 +443,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
       ? nodeScreenPos!.y - (barHeight + 92)
       : nodeScreenPos!.y + 78;
     const clampedTop = Math.max(
-      64,
-      Math.min(kb.viewportH - barHeight - 16, rawTop)
+      76,
+      Math.min(kb.viewportH - barHeight - 28, rawTop)
     );
 
     containerStyle = {
@@ -481,25 +483,25 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
       className="animate-studio-dock z-40 box-border select-none"
     >
       <div
-        className={`flex max-h-full w-full flex-col overflow-hidden border shadow-2xl backdrop-blur-xl ${
+        className={`flex max-h-full w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border shadow-2xl ${
           isSlimKeyboardMode
             ? useFullWidthBottomSheet
               ? 'rounded-t-2xl border-x-0 border-b-0 px-2.5 pt-1.5'
               : 'rounded-2xl px-3 py-1.5'
             : useFullWidthBottomSheet
-            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-1'
-            : 'rounded-3xl px-3.5 py-2'
+            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-1.5'
+            : 'rounded-3xl px-4 py-2.5'
         }`}
         style={{
           backgroundColor: 'var(--hud-bg)',
           borderColor: 'var(--hud-border)',
           paddingBottom: isSlimKeyboardMode
-            ? '6px'
-            : useFullWidthBottomSheet && !kb.isKeyboardOpen
-            ? 'max(8px, var(--safe-bottom))'
-            : useFullWidthBottomSheet
             ? '8px'
-            : undefined,
+            : useFullWidthBottomSheet && !kb.isKeyboardOpen
+            ? 'max(22px, calc(var(--safe-bottom) + 14px))'
+            : useFullWidthBottomSheet
+            ? '10px'
+            : '12px',
         }}
       >
         {useFullWidthBottomSheet && !isSlimKeyboardMode && (
@@ -1141,16 +1143,16 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
         {/* ROW 3: Working S/M/L/XL Size + Style + Colors + Checklist + Priority + Link + Delete */}
         {!isSlimKeyboardMode && !isTightAboveKeyboard && (
           <div
-            className="no-scrollbar mt-1.5 flex items-center justify-between gap-2 overflow-x-auto border-t pt-1.5 text-[11px]"
-            style={{ borderColor: 'var(--hud-border)' }}
+            className="no-scrollbar mt-1.5 flex items-center justify-between gap-2.5 overflow-x-auto border-t pt-2 pb-0.5 text-[11.5px]"
+            style={{ borderColor: 'var(--hud-border)', touchAction: 'pan-x' }}
           >
             <div className="flex shrink-0 items-center gap-1.5">
-              {/* Working Sticker Size Preset (S / M / L / XL) */}
+              {/* Working Sticker Size Preset (S / M / L / XL) - Generous Tablet & Phone Touch Targets */}
               <div
                 className="inline-flex items-center gap-0.5 rounded-xl bg-slate-500/10 p-0.5"
                 title="İkon / Görsel Boyutu (S / M / L / XL)"
               >
-                <span className="px-1.5 text-[10px] font-extrabold opacity-65">
+                <span className="px-1.5 text-[10.5px] font-extrabold opacity-70">
                   Boyut:
                 </span>
                 {SIZE_PRESETS.map((sz) => (
@@ -1161,10 +1163,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                     title={sz.hint}
                     onPointerDown={(e) => e.preventDefault()}
                     onClick={() => handlePickStickerSize(sz.id)}
-                    className={`min-h-[28px] min-w-[28px] rounded-lg px-2 text-[10.5px] font-extrabold transition ${
+                    className={`min-h-[36px] min-w-[34px] rounded-lg px-2 text-xs font-extrabold transition active:scale-95 ${
                       effectiveStickerSize === sz.id
                         ? 'bg-sky-500 text-white shadow-2xs'
-                        : 'opacity-75 hover:bg-slate-500/10 hover:opacity-100'
+                        : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
                     }`}
                   >
                     {sz.label}
@@ -1179,10 +1181,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                     type="button"
                     onPointerDown={(e) => e.preventDefault()}
                     onClick={() => onChangeNodeStyle(activeNode.id, 'card')}
-                    className={`min-h-[28px] rounded-lg px-2 text-[10.5px] font-extrabold ${
+                    className={`min-h-[36px] rounded-lg px-2.5 text-[11px] font-extrabold active:scale-95 ${
                       effectiveNodeStyle === 'card'
                         ? 'bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white'
-                        : 'opacity-70 hover:opacity-100'
+                        : 'opacity-75 hover:opacity-100'
                     }`}
                   >
                     Kart
@@ -1191,10 +1193,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
                     type="button"
                     onPointerDown={(e) => e.preventDefault()}
                     onClick={() => onChangeNodeStyle(activeNode.id, 'organic')}
-                    className={`min-h-[28px] rounded-lg px-2 text-[10.5px] font-extrabold ${
+                    className={`min-h-[36px] rounded-lg px-2.5 text-[11px] font-extrabold active:scale-95 ${
                       effectiveNodeStyle === 'organic'
                         ? 'bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white'
-                        : 'opacity-70 hover:opacity-100'
+                        : 'opacity-75 hover:opacity-100'
                     }`}
                   >
                     Organik
@@ -1349,4 +1351,4 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = ({
       </div>
     </div>
   );
-};
+});

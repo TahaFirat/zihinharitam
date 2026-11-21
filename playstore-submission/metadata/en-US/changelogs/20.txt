@@ -1,0 +1,4 @@
+• PERFORMANCE: Zero-idle on-demand rendering engine, cached vector paths, and 60/120 FPS hardware-accelerated canvas.
+• MASSIVE ICON ENGINE: 43,000+ offline icons plus 540,000+ live online icons with automatic multilingual search.
+• TABLET & PHONE UX: Full Android tablet taskbar & system-bar safe areas plus enlarged S/M/L/XL touch buttons.
+• OPTIMIZATION: Android API 36, R8 Full Mode, and Google Play Billing 8.0.0.

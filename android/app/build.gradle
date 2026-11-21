@@ -7,7 +7,7 @@ android {
         applicationId "com.tahafirat.zihinharitam"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
+        versionCode 20
         versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -30,8 +30,37 @@ android {
             if (System.getenv("ZH_UPLOAD_STORE_FILE") != null && file(System.getenv("ZH_UPLOAD_STORE_FILE")).exists()) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
+        }
+    }
+    bundle {
+        language {
+            enableSplit = true
+        }
+        density {
+            enableSplit = true
+        }
+        abi {
+            enableSplit = true
+        }
+    }
+    packaging {
+        resources {
+            excludes += [
+                'META-INF/LICENSE*',
+                'META-INF/NOTICE*',
+                'META-INF/*.kotlin_module',
+                'META-INF/DEPENDENCIES',
+                'DebugProbesKt.bin'
+            ]
+        }
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 }

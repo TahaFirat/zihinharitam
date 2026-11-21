@@ -454,7 +454,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Debounced auto-save with `<6ms` WebP thumbnail refresh
+  // Zero-lag debounced auto-save: saves quietly after 650ms idle (no per-keystroke thumbnail/listMaps/Yjs storm!)
   useEffect(() => {
     if (!isHydratedRef.current) return;
     if (doc.deletedAt) return;
@@ -466,20 +466,25 @@ export const App: React.FC = () => {
       doc.id.startsWith('tpl_') &&
       doc.id !== 'tpl_sistem_tasarimi';
 
-    const timer = window.setTimeout(async () => {
+    const saveTimer = window.setTimeout(async () => {
       if (isEphemeralTplPreview) return;
-      const thumb = generateMapThumbnailDataUrl(doc);
-      const docWithThumb: MindMapDocument = thumb
-        ? { ...doc, thumbnailDataUrl: thumb }
-        : doc;
-      await LocalStore.saveMap(docWithThumb, { preserveUpdatedAt: true });
-      const list = await LocalStore.listMaps();
-      setSavedMaps(list);
-    }, 260);
+      await LocalStore.saveMap(doc, { preserveUpdatedAt: true });
+      // Only refresh Home library cards list when Home screen is visible (avoids unnecessary App root re-render on Canvas!)
+      if (activeScreen === 'home') {
+        const list = await LocalStore.listMaps();
+        setSavedMaps(list);
+      }
+    }, 650);
 
-    collabRef.current?.syncLocalDocument(doc);
-    return () => clearTimeout(timer);
-  }, [doc]);
+    const collabTimer = window.setTimeout(() => {
+      collabRef.current?.syncLocalDocument(doc);
+    }, 900);
+
+    return () => {
+      clearTimeout(saveTimer);
+      clearTimeout(collabTimer);
+    };
+  }, [doc, activeScreen]);
 
   // Atomic iOS / Browser background & swipe-kill flush (`visibilitychange` + `pagehide`)
   useEffect(() => {
@@ -2054,13 +2059,13 @@ export const App: React.FC = () => {
           {/* Compact 1-Handed Mobile/Tablet Right-Edge Zoom (+/-) & Quick Undo Controls */}
           {!kbInset.isKeyboardOpen && examMode === 'off' && (
             <div
-              className="pointer-events-auto fixed right-2.5 z-20 flex flex-col items-center gap-1 rounded-2xl border p-1 shadow-lg backdrop-blur-xl lg:hidden"
+              className="pointer-events-auto fixed right-2.5 z-20 flex flex-col items-center gap-1 rounded-2xl border p-1 shadow-lg lg:hidden"
               style={{
                 backgroundColor: 'var(--hud-bg)',
                 borderColor: 'var(--hud-border)',
                 bottom: activeStudioNode
-                  ? `${Math.max(210, kbInset.studioBarHeight + 16)}px`
-                  : 'calc(var(--safe-bottom) + 76px)',
+                  ? `${Math.max(250, kbInset.studioBarHeight + 36)}px`
+                  : 'max(88px, calc(var(--safe-bottom) + 84px))',
               }}
             >
               <button
@@ -2119,13 +2124,14 @@ export const App: React.FC = () => {
             examMode === 'off' && (
               <div
                 className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-2.5 lg:hidden"
-                style={{ paddingBottom: 'calc(var(--safe-bottom) + 14px)' }}
+                style={{ paddingBottom: 'max(24px, calc(var(--safe-bottom) + 20px))' }}
               >
                 <div
-                  className="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border px-2 py-1.5 text-xs font-extrabold shadow-xl backdrop-blur-xl"
+                  className="no-scrollbar pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border px-2 py-1.5 text-xs font-extrabold whitespace-nowrap shadow-xl"
                   style={{
                     backgroundColor: 'var(--hud-bg)',
                     borderColor: 'var(--hud-border)',
+                    touchAction: 'pan-x',
                   }}
                 >
                   <button

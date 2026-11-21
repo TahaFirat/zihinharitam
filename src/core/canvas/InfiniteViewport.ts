@@ -147,6 +147,21 @@ export class InfiniteViewport {
     this.animateTo({ x: endX, y: endY, scale }, durationMs);
   }
 
+  private dotPatternCache: {
+    step: number;
+    radius: number;
+    darkMode: boolean;
+    pattern: CanvasPattern | null;
+  } | null = null;
+
+  public isAnimating(): boolean {
+    return (
+      this.targetAnimation !== null ||
+      Math.abs(this.velocityX) > 0.14 ||
+      Math.abs(this.velocityY) > 0.14
+    );
+  }
+
   /**
    * Advances inertial momentum or smooth camera transition.
    * Returns true if viewport changed on this frame.
@@ -169,13 +184,13 @@ export class InfiniteViewport {
       return true;
     }
 
-    if (Math.abs(this.velocityX) > 0.08 || Math.abs(this.velocityY) > 0.08) {
+    if (Math.abs(this.velocityX) > 0.14 || Math.abs(this.velocityY) > 0.14) {
       this.transform.x += this.velocityX;
       this.transform.y += this.velocityY;
-      this.velocityX *= 0.915;
-      this.velocityY *= 0.915;
-      if (Math.abs(this.velocityX) <= 0.08) this.velocityX = 0;
-      if (Math.abs(this.velocityY) <= 0.08) this.velocityY = 0;
+      this.velocityX *= 0.895;
+      this.velocityY *= 0.895;
+      if (Math.abs(this.velocityX) <= 0.14) this.velocityX = 0;
+      if (Math.abs(this.velocityY) <= 0.14) this.velocityY = 0;
       return true;
     }
 
@@ -198,7 +213,8 @@ export class InfiniteViewport {
   }
 
   /**
-   * Renders the warm paper-textured dot grid with smooth multi-scale LOD.
+   * Renders the warm paper-textured dot grid in a SINGLE GPU draw call using a
+   * cached offscreen tiled CanvasPattern (replaces 1,200+ per-frame `ctx.arc` calls!).
    */
   public renderPaperDotGrid(
     ctx: CanvasRenderingContext2D,
@@ -209,7 +225,6 @@ export class InfiniteViewport {
     const bgColor = darkMode ? '#12161F' : '#FAF9F5';
     const dotColor = darkMode ? '#262D3D' : '#E2E0D8';
 
-    ctx.save();
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, screenWidth, screenHeight);
 
@@ -225,23 +240,46 @@ export class InfiniteViewport {
 
     const screenStep = baseSpacing * scale;
     if (screenStep < 10) {
-      ctx.restore();
       return;
     }
 
-    const dotRadius = Math.max(1.05, Math.min(2.3, 1.45 * Math.sqrt(scale)));
-    const startX = ((offsetX % screenStep) + screenStep) % screenStep;
-    const startY = ((offsetY % screenStep) + screenStep) % screenStep;
+    const tileStep = Math.max(10, Math.round(screenStep));
+    const dotRadius = Math.round(Math.max(1.05, Math.min(2.2, 1.45 * Math.sqrt(scale))) * 4) / 4;
 
-    ctx.fillStyle = dotColor;
-    ctx.beginPath();
-    for (let sx = startX; sx < screenWidth + screenStep; sx += screenStep) {
-      for (let sy = startY; sy < screenHeight + screenStep; sy += screenStep) {
-        ctx.moveTo(sx + dotRadius, sy);
-        ctx.arc(sx, sy, dotRadius, 0, Math.PI * 2);
+    if (
+      !this.dotPatternCache ||
+      this.dotPatternCache.step !== tileStep ||
+      this.dotPatternCache.radius !== dotRadius ||
+      this.dotPatternCache.darkMode !== darkMode
+    ) {
+      const tile = document.createElement('canvas');
+      tile.width = tileStep;
+      tile.height = tileStep;
+      const tctx = tile.getContext('2d');
+      if (tctx) {
+        tctx.fillStyle = dotColor;
+        tctx.beginPath();
+        tctx.arc(tileStep * 0.5, tileStep * 0.5, dotRadius, 0, Math.PI * 2);
+        tctx.fill();
       }
+      this.dotPatternCache = {
+        step: tileStep,
+        radius: dotRadius,
+        darkMode,
+        pattern: ctx.createPattern(tile, 'repeat'),
+      };
     }
-    ctx.fill();
+
+    const pattern = this.dotPatternCache.pattern;
+    if (!pattern) return;
+
+    const startX = ((offsetX % tileStep) + tileStep) % tileStep - tileStep * 0.5;
+    const startY = ((offsetY % tileStep) + tileStep) % tileStep - tileStep * 0.5;
+
+    ctx.save();
+    ctx.translate(startX, startY);
+    ctx.fillStyle = pattern;
+    ctx.fillRect(-startX, -startY, screenWidth + tileStep, screenHeight + tileStep);
     ctx.restore();
   }
 }

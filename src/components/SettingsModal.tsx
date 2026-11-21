@@ -162,7 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
           color: 'var(--text-primary)',
-          paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+          paddingBottom: 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
         onClick={(e) => e.stopPropagation()}
       >

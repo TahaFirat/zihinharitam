@@ -203,10 +203,10 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-2 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-2 sm:items-center sm:p-4"
       style={{
-        paddingTop: 'max(10px, env(safe-area-inset-top))',
-        paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+        paddingTop: 'max(12px, var(--safe-top))',
+        paddingBottom: 'max(20px, calc(var(--safe-bottom) + 14px))',
       }}
       onClick={onClose}
       role="dialog"
@@ -314,7 +314,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <Palette className="h-3.5 w-3.5" />
             </div>
             <span className="font-bold">
-              25.000+ Akademik Çıkartma (%100 Çevrimdışı) & AI Çizim
+              43.000+ Çevrimdışı & 540.000+ Online İkon + 3D Stüdyo
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -362,7 +362,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
                   Yıllık Pro Abonelik
                 </div>
                 <div className="text-[11px] font-semibold opacity-75">
-                  Aylık sadece <strong>125 ₺</strong>’ye gelir • 12 ay tam erişim
+                  Aylık sadece <strong>250 ₺</strong>’ye gelir • 12 ay tam erişim
                 </div>
               </div>
             </div>
@@ -502,14 +502,14 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
           )}
         </button>
 
-        {/* Mandatory Apple Guideline 3.1.2 Auto-Renewal & Plan Disclosure */}
+        {/* Mandatory Store Auto-Renewal & Plan Disclosure */}
         <div
           className="mt-1.5 text-center text-[10.5px] leading-snug font-medium"
           style={{ color: 'var(--text-secondary)' }}
         >
           {activePlanCfg.isSubscription
-            ? `${activePlan.title} (${activePlan.displayPrice}${activePlanCfg.periodLabelTr}): Ödeme Apple Kimliği hesabınızdan tahsil edilir. Dönem bitiminden en az 24 saat önce iptal edilmezse otomatik yenilenir. Ayarlar > Apple Kimliği > Abonelikler’den istediğiniz an iptal edebilirsiniz.`
-            : `Tek seferlik ödeme (${activePlan.displayPrice}) • Otomatik yenilenen abonelik değildir, tüm iPhone ve iPad cihazlarınızda ömür boyu geçerlidir.`}
+            ? `${activePlan.title} (${activePlan.displayPrice}${activePlanCfg.periodLabelTr}): Ödeme mağaza hesabınızdan (App Store / Google Play) tahsil edilir. Dönem bitiminden en az 24 saat önce iptal edilmezse otomatik yenilenir. Hesap Abonelikleri bölümünden istediğiniz an iptal edebilirsiniz.`
+            : `Tek seferlik ödeme (${activePlan.displayPrice}) • Otomatik yenilenen abonelik değildir, tüm cihazlarınızda ömür boyu geçerlidir.`}
         </div>
 
         {/* Mandatory App Store Guideline 3.1.1 & 3.1.2 Footer Links */}
