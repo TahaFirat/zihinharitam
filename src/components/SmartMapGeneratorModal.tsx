@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Wand2, Plus, Sparkles, Check, FileText } from 'lucide-react';
+import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
   type AcademicDepartment,
@@ -7,7 +7,6 @@ import {
   type MindMapDocument,
   type MindNode,
   type ProactiveBranchSuggestion,
-  type StickerAsset,
 } from '../types/mindmap';
 import { computeRadialAutoLayout } from '../core/canvas/RadialAutoLayout';
 import {
@@ -84,10 +83,10 @@ const QUICK_SAMPLE_NOTES: Array<{
   },
 ];
 
-function buildSmartMapFromOutlineText(
+async function buildSmartMapFromOutlineText(
   rawInput: string,
   deptHint: AcademicDepartment = 'genel'
-): MindMapDocument {
+): Promise<MindMapDocument> {
   const lines = rawInput
     .split(/\r?\n/)
     .map((l) => l.replace(/\t/g, '  '))
@@ -189,34 +188,80 @@ function buildSmartMapFromOutlineText(
     }
   }
 
-  // Assign distinct, semantically accurate multi-color stickers to every generated node!
+  // Assign distinct, semantically accurate stickers to EVERY generated node using ALL 43,487 Offline + 546,996 Live Icons!
+  // Process Root + specific Leaf concepts BEFORE generic category headers so specific leaves always claim their #1 exact icon!
   const mapContext = TopicContextIntelligence.analyzeMapContext(nodes, rootId, rootId, deptHint);
   const usedUrls = new Set<string>();
+  const parentIdsWithKids = new Set<string>();
+  for (const n of Object.values(nodes)) {
+    if (n.parentId) parentIdsWithKids.add(n.parentId);
+  }
+  const orderedNodesForStickers = Object.values(nodes).sort((a, b) => {
+    const rank = (nd: MindNode) =>
+      nd.id === rootId ? 0 : !parentIdsWithKids.has(nd.id) ? 1 : 2;
+    return rank(a) - rank(b);
+  });
 
-  for (const node of Object.values(nodes)) {
+  for (const node of orderedNodesForStickers) {
     if (node.sticker) {
       usedUrls.add(node.sticker.url);
       continue;
     }
-    const wave1 = VisualSearchOrchestrator.getInstantWave1Results(
-      node.title,
-      mapContext,
-      node.branchColor
-    );
+    const richQuery = node.techBadge
+      ? `${node.title} ${node.techBadge}`
+      : node.title;
+
+    let pool = (
+      await VisualSearchOrchestrator.searchOfflineWave(
+        node.title,
+        mapContext,
+        node.branchColor,
+        24
+      )
+    ).results;
+
+    if (pool.length < 3 && node.techBadge) {
+      const withBadge = await VisualSearchOrchestrator.searchOfflineWave(
+        richQuery,
+        mapContext,
+        node.branchColor,
+        24
+      );
+      pool = [...pool, ...withBadge.results];
+    }
+
+    if (
+      pool.length < 2 &&
+      typeof navigator !== 'undefined' &&
+      navigator.onLine
+    ) {
+      const liveFed = await VisualSearchOrchestrator.searchFederatedGallery(
+        node.title,
+        mapContext,
+        node.branchColor
+      );
+      pool = [...liveFed.results, ...pool];
+    }
+
     const chosen =
-      wave1.results.find((r) => !usedUrls.has(r.previewUrl)) ?? wave1.results[0];
+      pool.find((r) => r.isVectorSvg && !usedUrls.has(r.previewUrl)) ??
+      pool.find((r) => !usedUrls.has(r.previewUrl)) ??
+      pool[0];
+
     if (chosen) {
       usedUrls.add(chosen.previewUrl);
-      const stk: StickerAsset = {
+      const materialized = await VisualSearchOrchestrator.materializeStickerSelection(
+        chosen,
+        {
+          retintToBranchColor: chosen.isDuotoneColorizable
+            ? node.branchColor
+            : null,
+        }
+      );
+      node.sticker = {
+        ...materialized,
         id: `genstk_${node.id}`,
-        url: chosen.previewUrl,
-        mode: chosen.mode,
-        source: 'library',
-        dieCutProcessed: !chosen.needsDieCut,
-        aspectRatio: 1,
-        label: chosen.title,
       };
-      node.sticker = stk;
     }
   }
 
@@ -265,6 +310,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [outlineText, setOutlineText] = useState('');
   const [deptHint, setDeptHint] = useState<AcademicDepartment>('genel');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const proactiveList = useMemo(() => {
     const targetTitle = activeNode?.title || mapContext.parentTitle || mapContext.label;
@@ -277,13 +323,19 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleCreateSmartMap = (e: React.FormEvent) => {
+  const handleCreateSmartMap = async (e: React.FormEvent) => {
     e.preventDefault();
-    const input = outlineText.trim() || QUICK_SAMPLE_NOTES[0].text;
-    void hapticSuccess();
-    const generatedDoc = buildSmartMapFromOutlineText(input, deptHint);
-    onGenerateCompleteMap(generatedDoc);
-    onClose();
+    if (isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const input = outlineText.trim() || QUICK_SAMPLE_NOTES[0].text;
+      const generatedDoc = await buildSmartMapFromOutlineText(input, deptHint);
+      void hapticSuccess();
+      onGenerateCompleteMap(generatedDoc);
+      onClose();
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -411,10 +463,15 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95"
+                  disabled={isGenerating}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-60"
                 >
-                  <Wand2 className="h-4 w-4" />
-                  <span>Görsel Haritayı Oluştur</span>
+                  {isGenerating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                  <span>{isGenerating ? 'İkonlar Eşleştiriliyor...' : 'Görsel Haritayı Oluştur'}</span>
                 </button>
               </div>
             </form>

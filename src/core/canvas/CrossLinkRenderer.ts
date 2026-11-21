@@ -25,16 +25,28 @@ export function computeCrossLinkGeometry(
   const dy = toNode.y - fromNode.y;
   const dist = Math.max(1, Math.hypot(dx, dy));
 
-  // Perpendicular normal to arch smoothly clear of horizontal branches
+  // Perpendicular normal to arch smoothly clear of horizontal branches AND central root hub/sticker!
   const nx = -dy / dist;
   const ny = dx / dist;
-  const archSign = dy >= 0 ? -1 : 1;
-  const archMagnitude = Math.min(135, Math.max(48, dist * 0.22));
-
   const rawMidX = (fromNode.x + toNode.x) * 0.5;
   const rawMidY = (fromNode.y + toNode.y) * 0.5;
-  const cpX = rawMidX + nx * archMagnitude * archSign;
-  const cpY = rawMidY + ny * archMagnitude * archSign;
+  const crossesRootZone = Math.abs(rawMidX) < 230 && Math.abs(rawMidY) < 195;
+
+  let cpX: number;
+  let cpY: number;
+  if (crossesRootZone) {
+    // Arch generously above (or below) the central root node + 124px root sticker so the pill is never occluded!
+    const archUp = rawMidY <= 60;
+    cpX = rawMidX;
+    cpY = archUp
+      ? Math.min(-255, rawMidY - 215)
+      : Math.max(225, rawMidY + 195);
+  } else {
+    const archSign = dy >= 0 ? -1 : 1;
+    const archMagnitude = Math.min(145, Math.max(52, dist * 0.23));
+    cpX = rawMidX + nx * archMagnitude * archSign;
+    cpY = rawMidY + ny * archMagnitude * archSign;
+  }
 
   // Offset start & end points slightly outside the node pill so arrowheads sit crisply at pill edge
   const startDirAngle = Math.atan2(cpY - fromNode.y, cpX - fromNode.x);

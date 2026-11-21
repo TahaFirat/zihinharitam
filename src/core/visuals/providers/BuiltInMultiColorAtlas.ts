@@ -1233,6 +1233,211 @@ export const EXTRA_MULTI_COLOR_ATLAS: BespokeVisualEntry[] = [
       <path d="M40 42 C52 36, 62 46, 58 60 C54 72, 42 78, 36 66 Z M72 48 C84 44, 94 56, 88 74 C82 86, 70 82, 72 68 Z" fill="#22C55E"/>
     `),
   },
+  // =========================================================================
+  // TARİH, OSMANLI TEŞKİLATI & SOSYAL BİLİMLER (10 ÖZEL ÇOK RENKLİ İLLÜSTRASYON)
+  // =========================================================================
+  {
+    id: 'hist_ottoman_imperial_seal',
+    titleTr: 'Osmanlı Fermanı & Devlet Mührü',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['osmanli', 'osmanli timar ve toprak sistemi', 'padisah', 'ferman', 'berat', 'divan', 'imparatorluk', 'saltanat', 'tarih', 'kanunname', 'merkezi otorite dengesi', 'merkezi otorite'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#FEF3C7"/>
+      <rect x="34" y="24" width="60" height="80" rx="8" fill="#FDE68A" stroke="#92400E" stroke-width="3"/>
+      <rect x="28" y="20" width="72" height="10" rx="5" fill="#D97706" stroke="#78350F" stroke-width="2.4"/>
+      <rect x="28" y="98" width="72" height="10" rx="5" fill="#D97706" stroke="#78350F" stroke-width="2.4"/>
+      <path d="M52 46 C52 36, 76 36, 76 46 C68 42, 58 44, 58 52 C58 58, 70 58, 76 54" fill="none" stroke="#B45309" stroke-width="3.4" stroke-linecap="round"/>
+      <line x1="44" y1="66" x2="84" y2="66" stroke="#92400E" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="44" y1="76" x2="76" y2="76" stroke="#92400E" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="78" cy="84" r="10" fill="#E11D48" stroke="#881337" stroke-width="2.4"/>
+      <circle cx="78" cy="84" r="4" fill="#FDA4AF"/>
+    `),
+  },
+  {
+    id: 'hist_dirlik_hierarchy_pyramid',
+    titleTr: 'Dirlik Kademeleri Piramidi (Has • Zeamet • Tımar)',
+    discipline: 'humanities_social',
+    category: 'diagram',
+    keywords: ['dirlik', 'dirlik kademeleri', 'dirlik sistemi', 'kademe', 'hiyerarsi', 'teskilat', 'tabaka', 'pyramid'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#FFFBEB"/>
+      <polygon points="64,22 80,48 48,48" fill="#F59E0B" stroke="#78350F" stroke-width="2.8" stroke-linejoin="round"/>
+      <polygon points="46,52 82,52 94,74 34,74" fill="#10B981" stroke="#065F46" stroke-width="2.8" stroke-linejoin="round"/>
+      <polygon points="32,78 96,78 106,100 22,100" fill="#0EA5E9" stroke="#0C4A6E" stroke-width="2.8" stroke-linejoin="round"/>
+      <circle cx="64" cy="39" r="3.5" fill="#FEF08A"/>
+      <line x1="54" y1="63" x2="74" y2="63" stroke="#ECFDF5" stroke-width="3" stroke-linecap="round"/>
+      <line x1="44" y1="89" x2="84" y2="89" stroke="#E0F2FE" stroke-width="3" stroke-linecap="round"/>
+    `),
+  },
+  {
+    id: 'hist_has_imperial_crown',
+    titleTr: 'Has Topraklar (Padişah & Vezir Hası)',
+    discipline: 'humanities_social',
+    category: '3d_color',
+    keywords: ['has', 'has topraklar', 'has toprak', 'padisah hassi', 'hanedan', 'saltanat', 'kral', 'hukmdar', 'crown'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#FEF9C3"/>
+      <path d="M26 84 L32 42 L50 60 L64 32 L78 60 L96 42 L102 84 Z" fill="#FBBF24" stroke="#92400E" stroke-width="3.2" stroke-linejoin="round"/>
+      <rect x="26" y="84" width="76" height="14" rx="5" fill="#D97706" stroke="#78350F" stroke-width="2.8"/>
+      <circle cx="64" cy="28" r="5" fill="#F43F5E" stroke="#881337" stroke-width="2"/>
+      <circle cx="31" cy="38" r="4.2" fill="#0EA5E9" stroke="#075985" stroke-width="1.8"/>
+      <circle cx="97" cy="38" r="4.2" fill="#10B981" stroke="#065F46" stroke-width="1.8"/>
+      <circle cx="64" cy="70" r="6" fill="#E11D48"/><circle cx="44" cy="73" r="4" fill="#0EA5E9"/><circle cx="84" cy="73" r="4" fill="#10B981"/>
+    `),
+  },
+  {
+    id: 'hist_zeamet_banner_medal',
+    titleTr: 'Zeamet Dirlikleri & Sancak Nişanı',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['zeamet', 'zeamet dirlikleri', 'orta kademe', 'subasi', 'alaybeyi', 'sancak', 'nisan', 'berat', 'medal'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#ECFDF5"/>
+      <path d="M44 22 L84 22 L84 62 L64 76 L44 62 Z" fill="#10B981" stroke="#065F46" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M54 22 L74 22 L74 68 L64 75 L54 68 Z" fill="#34D399"/>
+      <circle cx="64" cy="82" r="20" fill="#F59E0B" stroke="#78350F" stroke-width="3"/>
+      <polygon points="64,69 68,78 78,78 70,84 73,93 64,87 55,93 58,84 50,78 60,78" fill="#FEF08A"/>
+    `),
+  },
+  {
+    id: 'hist_sipahi_cavalry_shield',
+    titleTr: 'Tımarlı Sipahi & Cebelü Süvari Kalkanı',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['timar', 'timarli sipahi', 'timarli sipahi ordusu', 'sipahi', 'cebelu', 'atli asker', 'suvari', 'kilic timari', 'ordu', 'askeri', 'savasci', 'kilic', 'kalkan'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#FFE4E6"/>
+      <path d="M28 96 C44 76, 82 40, 100 24 M100 96 C84 76, 46 40, 28 24" stroke="#475569" stroke-width="6" stroke-linecap="round"/>
+      <path d="M24 90 L36 102 M104 90 L92 102" stroke="#D97706" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="64" cy="64" r="28" fill="#E11D48" stroke="#881337" stroke-width="3.4"/>
+      <circle cx="64" cy="64" r="18" fill="#FBBF24" stroke="#92400E" stroke-width="2.6"/>
+      <circle cx="64" cy="64" r="6" fill="#FFFBEB"/>
+    `),
+  },
+  {
+    id: 'hist_miri_wheat_land',
+    titleTr: 'Mîrî Arazi, Reaya & Buğday Hasadı',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['miri arazi', 'reaya', 'reaya ve ciftci', 'ciftci', 'tarim', 'toprak', 'ekim', 'hasat', 'bugday', 'tahil', 'uretim', 'koylu', 'ciftbozan', 'wheat', 'agriculture'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#FEF9C3"/>
+      <path d="M20 88 Q64 72 108 88 L104 102 Q64 94 24 102 Z" fill="#16A34A" stroke="#14532D" stroke-width="2.8"/>
+      <path d="M64 92 L64 26 M48 90 L40 38 M80 90 L88 38" stroke="#B45309" stroke-width="3.2" stroke-linecap="round"/>
+      <g fill="#F59E0B" stroke="#92400E" stroke-width="1.8">
+        <ellipse cx="58" cy="38" rx="5" ry="9" transform="rotate(-28 58 38)"/><ellipse cx="70" cy="38" rx="5" ry="9" transform="rotate(28 70 38)"/>
+        <ellipse cx="58" cy="52" rx="5" ry="9" transform="rotate(-28 58 52)"/><ellipse cx="70" cy="52" rx="5" ry="9" transform="rotate(28 70 52)"/>
+        <ellipse cx="58" cy="66" rx="5" ry="9" transform="rotate(-28 58 66)"/><ellipse cx="70" cy="66" rx="5" ry="9" transform="rotate(28 70 66)"/>
+        <ellipse cx="38" cy="48" rx="4.5" ry="8" transform="rotate(-32 38 48)"/><ellipse cx="90" cy="48" rx="4.5" ry="8" transform="rotate(32 90 48)"/>
+      </g>
+    `),
+  },
+  {
+    id: 'hist_vergi_osur_scale',
+    titleTr: 'Örfi & Şer’i Vergi / Öşür Terazisi',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['vergi', 'orfi ve seri vergi toplama', 'orfi vergi', 'seri vergi', 'osur', 'harac', 'cizye', 'maliye', 'mali ve hukuki yapi', 'tahsilat', 'adalet dengesi'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#F0F9FF"/>
+      <line x1="64" y1="24" x2="64" y2="98" stroke="#78350F" stroke-width="4.5" stroke-linecap="round"/>
+      <rect x="44" y="96" width="40" height="8" rx="4" fill="#92400E"/>
+      <line x1="30" y1="42" x2="98" y2="42" stroke="#D97706" stroke-width="4" stroke-linecap="round"/>
+      <line x1="34" y1="42" x2="26" y2="68" stroke="#64748B" stroke-width="2.2"/><line x1="34" y1="42" x2="42" y2="68" stroke="#64748B" stroke-width="2.2"/>
+      <line x1="94" y1="42" x2="86" y2="68" stroke="#64748B" stroke-width="2.2"/><line x1="94" y1="42" x2="102" y2="68" stroke="#64748B" stroke-width="2.2"/>
+      <path d="M22 68 Q34 80 46 68 Z" fill="#F59E0B" stroke="#92400E" stroke-width="2.4"/>
+      <path d="M82 68 Q94 80 106 68 Z" fill="#10B981" stroke="#065F46" stroke-width="2.4"/>
+      <circle cx="34" cy="63" r="5" fill="#FDE047" stroke="#CA8A04" stroke-width="1.6"/>
+      <circle cx="94" cy="63" r="5" fill="#34D399" stroke="#059669" stroke-width="1.6"/>
+    `),
+  },
+  {
+    id: 'hist_iltizam_treasury_chest',
+    titleTr: 'İltizam & Mültezim Nakit Hazine Sandığı',
+    discipline: 'humanities_social',
+    category: '3d_color',
+    keywords: ['iltizam', 'iltizam ve multezim sistemi', 'multezim', 'mukataa', 'hazine', 'nakit hazine', 'akce', 'altin', 'darphane', 'butce'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#FEF3C7"/>
+      <rect x="28" y="54" width="72" height="44" rx="8" fill="#B45309" stroke="#451A03" stroke-width="3.2"/>
+      <path d="M28 54 C28 34, 100 34, 100 54 Z" fill="#D97706" stroke="#451A03" stroke-width="3.2"/>
+      <circle cx="50" cy="54" r="7" fill="#FDE047" stroke="#92400E" stroke-width="2"/>
+      <circle cx="64" cy="50" r="8" fill="#FACC15" stroke="#92400E" stroke-width="2"/>
+      <circle cx="78" cy="54" r="7" fill="#FDE047" stroke="#92400E" stroke-width="2"/>
+      <rect x="57" y="66" width="14" height="18" rx="4" fill="#FBBF24" stroke="#78350F" stroke-width="2.4"/>
+      <circle cx="64" cy="74" r="2.5" fill="#451A03"/>
+    `),
+  },
+  {
+    id: 'hist_tasra_fortress_castle',
+    titleTr: 'Taşra Güvenliği, Kale & Sancak Asayişi',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['tasra', 'tasra guvenligi', 'tasra guvenligi ve asayis', 'asayis', 'kale', 'hisar', 'savunma', 'muhafiz', 'guvenlik', 'idari sonuclar'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#E0F2FE"/>
+      <rect x="28" y="44" width="20" height="54" rx="2" fill="#94A3B8" stroke="#1E293B" stroke-width="2.8"/>
+      <rect x="80" y="44" width="20" height="54" rx="2" fill="#94A3B8" stroke="#1E293B" stroke-width="2.8"/>
+      <rect x="44" y="56" width="40" height="42" fill="#CBD5E1" stroke="#1E293B" stroke-width="2.8"/>
+      <path d="M26 44 L33 32 L40 44 L47 32 L52 44 M76 44 L83 32 L90 44 L97 32 L102 44" fill="#64748B" stroke="#1E293B" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M54 98 L54 76 A10 10 0 0 1 74 76 L74 98 Z" fill="#78350F" stroke="#1E293B" stroke-width="2.4"/>
+      <path d="M64 24 L64 56 M64 24 L80 30 L64 36" fill="#EF4444" stroke="#991B1B" stroke-width="2.6" stroke-linejoin="round"/>
+    `),
+  },
+  {
+    id: 'hist_vakif_kulliye_mosque',
+    titleTr: 'Vakıf Toprakları, Külliye & Sosyal Dayanışma',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['vakif', 'vakif topraklari', 'kulliye', 'medrese', 'imaret', 'cami', 'darussifa', 'hayir', 'turk islam'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#ECFDF5"/>
+      <rect x="28" y="34" width="8" height="62" rx="2" fill="#0EA5E9" stroke="#0C4A6E" stroke-width="2.4"/>
+      <polygon points="28,34 32,22 36,34" fill="#F59E0B" stroke="#78350F" stroke-width="2"/>
+      <rect x="92" y="34" width="8" height="62" rx="2" fill="#0EA5E9" stroke="#0C4A6E" stroke-width="2.4"/>
+      <polygon points="92,34 96,22 100,34" fill="#F59E0B" stroke="#78350F" stroke-width="2"/>
+      <path d="M40 70 A24 22 0 0 1 88 70 Z" fill="#10B981" stroke="#065F46" stroke-width="2.8"/>
+      <rect x="36" y="70" width="56" height="26" rx="3" fill="#F8FAFC" stroke="#0F172A" stroke-width="2.6"/>
+      <path d="M58 96 L58 80 A6 6 0 0 1 70 80 L70 96 Z" fill="#F59E0B" stroke="#78350F" stroke-width="2"/>
+    `),
+  },
+  {
+    id: 'hist_mali_legal_scroll_scale',
+    titleTr: 'Mali & Hukuki Yapı (Kanunname & Vergi Defteri)',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['mali ve hukuki yapi', 'mali yapi', 'hukuki yapi', 'kanunname', 'tahrir defteri', 'maliye', 'hukuk duzeni'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#EFF6FF"/>
+      <rect x="26" y="30" width="46" height="66" rx="6" fill="#FEF3C7" stroke="#92400E" stroke-width="2.8"/>
+      <line x1="35" y1="44" x2="62" y2="44" stroke="#B45309" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="35" y1="56" x2="58" y2="56" stroke="#B45309" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="35" y1="68" x2="54" y2="68" stroke="#B45309" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="84" cy="72" r="20" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="2.8"/>
+      <line x1="84" y1="57" x2="84" y2="85" stroke="#1E3A8A" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="71" y1="64" x2="97" y2="64" stroke="#1E3A8A" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="73" cy="74" r="4.5" fill="#F59E0B" stroke="#92400E" stroke-width="1.8"/>
+      <circle cx="95" cy="74" r="4.5" fill="#10B981" stroke="#065F46" stroke-width="1.8"/>
+    `),
+  },
+  {
+    id: 'hist_merkezi_otorite_pillar',
+    titleTr: 'Merkezi Otorite & Devlet İdaresi Sütunu',
+    discipline: 'humanities_social',
+    category: 'hand_drawn',
+    keywords: ['merkezi otorite', 'merkezi otorite dengesi', 'otorite dengesi', 'idari sonuclar', 'idari yapi', 'devlet idaresi', 'divan teskilati'],
+    svgDataUri: wrapAtlasSvg(`
+      <circle cx="64" cy="64" r="46" fill="#F0FDF4"/>
+      <polygon points="64,22 102,42 26,42" fill="#0EA5E9" stroke="#0C4A6E" stroke-width="2.8" stroke-linejoin="round"/>
+      <rect x="30" y="42" width="68" height="8" rx="2" fill="#BAE6FD" stroke="#0C4A6E" stroke-width="2.2"/>
+      <rect x="36" y="50" width="12" height="38" fill="#F8FAFC" stroke="#1E293B" stroke-width="2.4"/>
+      <rect x="58" y="50" width="12" height="38" fill="#F8FAFC" stroke="#1E293B" stroke-width="2.4"/>
+      <rect x="80" y="50" width="12" height="38" fill="#F8FAFC" stroke="#1E293B" stroke-width="2.4"/>
+      <rect x="24" y="88" width="80" height="12" rx="4" fill="#F59E0B" stroke="#78350F" stroke-width="2.8"/>
+      <circle cx="64" cy="34" r="4" fill="#FDE047"/>
+    `),
+  },
 ];
 
 /**
@@ -1273,6 +1478,12 @@ export interface ScoredAtlasMatch {
  * - When `query` is empty: returns starter visuals for the active `discipline`.
  * - When `query` is non-empty: returns ONLY genuinely matching atlas entries (never pads with unrelated items!).
  */
+const ATLAS_QUERY_STOPWORDS = new Set([
+  've', 'ile', 'veya', 'de', 'da', 'ki', 'mi', 'mu', 'bu', 'su', 'bir', 'her', 'icin',
+  'olan', 'olarak', 'ait', 'dair', 'gore', 'sistemi', 'sistemleri', 'yapisi',
+  'ozellikleri', 'cesitleri', 'turleri', 'ilkeleri', 'sonuclari', 'etkileri',
+]);
+
 export function searchBuiltInAtlasV3(
   query: string,
   discipline: DisciplineProfile = 'system_design_cs',
@@ -1291,10 +1502,13 @@ export function searchBuiltInAtlasV3(
   const offlineDomain = mapDisciplineToOfflineDomain(discipline);
   const expanded = expandSemanticQueryV3(clean, offlineDomain);
   const normFull = expanded.normalizedQuery;
-  const queryTokens = normFull.split(/\s+/).filter((t) => t.length >= 2);
+  const rawQueryTokens = normFull.split(/\s+/).filter((t) => t.length >= 2);
+  const filteredTokens = rawQueryTokens.filter((t) => !ATLAS_QUERY_STOPWORDS.has(t));
+  const queryTokens = filteredTokens.length > 0 ? filteredTokens : rawQueryTokens;
   const queryStems = queryTokens
     .map((t) => stemTurkishSafe(t))
-    .filter((s) => s.length >= 4);
+    .filter((s) => s.length >= 4 && !ATLAS_QUERY_STOPWORDS.has(s));
+  const directMatchedAtlasSet = new Set(expanded.matchedAtlasIds);
 
   const expandedEnSet = new Set(
     expanded.expandedEnTokens.map((t) => normalizeTrToken(t))
@@ -1312,13 +1526,15 @@ export function searchBuiltInAtlasV3(
     const kwNormalized = entry.keywords.map((k) => normalizeTrToken(k));
     const titleWords = normalizeTrToken(entry.titleTr)
       .split(/[\s()•/,-]+/)
-      .filter(Boolean);
+      .filter((w) => w.length >= 2 && !ATLAS_QUERY_STOPWORDS.has(w));
     const allPhraseSet = new Set<string>([...kwNormalized]);
     const allWordTokens = new Set<string>(titleWords);
     for (const kw of kwNormalized) {
       allWordTokens.add(kw);
       for (const part of kw.split(/[\s_-]+/)) {
-        if (part.length >= 2) allWordTokens.add(part);
+        if (part.length >= 2 && !ATLAS_QUERY_STOPWORDS.has(part)) {
+          allWordTokens.add(part);
+        }
       }
     }
 
@@ -1333,6 +1549,11 @@ export function searchBuiltInAtlasV3(
     if (isBlocked) continue;
 
     let rawScore = 0;
+
+    // 0. Direct Taxonomy Cluster Pack ID Match (highest semantic authority)
+    if (directMatchedAtlasSet.has(entry.id)) {
+      rawScore += 90;
+    }
 
     // 1. Exact full query match against keyword phrase
     if (allPhraseSet.has(normFull)) {

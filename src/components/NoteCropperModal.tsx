@@ -416,7 +416,7 @@ export const NoteCropperModal: React.FC<NoteCropperModalProps> = ({
                 style={{ borderColor: 'var(--hud-border)' }}
               >
                 <ClipboardPaste className="h-6 w-6 text-violet-500" />
-                <div className="text-xs font-extrabold">Panodan Yapıştır (Ctrl+V)</div>
+                <div className="text-xs font-extrabold">Panodan Görsel Yapıştır</div>
               </button>
 
               <button

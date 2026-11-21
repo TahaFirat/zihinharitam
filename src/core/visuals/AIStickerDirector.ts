@@ -35,13 +35,13 @@ export const AI_STYLE_PRESETS: Record<
   { labelTr: string; emoji: string; descTr: string; stylePrefix: string }
 > = {
   hand_drawn: {
-    labelTr: 'El Çizimi Çıkartma',
+    labelTr: 'El Çizimi',
     emoji: '🎨',
     descTr: 'Kalın mürekkep konturlu, canlı suluboya/keçeli kalem defter çıkartması',
     stylePrefix: 'die-cut educational illustration sticker of',
   },
   isometric_3d: {
-    labelTr: 'İzometrik 3D Sistem',
+    labelTr: 'İzometrik 3D',
     emoji: '🧊',
     descTr: 'Parlak hacimsel 3D sistem mimarisi ve mühendislik objesi',
     stylePrefix: 'clean isometric 3D icon sticker of',
@@ -49,11 +49,11 @@ export const AI_STYLE_PRESETS: Record<
   scientific_atlas: {
     labelTr: 'Bilimsel Atlas',
     emoji: '🔬',
-    descTr: 'Tıp, mimarlık ve temel bilimler ders kitabı kesit/atlas illüstrasyonu',
+    descTr: 'Tıp, tarih, mimarlık ve temel bilimler ders kitabı illüstrasyonu',
     stylePrefix: 'detailed scientific textbook atlas illustration sticker of',
   },
   flat_vector: {
-    labelTr: 'Yalın Vektör Amblem',
+    labelTr: 'Vektör Amblem',
     emoji: '✨',
     descTr: 'Modern, yüksek kontrastlı çok renkli vektörel sembol',
     stylePrefix: 'modern flat colorful vector emblem sticker of',
@@ -72,10 +72,10 @@ const STYLE_MODIFIERS: Record<AIArtStyle, string> = {
 };
 
 const VARIATION_PALETTES = [
-  { primary: '#0EA5E9', secondary: '#38BDF8', accent: '#F59E0B', bgTint: '#F0F9FF', labelTr: 'Canlı Stüdyo Kesim' },
-  { primary: '#8B5CF6', secondary: '#C084FC', accent: '#EC4899', bgTint: '#F5F3FF', labelTr: '3D Cam Madalyon' },
-  { primary: '#10B981', secondary: '#34D399', accent: '#0EA5E9', bgTint: '#ECFDF5', labelTr: 'Akademik Atlas Arma' },
-  { primary: '#F43F5E', secondary: '#FB7185', accent: '#FBBF24', bgTint: '#FFF1F2', labelTr: 'Kontrast Rozet Kesim' },
+  { primary: '#0EA5E9', secondary: '#38BDF8', accent: '#F59E0B', bgTint: '#F0F9FF', labelTr: 'Stüdyo Kesim' },
+  { primary: '#8B5CF6', secondary: '#C084FC', accent: '#EC4899', bgTint: '#F5F3FF', labelTr: '3D Madalyon' },
+  { primary: '#10B981', secondary: '#34D399', accent: '#0EA5E9', bgTint: '#ECFDF5', labelTr: 'Atlas Arma' },
+  { primary: '#F43F5E', secondary: '#FB7185', accent: '#FBBF24', bgTint: '#FFF1F2', labelTr: 'Rozet Kesim' },
 ] as const;
 
 export function loadAIProviderSettings(): AIProviderSettings {
@@ -463,11 +463,12 @@ export class AIStickerDirector {
     baseSeed: number,
     onSlotUpdate: (slot: AICandidateSlot) => void,
     signal?: AbortSignal,
-    branchColor = '#0EA5E9'
+    branchColor = '#0EA5E9',
+    variationRound = 0
   ): Promise<void> {
     const clean = conceptTr.trim() || mapContext.parentTitle || 'Akademik Kavram';
 
-    // 1. Gather top semantic visual matches from 0ms Atlas + 25,209-icon Offline Shards
+    // 1. Gather top semantic visual matches from 0ms Atlas + 43,487 Offline Shards + 546,996 Online Iconify!
     const wave1 = VisualSearchOrchestrator.getInstantWave1Results(
       clean,
       mapContext,
@@ -483,6 +484,21 @@ export class AIStickerDirector {
         28
       );
       const collected: VisualSearchResult[] = [...offlineWave.results];
+
+      // When online, enrich with live 546K+ Iconify + TR->EN auto-translation if offline top hits are sparse!
+      if (
+        collected.length < 6 &&
+        typeof navigator !== 'undefined' &&
+        navigator.onLine
+      ) {
+        const fed = await VisualSearchOrchestrator.searchFederatedGallery(
+          clean,
+          mapContext,
+          branchColor,
+          signal
+        );
+        collected.unshift(...fed.results.slice(0, 12));
+      }
 
       // Multi-word Turkish decomposition fallback so users NEVER hit a missing-concept dead end!
       const words = clean
@@ -504,9 +520,12 @@ export class AIStickerDirector {
       if (collected.length > 0) {
         const seen = new Set<string>();
         const merged: VisualSearchResult[] = [];
-        for (const r of [...collected, ...wave1.results]) {
-          if (!seen.has(r.id)) {
+        // Keep highest-precision bespoke atlas + top offline/online vector matches strictly ordered by relevance!
+        for (const r of [...wave1.results.slice(0, 4), ...collected]) {
+          if (r.id.startsWith('comp_')) continue;
+          if (!seen.has(r.id) && !seen.has(r.previewUrl)) {
             seen.add(r.id);
+            seen.add(r.previewUrl);
             merged.push(r);
           }
         }
@@ -518,9 +537,13 @@ export class AIStickerDirector {
 
     if (signal?.aborted) return;
 
-    // Pick 4 distinct base icons shifted by baseSeed so "Yeni Varyasyonlar" always cycles fresh icons!
-    const poolSize = Math.max(4, Math.min(16, candidateVisuals.length));
-    const offset = (baseSeed % Math.max(1, poolSize - 3));
+    // Initial generation (`variationRound === 0`) ALWAYS uses the TOP 4 (#1..#4) most relevant icons!
+    // Clicking "Yeni Varyasyonlar" increments `variationRound` to cycle fresh relevant alternatives cleanly!
+    const poolSize = Math.max(4, Math.min(20, candidateVisuals.length));
+    const offset =
+      variationRound <= 0
+        ? 0
+        : (variationRound * 4) % Math.max(1, poolSize - 3);
 
     const tasks = Array.from({ length: 4 }, async (_, idx) => {
       const seed = baseSeed + idx * 137 + 11;

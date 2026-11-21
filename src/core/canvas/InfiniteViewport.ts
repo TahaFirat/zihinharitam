@@ -14,6 +14,7 @@ export class InfiniteViewport {
   private transform: ViewportTransform = { x: 0, y: 0, scale: 1 };
   private velocityX = 0;
   private velocityY = 0;
+  private lastStepTime = 0;
   private targetAnimation: {
     startX: number;
     startY: number;
@@ -54,6 +55,7 @@ export class InfiniteViewport {
   public stopMomentum(): void {
     this.velocityX = 0;
     this.velocityY = 0;
+    this.lastStepTime = 0;
     this.targetAnimation = null;
   }
 
@@ -78,9 +80,10 @@ export class InfiniteViewport {
   }
 
   public setInertia(vx: number, vy: number): void {
-    const maxSpeed = 58;
+    const maxSpeed = 62;
     this.velocityX = Math.max(-maxSpeed, Math.min(maxSpeed, vx));
     this.velocityY = Math.max(-maxSpeed, Math.min(maxSpeed, vy));
+    this.lastStepTime = performance.now();
   }
 
   public zoomAtScreenPoint(nextScale: number, screenX: number, screenY: number): void {
@@ -185,15 +188,23 @@ export class InfiniteViewport {
     }
 
     if (Math.abs(this.velocityX) > 0.14 || Math.abs(this.velocityY) > 0.14) {
-      this.transform.x += this.velocityX;
-      this.transform.y += this.velocityY;
-      this.velocityX *= 0.895;
-      this.velocityY *= 0.895;
+      const dtMs = this.lastStepTime > 0 ? Math.max(4, Math.min(42, now - this.lastStepTime)) : 16.667;
+      this.lastStepTime = now;
+      const dtNorm = dtMs / 16.667;
+
+      this.transform.x += this.velocityX * dtNorm;
+      this.transform.y += this.velocityY * dtNorm;
+
+      // Frame-rate independent exponential decay so 60Hz, 90Hz, and 120Hz tablets glide identical silky distances!
+      const decay = Math.pow(0.915, dtNorm);
+      this.velocityX *= decay;
+      this.velocityY *= decay;
       if (Math.abs(this.velocityX) <= 0.14) this.velocityX = 0;
       if (Math.abs(this.velocityY) <= 0.14) this.velocityY = 0;
       return true;
     }
 
+    this.lastStepTime = 0;
     return false;
   }
 

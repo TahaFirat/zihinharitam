@@ -1,12 +1,12 @@
 # ZihinHaritam — Google Play Store Eksiksiz Hazırlık & Yükleme Rehberi
 
-Tüm teknik gereksinimler (**Android API 35 / Target SDK 35**, **Google Play Billing Library v7.1.1**, **Kalıcı 2048-bit RSA Upload Keystore**, **512×512 İkon**, **1024×500 Özellik Grafiği**, **10 Adet Çerçeveli Ekran Görüntüsü**, **TR & EN Mağaza Metinleri** ve **Gizlilik/Destek Web Sayfaları**) hazırlandı.
+Tüm teknik gereksinimler (**Android API 36 / Target SDK 36**, **Google Play Billing Library v8.0.0**, **R8 Full Mode DEX Optimizasyonu**, **120Hz Tablet & Telefon Akıcılığı**, **Kalıcı 2048-bit RSA Upload Keystore**, **512×512 İkon**, **1024×500 Özellik Grafiği**, **10 Adet Çerçeveli Ekran Görüntüsü**, **TR & EN Mağaza Metinleri** ve **Gizlilik/Destek Web Sayfaları**) hazırlandı.
 
 ---
 
-## 1. Kalıcı İmzalı Uygulama Paketleri (`versionCode: 16`, `versionName: 1.0.2`)
-- **Google Play Yükleme Dosyası (`.aab`)**: `playstore-submission/ZihinHaritam-v1.0.2-b16-release.aab`
-- **Doğrudan Android Cihazda Test İçin (`.apk`)**: `playstore-submission/ZihinHaritam-v1.0.2-b16-release.apk`
+## 1. Kalıcı İmzalı Uygulama Paketleri (`versionCode: 21`, `versionName: 1.0.2`)
+- **Google Play Yükleme Dosyası (`.aab`)**: `playstore-submission/ZihinHaritam-v1.0.2-b21-release.aab`
+- **Doğrudan Android Cihazda Test İçin (`.apk`)**: `playstore-submission/ZihinHaritam-v1.0.2-b21-release.apk`
 - **Paket Kimliği (`applicationId`)**: `com.tahafirat.zihinharitam`
 - **Kalıcı Yükleme Anahtarı (Saklayın / Yedekleyin)**: `.secrets/zihinharitam-upload.jks`
   - **Alias**: `zihinharitam-upload`

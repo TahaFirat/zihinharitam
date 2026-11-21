@@ -1286,6 +1286,21 @@ export const App: React.FC = () => {
     [doc, pushHistory]
   );
 
+  const handleCycleNodePriorityTag = useCallback(
+    (nodeId: string) => {
+      const cur = doc.nodes[nodeId]?.priorityTag ?? null;
+      const order: Array<NodePriorityTag | null> = [
+        null,
+        'important',
+        'exam',
+        'review',
+      ];
+      const next = order[(order.indexOf(cur) + 1) % order.length];
+      handleChangeNodePriorityTag(nodeId, next);
+    },
+    [doc.nodes, handleChangeNodePriorityTag]
+  );
+
   const handleChangeStickerSize = useCallback(
     (nodeId: string, stickerSize: StickerSizePreset) => {
       pushHistory(doc);
@@ -1579,6 +1594,41 @@ export const App: React.FC = () => {
     settingsOpen ||
     paywallState.open ||
     showOnboarding;
+
+  // Native Mobile App Shell Guards: suppress web browser context menus, image drag ghosts & UI pinch-zoom
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.closest('.allow-text-input'))
+      ) {
+        return;
+      }
+      e.preventDefault();
+    };
+    const onDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    const onGestureStart = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.canvas-stage')) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', onContextMenu);
+    document.addEventListener('dragstart', onDragStart);
+    document.addEventListener('gesturestart', onGestureStart, { passive: false });
+    return () => {
+      document.removeEventListener('contextmenu', onContextMenu);
+      document.removeEventListener('dragstart', onDragStart);
+      document.removeEventListener('gesturestart', onGestureStart);
+    };
+  }, []);
 
   // Full Pro Keyboard Shortcuts (`Cmd/Ctrl+K`, `Space+Drag`, `Tab`, `Enter`, `Delete`, `Ctrl+Z/Y`)
   useEffect(() => {
@@ -1891,6 +1941,7 @@ export const App: React.FC = () => {
             nodes={doc.nodes}
             crossLinks={doc.crossLinks}
             rootNodeId={doc.rootNodeId}
+            department={doc.department}
             darkMode={Boolean(doc.darkMode)}
             defaultNodeStyle={defaultNodeStyle}
             spacePressed={spacePressed}
@@ -1914,6 +1965,7 @@ export const App: React.FC = () => {
             onUpdateNodeTitle={handleUpdateNodeTitle}
             onDeleteNode={handleDeleteNode}
             onToggleNodeCheck={handleToggleNodeCheck}
+            onCyclePriorityTag={handleCycleNodePriorityTag}
             onToggleNoteCollapse={handleToggleNodeNoteCollapse}
             onStartCrossLink={(fromId) => {
               setSelectedNodeId(null);

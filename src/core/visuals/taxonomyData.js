@@ -27,6 +27,7 @@ export function normalizeTrToken(raw) {
   if (!raw) return '';
   return String(raw)
     .toLocaleLowerCase('tr-TR')
+    .replace(/['’‘´`]/g, '')
     .replace(/ğ/g, 'g')
     .replace(/ü/g, 'u')
     .replace(/ş/g, 's')
@@ -109,12 +110,60 @@ const CONSONANT_RESTORE = {
   periyod: 'periyot',
 };
 
+const TURKISH_STOPWORDS = new Set([
+  've', 'ile', 'veya', 'yahut', 'ama', 'fakat', 'ancak', 'lakin', 'ki', 'de', 'da',
+  'mi', 'mu', 'bu', 'su', 'o', 'bir', 'her', 'hem', 'ya', 'ne', 'gibi', 'gore',
+  'icin', 'uzere', 'kadar', 'daha', 'en', 'cok', 'az', 'olan', 'olarak', 'ise',
+  'ait', 'dair', 'iliskin', 'karsi', 'sonra', 'once', 'arasinda', 'uzerinde', 'altinda',
+  'icinde', 'disinda', 'tarafindan', 'sistemi', 'sistemleri', 'yapisi', 'ozellikleri',
+  'cesitleri', 'turleri', 'ilkeleri', 'sonuclari', 'etkileri', 'evreleri', 'asamalari',
+]);
+
+// Words ending in natural vowel / `-um` / `-im` root that must NOT lose their ending when stripping suffixes
+const PROTECTED_ROOTS = new Set([
+  'denge', 'ulke', 'ilke', 'madde', 'proje', 'bolge', 'belge', 'golge', 'hazine',
+  'idare', 'irade', 'ihale', 'mahkeme', 'medrese', 'kulliye', 'sermaye', 'butce',
+  'vergi', 'reaya', 'tasra', 'ordu', 'kale', 'cami', 'kopru', 'hucre', 'dalga',
+  'parca', 'nokta', 'halka', 'kutle', 'enerji', 'teori', 'yapi', 'konu', 'soru',
+  'baski', 'etki', 'tepki', 'katki', 'yetki', 'bitki', 'uyku', 'duygu', 'kaygi',
+  'serum', 'durum', 'kurum', 'bolum', 'cozum', 'tohum', 'dogum', 'olum', 'tutum',
+  'uyum', 'konum', 'sunum', 'yorum', 'toplum', 'iklim', 'bilim', 'tarim', 'egitim',
+  'uretim', 'yonetim', 'denetim', 'secim', 'hacim', 'ritim', 'terim', 'birim',
+]);
+
 /**
- * Safe Turkish agglutinative stemmer (`minRootLen >= 3`) with consonant softening restoration.
+ * Restores Turkish k -> ğ (`g` in ASCII) and p/ç/t -> b/c/d consonant softening generically!
+ */
+function restoreTurkishSoftening(candidate) {
+  if (CONSONANT_RESTORE[candidate]) return CONSONANT_RESTORE[candidate];
+  if (candidate.length >= 4) {
+    if (
+      candidate.endsWith('lig') ||
+      candidate.endsWith('lug') ||
+      candidate.endsWith('rig') ||
+      candidate.endsWith('rug') ||
+      candidate.endsWith('rag') ||
+      candidate.endsWith('yag') ||
+      candidate.endsWith('dag') ||
+      candidate.endsWith('tag') ||
+      candidate.endsWith('bag') ||
+      candidate.endsWith('cag') ||
+      candidate.endsWith('sag') ||
+      candidate.endsWith('kag')
+    ) {
+      return `${candidate.slice(0, -1)}k`;
+    }
+  }
+  return candidate;
+}
+
+/**
+ * Safe Turkish agglutinative stemmer (`minRootLen >= 3`) with full k->ğ consonant softening restoration.
  */
 export function stemTurkishSafe(word) {
   const norm = normalizeTrToken(word).replace(/-/g, '');
   if (norm.length <= 3) return norm;
+  if (PROTECTED_ROOTS.has(norm)) return norm;
   if (CONSONANT_RESTORE[norm]) return CONSONANT_RESTORE[norm];
 
   // Never strip compound scientific stems like mikroorganizma, ekokardiyografi, mikrobiyoloji!
@@ -138,11 +187,16 @@ export function stemTurkishSafe(word) {
 
   let current = norm;
   for (let pass = 0; pass < 2; pass++) {
+    if (PROTECTED_ROOTS.has(current)) break;
     let stripped = false;
     for (const suf of TURKISH_SUFFIXES) {
       if (current.length - suf.length >= 3 && current.endsWith(suf)) {
-        const candidate = current.slice(0, -suf.length);
-        current = CONSONANT_RESTORE[candidate] || candidate;
+        const rawCandidate = current.slice(0, -suf.length);
+        // Do not strip single trailing vowel if rawCandidate would mangle a protected root (e.g. `denge` -> `deng`)
+        if ((suf === 'e' || suf === 'a' || suf === 'i' || suf === 'u') && PROTECTED_ROOTS.has(current)) {
+          break;
+        }
+        current = restoreTurkishSoftening(rawCandidate);
         stripped = true;
         break;
       }
@@ -533,13 +587,97 @@ export const RAW_TAXONOMY_CLUSTERS = [
     'arch_seismic_fault|sci_earth_tectonics',
   ],
 
-  // ==================== 7. TARİH, COĞRAFYA & SOSYAL BİLİMLER ====================
+  // ==================== 7. TARİH, OSMANLI DEVLET TEŞKİLATI, COĞRAFYA & SOSYAL BİLİMLER ====================
   [
     'social_history',
-    'osmanli|osmanlı|timar|iltizam|sipahi|yeniceri|divan|ferman|berat|tugra|padisah|imparatorluk|selcuklu|fetih|islahat|tanzimat|kurtulus savasi|cumhuriyet|inkilap|ataturk|tarih|antik cag|ortacag',
-    'scroll|crown|castle|sword|shield|horse|mosque|landmark|monument|flag|book|hourglass|feather|map|museum|ottoman',
-    '',
-    'hist_ottoman_timar|soc_ottoman_timar|law_sealed_verdict|arch_dome_section',
+    'osmanli|osmanlı|osmanli timar ve toprak sistemi|timar sistemi|osmanli devleti|padisah|divan|ferman|berat|tugra|imparatorluk|selcuklu|fetih|islahat|tanzimat|tarih|antik cag|ortacag',
+    'crown|scroll|castle|mosque|shield|horse|landmark|monument|feather|map',
+    'pirate|skull|hockey|baseball|football|golf|tokyo|alien|zombie|carousel|mouse|cursor|scrollbar|wheel|police|taxi|lightbulb|bulb',
+    'hist_ottoman_imperial_seal|hist_dirlik_hierarchy_pyramid|hist_sipahi_cavalry_shield|law_sealed_verdict',
+  ],
+  [
+    'social_history',
+    'dirlik|dirlik kademeleri|dirlik sistemi|kademe|toprak kademeleri',
+    'pyramid|crown|layers|medal|scroll|award',
+    'pirate|skull|hockey|tokyo|mouse|cursor|scrollbar|wheel|police',
+    'hist_dirlik_hierarchy_pyramid|hist_has_imperial_crown|hist_zeamet_banner_medal',
+  ],
+  [
+    'social_history',
+    'has|has toprak|has topraklar|padisah hassi|vezir hassi',
+    'crown|gem|coins|treasure|castle',
+    'stethoscope|lungs|hospital|doctor|pill|syringe|patient|pirate|hockey|medal|mouse|police',
+    'hist_has_imperial_crown|hist_dirlik_hierarchy_pyramid|hist_ottoman_imperial_seal',
+  ],
+  [
+    'social_history',
+    'zeamet|zeamet dirlikleri|orta kademe dirlik|subasi|alaybeyi',
+    'medal|award|shield|scroll|crown',
+    'pirate|skull|hockey|tokyo|black-flag|mouse|cursor|scrollbar|wheel|police',
+    'hist_zeamet_banner_medal|hist_dirlik_hierarchy_pyramid|hist_sipahi_cavalry_shield',
+  ],
+  [
+    'social_history',
+    'timar|kilic timari|timarli sipahi|timarli sipahi ordusu|sipahi|cebelu|atli asker|suvari|akinci|yeniceri|kapikulu|askeri yukumluluk|askeri yukumlulukler|sefer|ordu',
+    'horse|shield|knight|sword|castle',
+    'pirate|skull|jolly-roger|halloween|zombie|hockey|baseball|golf|medal|carousel|jockey|gooey|mouse|police',
+    'hist_sipahi_cavalry_shield|hist_zeamet_banner_medal|hist_tasra_fortress_castle',
+  ],
+  [
+    'social_history',
+    'miri|miri arazi|devlet topragi|devlet arazisi|toprak sistemi|reaya|ciftci|koylu|tarimsal uretim|ciftbozan|ekim|hasat|tahil|bugday|tarla',
+    'wheat|sheaf|seedling|sprout|tractor|farmer',
+    'hockey|football|soccer|baseball|golf|stadium|pirate|server|cpu|flag|christmas|police|mouse',
+    'hist_miri_wheat_land|hist_vergi_osur_scale',
+  ],
+  [
+    'social_history',
+    'vakif|vakif topraklari|vakif arazileri|vakif sistemi|kulliye|medrese|imaret|darussifa|hayir kurumu',
+    'mosque|dome|landmark|heart|handshake|arch',
+    'pirate|hockey|tokyo|police|mouse',
+    'hist_vakif_kulliye_mosque|arch_dome_section',
+  ],
+  [
+    'social_history',
+    'mali ve hukuki yapi|mali yapi|hukuki yapi|kanunname|adaletname',
+    'scale|gavel|scroll|landmark|coins',
+    'pirate|hockey|tokyo|syringe|flag|lightbulb|bulb|idea|police|mouse|cursor',
+    'hist_mali_legal_scroll_scale|law_justice_scale|hist_vergi_osur_scale',
+  ],
+  [
+    'social_history',
+    'vergi|vergi toplama|orfi vergi|seri vergi|orfi ve seri vergiler|orfi ve seri vergi toplama|osur|asar|harac|cizye|mali|maliye|mali yukumluluk',
+    'scale|coins|wheat|scroll|wallet',
+    'pirate|hockey|tokyo|syringe|flag|lightbulb|bulb|idea|lamp|police|mouse|cursor',
+    'hist_vergi_osur_scale|hist_mali_legal_scroll_scale|hist_iltizam_treasury_chest',
+  ],
+  [
+    'social_history',
+    'iltizam|multezim|iltizam ve multezim|iltizam multezim sistemi|mukataa|nakit hazine|hazine|sikke|akce|darphane',
+    'coins|treasure|bank|safe|wallet',
+    'pirate|skull|hockey|tokyo|lightbulb|bulb|police|mouse',
+    'hist_iltizam_treasury_chest|hist_vergi_osur_scale',
+  ],
+  [
+    'social_history',
+    'tasra|tasra guvenligi|tasra guvenligi ve asayis|tasra teskilati|asayis|sancak|eyalet|kale|hisar',
+    'castle|shield|lock|landmark|crown',
+    'tokyo|eiffel|pirate|skull|hockey|antenna|wifi|cell-tower|police|police-car|car|taxi|siren|fire-truck|ambulance|mouse',
+    'hist_tasra_fortress_castle|hist_merkezi_otorite_pillar|hist_ottoman_imperial_seal',
+  ],
+  [
+    'social_history',
+    'idari|idare|idari yapi|idari sonuclar|merkezi otorite|merkezi otorite dengesi|otorite dengesi|devlet duzeni',
+    'landmark|scale|crown|shield|castle|gavel',
+    'tokyo|eiffel|pirate|skull|hockey|police|police-car|car|taxi|siren|fire-truck|lightbulb|bulb|mouse',
+    'hist_merkezi_otorite_pillar|hist_ottoman_imperial_seal|law_justice_scale|hist_tasra_fortress_castle',
+  ],
+  [
+    'social_history',
+    'kurtulus savasi|milli mucadele|tbmm|cumhuriyet|ataturk|inkilap|lozan|bagimsizlik',
+    'flag|torch|medal|landmark|star|award',
+    'pirate|skull|hockey',
+    'hist_ottoman_imperial_seal|law_constitution_book',
   ],
   [
     'social_history',
@@ -943,12 +1081,14 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     };
   }
 
-  const words = norm.split(' ').filter((w) => w.length >= 2 || norm.length <= 3);
+  const rawWords = norm.split(' ').filter((w) => w.length >= 2 || norm.length <= 3);
+  const contentWords = rawWords.filter((w) => !TURKISH_STOPWORDS.has(w));
+  const words = contentWords.length > 0 ? contentWords : rawWords;
   const stemmedWords = words.map(stemTurkishSafe).filter(Boolean);
   const stemmedPhrase = stemmedWords.join(' ');
 
   const expandedEn = new Set();
-  const expandedTr = new Set([norm, ...stemmedWords]);
+  const expandedTr = new Set([norm, ...stemmedWords.filter((w) => w.length >= 3 && !TURKISH_STOPWORDS.has(w))]);
   const blocked = new Set();
   const atlasIds = new Set();
   const domains = new Set();
@@ -965,34 +1105,48 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  // 2. Full phrase match & multi-word n-gram matches (Highest specificity!)
-  const matchedClusters = [];
-  const tryLookup = (key) => {
+  // 2. Full phrase match & multi-word n-gram matches (Highest specificity FIRST so primary concept tokens lead!)
+  const phraseClusters = [];
+  const wordClusters = [];
+  const tryLookup = (key, targetArr) => {
+    if (!key || TURKISH_STOPWORDS.has(key)) return;
     const hits = trPhraseMap.get(key);
     if (hits) {
       for (const c of hits) {
-        if (!matchedClusters.includes(c)) matchedClusters.push(c);
+        if (!phraseClusters.includes(c) && !wordClusters.includes(c)) {
+          targetArr.push(c);
+        }
       }
     }
   };
 
-  tryLookup(norm);
-  tryLookup(stemmedPhrase);
+  tryLookup(norm, phraseClusters);
+  tryLookup(stemmedPhrase, phraseClusters);
 
   for (let i = 0; i < words.length; i++) {
     if (i + 1 < words.length) {
-      tryLookup(`${words[i]} ${words[i + 1]}`);
-      tryLookup(`${stemmedWords[i]} ${stemmedWords[i + 1]}`);
+      tryLookup(`${words[i]} ${words[i + 1]}`, phraseClusters);
+      tryLookup(`${stemmedWords[i]} ${stemmedWords[i + 1]}`, phraseClusters);
     }
-    tryLookup(words[i]);
-    tryLookup(stemmedWords[i]);
   }
 
-  // 3. Safe >=5-char prefix match ONLY inside same compound scientific stem (NEVER 3-5 char `mikro` or `eko`!)
-  if (matchedClusters.length === 0 && norm.length >= 5) {
+  for (let i = 0; i < words.length; i++) {
+    // Prevent 3-letter ambiguous fragments like `ser` (from `şer'i`) or `has` from hijacking unrelated medical/math clusters when phrase already matched!
+    if (phraseClusters.length > 0 && stemmedWords[i].length <= 3) continue;
+    tryLookup(words[i], wordClusters);
+    tryLookup(stemmedWords[i], wordClusters);
+  }
+
+  const matchedClusters = [...phraseClusters, ...wordClusters];
+
+  // 3. Safe >=6-char prefix match ONLY inside same compound stem when zero exact matches found
+  if (matchedClusters.length === 0 && norm.length >= 6) {
     for (const [key, clusters] of trPhraseMap.entries()) {
-      if (key.length >= 5 && (key.startsWith(norm) || norm.startsWith(key))) {
-        // Guard against `mikro` or `eko` root collisions!
+      if (
+        key.length >= 6 &&
+        !key.includes(' ') &&
+        (key.startsWith(norm) || (norm.length >= 7 && norm.startsWith(key)))
+      ) {
         if (
           (norm.startsWith('mikro') && key.slice(0, 8) !== norm.slice(0, 8)) ||
           (norm.startsWith('eko') && key.slice(0, 6) !== norm.slice(0, 6))
@@ -1009,15 +1163,21 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   for (const c of matchedClusters) {
     domains.add(c.domain);
     for (const e of c.enTokens) expandedEn.add(e);
-    for (const t of c.trTerms.slice(0, 5)) expandedTr.add(t);
+    for (const t of c.trTerms.slice(0, 4)) expandedTr.add(t);
     for (const b of c.blockedTokens) blocked.add(b);
     for (const p of c.packIds) atlasIds.add(p);
   }
 
-  // If user typed raw English terms directly (`load balancer`, `bacteria`, `cpu`, `redis`), keep them!
+  // Only pass raw query words as English tokens if they are >= 3 chars AND not Turkish stopwords
+  // (Prevents 2-letter Turkish words like `ve`, `de`, `ki`, `su` from matching country flags like `circle-flags:ve`!)
   for (const w of words) {
-    if (w.length >= 2) {
-      expandedEn.add(w);
+    if (w.length >= 3 && !TURKISH_STOPWORDS.has(w)) {
+      // Only inject raw word if no Turkish taxonomy cluster already translated the query, OR if it looks like an English/tech term
+      if (matchedClusters.length === 0 || /^[a-z0-9-]+$/.test(w)) {
+        if (matchedClusters.length === 0) {
+          expandedEn.add(w);
+        }
+      }
     }
   }
 

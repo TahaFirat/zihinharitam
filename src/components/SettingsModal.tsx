@@ -256,7 +256,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     <div className="text-xs opacity-70">
                       {isLifetimePro
-                        ? 'Sınırsız harita, 25.000+ çıkartma ve 300 DPI PDF açık.'
+                        ? 'Sınırsız harita, 540.000+ çıkartma ve 300 DPI PDF açık.'
                         : `Tek seferlik ${localizedPrice} ile tüm sınırları ömür boyu kaldırın.`}
                     </div>
                   </div>

@@ -226,7 +226,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             <span className="text-sm leading-none" aria-hidden="true">
               {contextEmoji || deptMeta.emoji}
             </span>
-            <span className="max-w-[92px] truncate text-xs font-extrabold tracking-tight sm:max-w-[140px] md:max-w-[168px] lg:max-w-[220px] sm:text-sm">
+            <span className="max-w-[96px] truncate text-xs font-extrabold tracking-tight sm:max-w-[150px] md:max-w-[190px] lg:max-w-[300px] xl:max-w-[380px] sm:text-sm">
               {mapTitle}
             </span>
             <Pencil className="h-3 w-3 shrink-0 text-sky-500 opacity-75 transition group-hover:scale-110 group-hover:opacity-100" />
@@ -328,18 +328,15 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           borderColor: 'var(--hud-border)',
         }}
       >
-        {/* Quick Search & 540K+ Command Palette (`Cmd/Ctrl + K`) */}
+        {/* Quick Search & 540K+ Command Palette */}
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          title="Hızlı Dal & 540.000+ İkon Arama Paleti (Ctrl+K)"
+          title="Hızlı Dal & 540.000+ İkon Arama"
           className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-500/10 px-2.5 text-xs font-extrabold hover:bg-sky-500/15 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
         >
           <Search className="h-4 w-4" />
           <span className="hidden lg:inline">Ara</span>
-          <kbd className="hidden rounded bg-slate-500/15 px-1 py-0.5 font-mono text-[10px] opacity-75 xl:inline">
-            ⌘K
-          </kbd>
         </button>
 
         {/* Hierarchical Outliner View (`📋 Anahat`) */}
@@ -354,13 +351,13 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           <span className="hidden xl:inline">Anahat</span>
         </button>
 
-        {/* Desktop & Landscape Tablet Undo/Redo (Phones/Portrait Tablets use right zoom rail & More menu) */}
+        {/* Landscape Tablet & Desktop Undo/Redo */}
         <div className="hidden items-center gap-0.5 lg:flex">
           <button
             type="button"
             onClick={onUndo}
             disabled={!canUndo}
-            title="Geri Al (Ctrl+Z)"
+            title="Geri Al"
             className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
           >
             <Undo2 className="h-4 w-4" />
@@ -369,7 +366,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             type="button"
             onClick={onRedo}
             disabled={!canRedo}
-            title="Yinele (Ctrl+Y)"
+            title="Yinele"
             className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
           >
             <Redo2 className="h-4 w-4" />

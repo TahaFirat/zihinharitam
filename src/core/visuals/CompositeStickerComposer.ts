@@ -203,11 +203,8 @@ export function buildInstantCompositeResults(
   );
   if (svgCandidates.length === 0) return [];
 
-  const badgesToCompose = detected
-    ? [detected]
-    : query.trim().includes(' ')
-    ? [CORNER_MICRO_BADGES[1], CORNER_MICRO_BADGES[0]]
-    : [];
+  // Attach corner micro-badges ONLY when the query explicitly asks for a qualifier (e.g. "şifreli", "hızlı", "onay")
+  const badgesToCompose = detected ? [detected] : [];
 
   const composites: VisualSearchResult[] = [];
   badgesToCompose.forEach((bdg, idx) => {

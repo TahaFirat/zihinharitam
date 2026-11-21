@@ -260,7 +260,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-sm font-extrabold sm:text-base">
-                  25.000+ İkon & 3D Görsel Kütüphanesi ({visibleEntries.length} Eşleşme)
+                  540.000+ İkon & 3D Görsel Kütüphanesi ({visibleEntries.length} Eşleşme)
                 </h2>
                 {offlineMs !== null && (
                   <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-300">

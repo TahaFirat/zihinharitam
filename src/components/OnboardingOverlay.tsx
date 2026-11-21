@@ -85,7 +85,7 @@ const STEPS = [
   {
     step: '2 / 3',
     title: 'Yazarken Binlerce Renkli Çıkartmayı Seç',
-    desc: 'Konu başlığını yazdığın anda 25.000+ çevrimdışı tıp, mühendislik, hukuk ve mimarlık çıkartması klavyenin üstünde belirir.',
+    desc: 'Konu başlığını yazdığın anda 43.000+ çevrimdışı ve 540.000+ online tıp, tarih, mühendislik ve hukuk çıkartması klavyenin üstünde belirir.',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />

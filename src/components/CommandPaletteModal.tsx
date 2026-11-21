@@ -193,7 +193,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                 }
               }
             }}
-            placeholder="Dala atla veya 25.000+ çevrimdışı ikondan ara..."
+            placeholder="Dala atla veya 540.000+ ikondan ara..."
             className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-bold outline-none sm:text-base"
           />
           {elapsedMs !== null && (
@@ -318,7 +318,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-extrabold tracking-wider uppercase opacity-55">
-                  25.000+ Çevrimdışı İkon ({offlineHits.length})
+                  43.000+ Çevrimdışı & 540K+ İkon ({offlineHits.length})
                 </span>
                 <button
                   type="button"

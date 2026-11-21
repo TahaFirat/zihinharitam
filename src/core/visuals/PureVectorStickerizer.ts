@@ -84,7 +84,7 @@ function parseViewBoxDims(viewBox: string): {
 export function wrapMultiColorSvgAsStickerDataUri(
   viewBox: string,
   svgBody: string,
-  options?: {
+  _options?: {
     useMorphologyContour?: boolean;
     badgeAccentColor?: string;
   }
@@ -95,32 +95,7 @@ export function wrapMultiColorSvgAsStickerDataUri(
   const tx = (120 - vb.w * scale) * 0.5 - vb.minX * scale;
   const ty = (120 - vb.h * scale) * 0.5 - vb.minY * scale;
 
-  if (options?.useMorphologyContour) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="160" height="160">
-      <defs>
-        <filter id="v3dc" x="-18%" y="-18%" width="136%" height="136%" color-interpolation-filters="sRGB">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="4.6" result="outerCut"/>
-          <feFlood flood-color="#0F172A" flood-opacity="0.11" result="cutTint"/>
-          <feComposite in="cutTint" in2="outerCut" operator="in" result="cutRing"/>
-          <feMorphology in="SourceAlpha" operator="dilate" radius="3.8" result="whiteDilate"/>
-          <feFlood flood-color="#FFFFFF" flood-opacity="1" result="whiteFill"/>
-          <feComposite in="whiteFill" in2="whiteDilate" operator="in" result="whiteContour"/>
-          <feMerge>
-            <feMergeNode in="cutRing"/>
-            <feMergeNode in="whiteContour"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      <g filter="url(#v3dc)">
-        <g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})">
-          ${svgBody}
-        </g>
-      </g>
-    </svg>`;
-    return encodeSvgToDataUri(svg);
-  }
-
+  // Pure hardware-accelerated vector sticker card (ZERO <feMorphology> filter so 120Hz tablet zoom/pan never stalls CPU!)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="160" height="160">
     <rect x="7" y="7" width="106" height="106" rx="28" fill="#FFFFFF" stroke="#0F172A" stroke-opacity="0.09" stroke-width="1.5"/>
     <g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})">

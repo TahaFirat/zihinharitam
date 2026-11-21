@@ -123,7 +123,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   defaultNodeStyle,
   mapContext,
   proactiveSuggestions,
-  nodeScreenPos,
+  nodeScreenPos: _nodeScreenPos,
   onUpdateNodeTitle,
   onUpdateNodeNote,
   onToggleNodeCheck,
@@ -160,7 +160,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [showTechBadgeInput, setShowTechBadgeInput] = useState(false);
   const [showStyleCustomize, setShowStyleCustomize] = useState(false);
-  const [barHeight, setBarHeight] = useState(236);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
@@ -181,7 +180,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     const syncH = () => {
       const h = Math.round(el.getBoundingClientRect().height);
       if (h > 40) {
-        setBarHeight(h);
         setStudioBarHeight(h);
       }
     };
@@ -284,14 +282,14 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     }));
 
     if (tierFilter === 'free') {
-      return tagged.filter((t) => t.isFree).slice(0, 48);
+      return tagged.filter((t) => t.isFree).slice(0, 32);
     }
     if (tierFilter === 'pro') {
       return tagged
         .filter((t) => !t.isFree || t.item.tier === 'pro' || t.item.mode === '3d')
-        .slice(0, 48);
+        .slice(0, 32);
     }
-    return tagged.slice(0, 48);
+    return tagged.slice(0, 32);
   }, [healthyByMode, tierFilter, isLifetimePro]);
 
   const freeTotalCount = useMemo(
@@ -324,8 +322,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const effectiveNodeStyle: NodeVisualStyle =
     activeNode.nodeStyle ?? defaultNodeStyle ?? 'card';
   const effectiveStickerSize: StickerSizePreset =
-    activeNode.stickerSize ??
-    (effectiveNodeStyle === 'organic' && !isRootNode ? 'lg' : 'md');
+    activeNode.stickerSize ?? 'md';
 
   const isTightAboveKeyboard = kb.isKeyboardOpen && kb.viewportH < 360;
   const isSlimKeyboardMode =
@@ -393,8 +390,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   };
 
   const useFullWidthBottomSheet = kb.isPhone;
-  const useCenteredTabletDock =
-    !kb.isPhone && (kb.isTablet || kb.isKeyboardOpen || kb.isTouchDevice || !nodeScreenPos);
 
   let containerStyle: React.CSSProperties;
 
@@ -413,46 +408,24 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       }px`,
       transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
-  } else if (useCenteredTabletDock) {
-    const cardWidth = Math.min(840, kb.viewportW - 28);
-    const leftPx = Math.round((kb.viewportW - cardWidth) * 0.5);
+  } else {
+    // 100% Native iPad / Android Tablet / Landscape Centered Bottom Studio Dock (Zero mid-screen floating or right-edge clipping!)
+    const cardWidth = Math.min(860, Math.max(320, kb.viewportW - 28));
+    const leftPx = Math.max(14, Math.round((kb.viewportW - cardWidth) * 0.5));
     containerStyle = {
       position: 'fixed',
       left: `${leftPx}px`,
-      // Lifted well clear of Android tablet taskbars/docks & iPadOS Home Indicator!
       bottom: kb.isKeyboardOpen
         ? `${kb.keyboardHeight + 10}px`
         : 'max(28px, calc(var(--safe-bottom) + 24px))',
       width: `${cardWidth}px`,
-      maxWidth: 'calc(100vw - 24px)',
+      maxWidth: 'calc(100vw - 28px)',
       maxHeight: `${
         isSlimKeyboardMode
           ? Math.min(140, Math.max(98, kb.viewportH - 68))
           : Math.min(420, Math.max(230, kb.viewportH - 88))
       }px`,
       transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
-    };
-  } else {
-    const cardWidth = Math.min(780, kb.viewportW - 32);
-    const clampedLeft = Math.max(
-      16,
-      Math.min(kb.viewportW - cardWidth - 16, nodeScreenPos!.x - cardWidth * 0.5)
-    );
-    const placeAbove = nodeScreenPos!.y > kb.viewportH * 0.56;
-    const rawTop = placeAbove
-      ? nodeScreenPos!.y - (barHeight + 92)
-      : nodeScreenPos!.y + 78;
-    const clampedTop = Math.max(
-      76,
-      Math.min(kb.viewportH - barHeight - 28, rawTop)
-    );
-
-    containerStyle = {
-      position: 'fixed',
-      left: `${Math.round(clampedLeft)}px`,
-      top: `${Math.round(clampedTop)}px`,
-      width: `${cardWidth}px`,
-      maxWidth: 'calc(100vw - 32px)',
     };
   }
 
@@ -508,7 +481,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           <button
             type="button"
             onClick={onOpenGalleryDrawer}
-            title="Tam 25K Görsel Galerisi İçin Yukarı Kaydırın"
+            title="Tam Görsel Galerisi İçin Yukarı Kaydırın"
             className="mx-auto mb-1 flex w-full items-center justify-center py-0.5"
           >
             <span className="h-1 w-10 rounded-full bg-slate-400/45" />
@@ -662,7 +635,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                 type="button"
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={onOpenGalleryDrawer}
-                title="25.000+ Görsel Galerisi"
+                title="43.000+ Çevrimdışı & 540.000+ Görsel Galerisi"
                 className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl border border-sky-500/40 bg-sky-500/15 text-sky-700 active:scale-95 dark:text-sky-300"
               >
                 <Search className="h-3.5 w-3.5" />
@@ -910,7 +883,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={onOpenGalleryDrawer}
-              title="25.000+ Çevrimdışı & Federatif Görsel Galerisi"
+              title="43.000+ Çevrimdışı & 540.000+ Online Görsel Galerisi"
               className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-2.5 text-[11.5px] font-extrabold whitespace-nowrap text-sky-700 hover:bg-sky-500/25 active:scale-95 dark:text-sky-300"
             >
               <Search className="h-3.5 w-3.5 shrink-0" />
@@ -1088,6 +1061,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                       src={item.previewUrl}
                       alt={item.title}
                       loading="lazy"
+                      decoding="async"
+                      draggable={false}
                       onError={() => {
                         setBrokenIds((prev) => new Set(prev).add(item.id));
                       }}
@@ -1276,18 +1251,22 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                 data-testid="studio-priority-btn"
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={handleCyclePriority}
-                title="Önem / Sınav / Tekrar Etiketi Ekle"
-                className={`inline-flex h-8 items-center gap-1 rounded-xl px-2 font-bold ${
-                  activeNode.priorityTag
-                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-                    : 'hover:bg-slate-500/10'
+                title="Önemli / Sınavda Çıkar / Tekrar Et Vurgusu Ekle"
+                className={`inline-flex min-h-[36px] items-center gap-1 rounded-xl px-2.5 font-extrabold transition active:scale-95 ${
+                  activeNode.priorityTag === 'important'
+                    ? 'bg-gradient-to-r from-rose-600 to-orange-500 text-white shadow-sm'
+                    : activeNode.priorityTag === 'exam'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-sm'
+                    : activeNode.priorityTag === 'review'
+                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm'
+                    : 'border border-rose-500/35 bg-rose-500/12 text-rose-700 hover:bg-rose-500/20 dark:text-rose-300'
                 }`}
               >
-                <Flame className="h-3.5 w-3.5 text-rose-500" />
+                {!activeNode.priorityTag && <Flame className="h-3.5 w-3.5 text-rose-500" />}
                 <span>
                   {activeNode.priorityTag
                     ? PRIORITY_LABELS[activeNode.priorityTag]
-                    : 'Önem'}
+                    : 'Önemli'}
                 </span>
               </button>
 

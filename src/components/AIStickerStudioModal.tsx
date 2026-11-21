@@ -40,6 +40,7 @@ interface AIStickerStudioModalProps {
 type QuickCategoryFilter = 'all' | 'illustration' | '3d' | 'diagram';
 
 const QUICK_CONCEPT_CHIPS: Array<{ label: string; query: string }> = [
+  { label: '📜 Osmanlı & Tımar', query: 'Tımarlı Sipahi ve Cebelü' },
   { label: '🫀 Kalp & Anatomi', query: 'kalp anatomi' },
   { label: '🧠 Beyin & Nöron', query: 'beyin nöron' },
   { label: '☁️ Sunucu & Bulut', query: 'sunucu bulut' },
@@ -66,6 +67,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
   const [seedBase, setSeedBase] = useState<number>(
     () => Math.floor(Math.random() * 9000) + 100
   );
+  const [variationRound, setVariationRound] = useState<number>(0);
   const [slots, setSlots] = useState<AICandidateSlot[]>([]);
   const [federatedPicks, setFederatedPicks] = useState<VisualSearchResult[]>([]);
   const [brokenFallbackIds, setBrokenFallbackIds] = useState<Set<string>>(new Set());
@@ -76,6 +78,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setConceptText(initialConcept || mapContext.parentTitle || 'Akademik Kavram');
+      setVariationRound(0);
       setBrokenFallbackIds(new Set());
       setCategoryFilter('all');
     } else {
@@ -119,7 +122,8 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
           );
         },
         controller.signal,
-        branchColor
+        branchColor,
+        variationRound
       );
 
       void VisualSearchOrchestrator.searchOfflineWave(
@@ -149,7 +153,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [isOpen, conceptText, artStyle, seedBase, mapContext, branchColor]);
+  }, [isOpen, conceptText, artStyle, seedBase, variationRound, mapContext, branchColor]);
 
   const filteredIcons = useMemo(() => {
     const valid = federatedPicks.filter((item) => !brokenFallbackIds.has(item.id));
@@ -233,16 +237,16 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
                 <Sparkles className="h-4 w-4" />
               </span>
               <h2 className="truncate text-base font-extrabold">
-                Akıllı Çıkartma & 25.000+ İkon Stüdyosu
+                3D Çıkartma & 540.000+ İkon Stüdyosu
               </h2>
               <span className="hidden rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-600 sm:inline-block dark:text-emerald-400">
                 %100 ÜCRETSİZ & ANINDA
               </span>
             </div>
             <p className="mt-0.5 truncate text-[11px] opacity-70">
-              {mapContext.emoji} Bağlam: <strong>{mapContext.label}</strong> • Kavram:{' '}
+              {mapContext.emoji} Bağlam: <strong>{mapContext.label}</strong> • Seçili Başlık:{' '}
               <span className="font-semibold text-sky-600 dark:text-sky-400">
-                {subjectEn}
+                {conceptText.trim() || 'Akademik Kavram'}
               </span>
             </p>
           </div>
@@ -265,8 +269,11 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
               <input
                 type="text"
                 value={conceptText}
-                onChange={(e) => setConceptText(e.target.value)}
-                placeholder="Kavram veya ikon ara (örn. Kalp, Sunucu, Mahkeme, DNA...)"
+                onChange={(e) => {
+                  setConceptText(e.target.value);
+                  setVariationRound(0);
+                }}
+                placeholder="Kavram veya ikon ara (örn. Kalp, Sunucu, Osmanlı Tımar, DNA...)"
                 className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-3.5 pl-9 text-base font-bold outline-none focus:ring-2 focus:ring-violet-500 sm:text-sm"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
@@ -275,6 +282,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
               type="button"
               onClick={() => {
                 void hapticLight();
+                setVariationRound((r) => r + 1);
                 setSeedBase((prev) => prev + Math.floor(Math.random() * 500) + 17);
               }}
               disabled={anyLoading}

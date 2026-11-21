@@ -20,8 +20,7 @@ export function estimateNodeDimensions(
   node: MindNode,
   isRoot: boolean
 ): { width: number; topExtent: number; bottomExtent: number; totalHeight: number } {
-  const sizePreset: StickerSizePreset =
-    node.stickerSize ?? (node.nodeStyle === 'organic' && !isRoot ? 'lg' : 'md');
+  const sizePreset: StickerSizePreset = node.stickerSize ?? 'md';
 
   let stickerPx = 0;
   if (node.sticker) {
@@ -75,8 +74,8 @@ export function estimateNodeDimensions(
     ? 268
     : Math.min(296, Math.max(164, (node.title || '').length * 8.5 + 56));
 
-  const topExtent = Math.round(cardBodyH * 0.5 + stickerPx + 14);
-  const bottomExtent = Math.round(cardBodyH * 0.5 + 18);
+  const topExtent = Math.round(cardBodyH * 0.5 + stickerPx + 24);
+  const bottomExtent = Math.round(cardBodyH * 0.5 + 26);
 
   return {
     width,

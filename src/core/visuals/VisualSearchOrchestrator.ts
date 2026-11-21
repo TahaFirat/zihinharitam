@@ -30,7 +30,6 @@ import type { MapContextAnalysis } from './TopicContextIntelligence';
 import { searchArasaacPictograms } from './providers/ArasaacPictogramAdapter';
 import { searchBuiltInAtlasV3 } from './providers/BuiltInMultiColorAtlas';
 import { searchIconifyLive } from './providers/IconifyLiveAdapter';
-import { searchOpenverseVisuals } from './providers/OpenverseAdapter';
 import { searchWikimediaAtlas } from './providers/WikimediaAtlasAdapter';
 
 export interface FederatedGalleryResponse {
@@ -258,7 +257,6 @@ export class VisualSearchOrchestrator {
           wikiBridge?.trTitle,
           signal
         ),
-        searchOpenverseVisuals(primaryEn, signal),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
         setTimeout(() => r([]), 1250)

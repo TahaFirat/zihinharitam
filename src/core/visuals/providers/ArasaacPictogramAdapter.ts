@@ -20,21 +20,26 @@ export async function searchArasaacPictograms(
 
   const endpoints: Array<{ url: string; lang: 'tr' | 'en'; fallbackLabel: string }> = [];
 
-  if (trPrimary && trPrimary.length >= 2) {
+  if (trPrimary && trPrimary.length >= 3 && !trPrimary.includes(' ')) {
     endpoints.push({
       url: `https://api.arasaac.org/v1/pictograms/tr/search/${encodeURIComponent(trPrimary)}`,
       lang: 'tr',
       fallbackLabel: trPrimary,
     });
   }
-  if (enPrimary && enPrimary.length >= 2) {
+  if (enPrimary && enPrimary.length >= 3 && !enPrimary.includes(' ')) {
     endpoints.push({
       url: `https://api.arasaac.org/v1/pictograms/en/search/${encodeURIComponent(enPrimary)}`,
       lang: 'en',
       fallbackLabel: enPrimary,
     });
   }
-  if (enSecondary && enSecondary !== enPrimary && enSecondary.length >= 2) {
+  if (
+    enSecondary &&
+    enSecondary !== enPrimary &&
+    enSecondary.length >= 3 &&
+    !enSecondary.includes(' ')
+  ) {
     endpoints.push({
       url: `https://api.arasaac.org/v1/pictograms/en/search/${encodeURIComponent(enSecondary)}`,
       lang: 'en',

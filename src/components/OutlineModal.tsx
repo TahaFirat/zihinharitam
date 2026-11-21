@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Navigation,
   Search,
+  Flame,
 } from 'lucide-react';
 import type { MindNode, NodePriorityTag } from '../types/mindmap';
 import { computeTreeMeta } from '../core/canvas/RadialAutoLayout';
@@ -49,6 +50,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
   const kb = useKeyboardInset();
   const [filterText, setFilterText] = useState('');
   const [onlyTasks, setOnlyTasks] = useState(false);
+  const [onlyPriority, setOnlyPriority] = useState(false);
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set());
 
   const flatRows = useMemo(() => {
@@ -85,12 +87,15 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
       if (onlyTasks && typeof node.checked !== 'boolean' && node.id !== rootNodeId) {
         return false;
       }
+      if (onlyPriority && !node.priorityTag && node.id !== rootNodeId) {
+        return false;
+      }
       if (!q) return true;
       const inTitle = (node.title || '').toLocaleLowerCase('tr-TR').includes(q);
       const inNote = (node.note || '').toLocaleLowerCase('tr-TR').includes(q);
       return inTitle || inNote;
     });
-  }, [flatRows, filterText, onlyTasks, rootNodeId]);
+  }, [flatRows, filterText, onlyTasks, onlyPriority, rootNodeId]);
 
   if (!isOpen) return null;
 
@@ -175,6 +180,20 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
               style={{ borderColor: 'var(--hud-border)' }}
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setOnlyPriority((v) => !v)}
+            className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3 text-xs font-extrabold ${
+              onlyPriority
+                ? 'border-rose-500 bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-xs'
+                : 'text-rose-600 hover:bg-rose-500/10 dark:text-rose-300'
+            }`}
+            style={{ borderColor: onlyPriority ? undefined : 'var(--hud-border)' }}
+          >
+            <Flame className="h-3.5 w-3.5" />
+            <span>Önemli & Sınav</span>
+          </button>
 
           <button
             type="button"

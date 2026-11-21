@@ -37,7 +37,7 @@ const TRIGGER_HEADERS: Record<
     badge: '3 / 3 Ücretsiz Harita Tamamlandı',
     title: '4. Haritanı Oluşturmak İçin ZihinHaritam Pro’ya Geç',
     subtitle:
-      'Mevcut 3 haritan her zaman açık kalır. Sınırsız harita, 25.000+ ikon ve sınav modu için sana en uygun planı seç.',
+      'Mevcut 3 haritan her zaman açık kalır. Sınırsız harita, 540.000+ ikon ve sınav modu için sana en uygun planı seç.',
   },
   node_limit: {
     badge: '45 Düğüm Sınırına Ulaşıldı',
@@ -47,9 +47,9 @@ const TRIGGER_HEADERS: Record<
   },
   pro_sticker: {
     badge: 'Pro Akademik Çıkartma Paketi',
-    title: '25.000+ Akademik Çıkartmanın Kilidini Aç',
+    title: '540.000+ Akademik & 3D Çıkartmanın Kilidini Aç',
     subtitle:
-      'Tıp, Sistem Mimarisi, Hukuk, Elektronik ve Mimarlık çıkartmalarını %100 çevrimdışı sınırsız kullan.',
+      'Tıp, Tarih, Sistem Mimarisi, Hukuk, Elektronik ve Mimarlık çıkartmalarını sınırsız kullan.',
   },
   note_crop_limit: {
     badge: 'Ücretsiz Deneme Tamamlandı',
@@ -89,7 +89,7 @@ const TRIGGER_HEADERS: Record<
   },
   settings_upgrade: {
     badge: 'ZihinHaritam Pro Planları',
-    title: 'Sınırsız Zihin Haritası & 25.000+ İkon',
+    title: 'Sınırsız Zihin Haritası & 540.000+ İkon',
     subtitle:
       'İhtiyacına göre Aylık, %50 avantajlı Yıllık veya tek seferlik Ömür Boyu lisans ile tüm sınırları kaldır.',
   },
