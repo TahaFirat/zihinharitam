@@ -1,7 +1,7 @@
 {
   "name": "gorsel-zihin-haritasi",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Telefon, Tablet ve Bilgisayar uyumlu 4 Katmanlı Sonsuz Görsel Motorlu Zihin Haritası Uygulaması",
   "type": "module",
   "scripts": {

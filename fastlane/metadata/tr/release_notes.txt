@@ -1,4 +1,3 @@
-• Akıcı Mobil Harita Gezinme: Artık telefon ve tablette kartların veya çıkartmaların üzerinden de tek parmakla takılmadan haritayı kaydırabilir, iki parmakla her noktadan yakınlaştırabilirsiniz. Dalı taşımak için üzerine basılı tutmanız yeterli.
-• Tek Dokunuşla Kolay Dal Silme & Geri Al: Seçili her dalın yanında ve düzenleme çubuğunun ana satırında anında ulaşılabilen kırmızı "Sil" düğmesi ve 5 saniyelik tek dokunuş "Geri Al" bildirimi eklendi.
-• Tek Elle Yakınlaştırma & Hızlı Kontroller: Mobil tuvalde Geri Al, Merkezle ve Yakınlaştır (+/-) kontrolleri eklendi.
-• Tam Duyarlı (Responsive) Arayüz İyileştirmeleri: Tüm telefon ve iPad ekranlarında üst çubuk, düzenleme paneli ve pencereler optimize edildi.
+• %100 Ücretsiz & Anında Akıllı Çıkartma ve İkon Stüdyosu: Dış API anahtarı gerektirmeyen, 4 farklı sanatsal stilde (El Çizimi, 3D İzometrik, Bilimsel Atlas ve Vektör Amblem) anında özel Die-Cut çıkartma üreten yeni yerleşik motor ve 32+ kategorili zengin ikon seçici eklendi.
+• Çalışma, Sınav ve Harita Sayacı Sıfırlama: Üst araç çubuğuna tek dokunuşla sıfırlanabilen Çalışma & Sınav Sayacı, Haritalarım ekranına ve Ayarlar menüsüne ise "Sayacı Sıfırla" kontrolü eklendi.
+• Akıcı Mobil Gezinme & Tek Dokunuşla Kolay Dal Silme iyileştirmeleri.

@@ -1,4 +1,3 @@
-• Smooth Mobile Map Navigation: Pan effortlessly from anywhere on the screen—including over cards and stickers—with seamless two-finger pinch-to-zoom. Long-press any node to reposition it with haptic feedback.
-• One-Tap Branch Deletion & Instant Undo: Added an immediately visible Delete button right on selected branches and on the main row of the editor bar, backed by a 5-second one-tap Undo toast.
-• One-Handed Canvas Controls: Quick Undo, Fit-to-Screen, and Zoom (+/-) controls for effortless phone and tablet navigation.
-• Full Responsive Polish: Refined layouts and touch targets across all iPhone and iPad screen sizes.
+• 100% Free Instant Custom Sticker & Icon Studio: Built-in zero-config 4-style Die-Cut sticker synthesizer (Hand-Drawn, 3D Isometric, Scientific Atlas, and Vector Emblem) plus an expanded 32+ multi-category icon studio—no external API keys required.
+• Study, Exam & Usage Counter Reset: Added one-tap Reset controls to the top HUD Study & Exam Counter, the Home Workspace counter badge, and Settings.
+• Smooth mobile canvas panning and one-tap branch deletion refinements.

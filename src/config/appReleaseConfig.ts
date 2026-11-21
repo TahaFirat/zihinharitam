@@ -7,7 +7,7 @@ export type ProPlanTier = 'monthly' | 'yearly' | 'lifetime';
 export const APP_RELEASE_CONFIG = {
   appName: 'ZihinHaritam',
   appSubtitle: 'Görsel Zihin Haritası & Not',
-  version: '1.0.1',
+  version: '1.0.2',
   bundleId: 'com.tahafirat.zihinharitam',
 
   appStore: {

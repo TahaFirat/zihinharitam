@@ -6,7 +6,7 @@ on:
       marketing_version:
         description: 'Uygulama Sürümü (CFBundleShortVersionString)'
         required: false
-        default: '1.0.1'
+        default: '1.0.2'
         type: string
       build_number:
         description: 'Özel Build Numarası (boş bırakılırsa github.run_number kullanılır)'
