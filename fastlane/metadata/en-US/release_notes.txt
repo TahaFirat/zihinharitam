@@ -1,3 +1,5 @@
-• 100% Free Instant Custom Sticker & Icon Studio: Built-in zero-config 4-style Die-Cut sticker synthesizer (Hand-Drawn, 3D Isometric, Scientific Atlas, and Vector Emblem) plus an expanded 32+ multi-category icon studio—no external API keys required.
-• Study, Exam & Usage Counter Reset: Added one-tap Reset controls to the top HUD Study & Exam Counter, the Home Workspace counter badge, and Settings.
-• Smooth mobile canvas panning and one-tap branch deletion refinements.
+• NEW: Multi-line branch descriptions, interactive task checkboxes, and study priority tags!
+• NEW: Hierarchical Outliner view to browse and edit your entire mind map as a structured list (100% Free).
+• NEW: Import photos and textbook figures directly from your device gallery, plus an upgraded 3D custom sticker studio.
+• NEW: 1-tap "Free Icons" filter and responsive S / M / L / XL sticker sizing controls.
+• IMPROVED: Collision-free smart tree layout engine and one-time first-launch onboarding.

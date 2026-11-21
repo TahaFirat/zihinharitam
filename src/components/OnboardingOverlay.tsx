@@ -1,8 +1,50 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Preferences } from '@capacitor/preferences';
 import { ArrowRight, Check } from 'lucide-react';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 
 export const ONBOARDING_STORAGE_KEY = 'onboarding_v4_done';
+
+export function hasCompletedOnboardingSync(): boolean {
+  try {
+    const raw = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function persistOnboardingCompleted(): void {
+  try {
+    localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+  } catch {
+    // Ignore storage write errors
+  }
+  void Preferences.set({ key: ONBOARDING_STORAGE_KEY, value: '1' }).catch(() => {
+    // Ignore native preference fallback errors on web
+  });
+}
+
+export async function checkNativeOnboardingCompleted(): Promise<boolean> {
+  if (hasCompletedOnboardingSync()) {
+    persistOnboardingCompleted();
+    return true;
+  }
+  try {
+    const res = await Preferences.get({ key: ONBOARDING_STORAGE_KEY });
+    if (res.value === '1' || res.value === 'true') {
+      try {
+        localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+      } catch {
+        // Ignore
+      }
+      return true;
+    }
+  } catch {
+    // Ignore
+  }
+  return false;
+}
 
 interface OnboardingOverlayProps {
   onComplete: () => void;
@@ -97,12 +139,16 @@ const STEPS = [
 export const OnboardingOverlay: React.FC<OnboardingOverlayProps> = ({ onComplete }) => {
   const [idx, setIdx] = useState(0);
 
+  // Persist after initial mount settles so even if user closes app without clicking Atla, it never re-opens on next launch
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      persistOnboardingCompleted();
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const finish = () => {
-    try {
-      localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
-    } catch {
-      // Ignore storage errors
-    }
+    persistOnboardingCompleted();
     void hapticSuccess();
     onComplete();
   };

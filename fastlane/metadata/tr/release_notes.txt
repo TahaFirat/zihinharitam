@@ -1,3 +1,5 @@
-• %100 Ücretsiz & Anında Akıllı Çıkartma ve İkon Stüdyosu: Dış API anahtarı gerektirmeyen, 4 farklı sanatsal stilde (El Çizimi, 3D İzometrik, Bilimsel Atlas ve Vektör Amblem) anında özel Die-Cut çıkartma üreten yeni yerleşik motor ve 32+ kategorili zengin ikon seçici eklendi.
-• Çalışma, Sınav ve Harita Sayacı Sıfırlama: Üst araç çubuğuna tek dokunuşla sıfırlanabilen Çalışma & Sınav Sayacı, Haritalarım ekranına ve Ayarlar menüsüne ise "Sayacı Sıfırla" kontrolü eklendi.
-• Akıcı Mobil Gezinme & Tek Dokunuşla Kolay Dal Silme iyileştirmeleri.
+• YENİ: Dal altına uzun, çok satırlı ders açıklamaları, ☑️ görev kutuları ve 🔥 Önem / Sınavda Çıkar etiketleri eklendi!
+• YENİ: Hiyerarşik Anahat (Liste) görünümü ile tüm ağacı tek ekranda görüntüleyip düzenleme özelliği (%100 Ücretsiz).
+• YENİ: Telefon ve iPad galerinizden doğrudan fotoğraf / şema ekleme ("🖼️ Foto Ekle") ve gelişmiş 3D özel ikon stüdyosu!
+• YENİ: "🎁 Ücretsiz" ikon filtresi ve hassas S / M / L / XL ikon boyutlandırma kontrolleri.
+• İYİLEŞTİRME: Uzun açıklamalarda ve büyük ikonlarda ağaçların birbirine karışmasını önleyen akıllı yerleşim motoru ile tek seferlik karşılama ekranı.

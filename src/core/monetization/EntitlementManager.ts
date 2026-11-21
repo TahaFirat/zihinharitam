@@ -52,21 +52,17 @@ function saveUsageCounters(usage: UsageCounters): void {
 }
 
 function isSpecialistProVisual(item: VisualSearchResult): boolean {
-  if (item.source === 'ai_pool') return true;
-  if (item.isDuotoneColorizable) return true;
+  if (item.source === 'user_photo' || item.source === 'sketch') return false;
+  if (item.tier === 'free') return false;
+  if (item.tier === 'pro') return true;
+  if (item.mode === '3d' || item.category === '3d_color') return true;
 
   const prov = (item.providerName || '').toLowerCase();
   if (
     prov.includes('systemdesign') ||
-    prov.includes('healthicons') ||
     prov.includes('medical atlas') ||
-    prov.includes('ibm carbon') ||
-    prov.includes('phosphor duotone') ||
     prov.includes('ansiklopedik') ||
-    prov.includes('tabler teknik') ||
-    prov.includes('devicon') ||
-    prov.includes('skill icons') ||
-    prov.includes('teknoloji logosu')
+    prov.includes('kompozit')
   ) {
     return true;
   }
@@ -192,23 +188,18 @@ class EntitlementStore {
   public isStickerFree(
     item: VisualSearchResult,
     indexInSearch: number,
-    surface: 'keyboard_bar' | 'gallery' | 'command_palette' = 'keyboard_bar'
+    _surface: 'keyboard_bar' | 'gallery' | 'command_palette' = 'keyboard_bar'
   ): boolean {
     if (this.snapshot.isLifetimePro) return true;
+    if (item.source === 'user_photo' || item.source === 'sketch') return true;
+    if (item.tier === 'free') return true;
+    if (isSpecialistProVisual(item)) return false;
 
     if (indexInSearch >= APP_RELEASE_CONFIG.quotas.freeSearchCarouselSlots) {
       return false;
     }
 
-    if (isSpecialistProVisual(item)) {
-      return false;
-    }
-
-    if (surface === 'gallery') {
-      return item.tier === 'free';
-    }
-
-    return item.tier === 'free' || !isSpecialistProVisual(item);
+    return true;
   }
 
   public canUseNoteCrop(): boolean {

@@ -1,0 +1,7 @@
+Turn complex lectures, exam prep, software architectures, and research notes into crystal-clear visual mind maps with ZihinHaritam!
+
+• Non-Overlapping Smart Tree Layout: Add rich multi-line notes and XL stickers without branches ever colliding.
+• Rich Branch Descriptions, Checklists & Study Tags: Write detailed notes under any branch, add interactive task checkboxes, and mark exam priorities.
+• Generous Free Icons + 3D Sticker Studio + Gallery Photos: Search 25,000+ offline icons, filter 100% Free icons in 1 tap, resize S/M/L/XL, generate custom 3D stickers without API keys, or import photos directly from your gallery.
+• Hierarchical Outliner & Cross-Links: Switch seamlessly between visual canvas and structured outline list.
+• Active Recall Exam Mode & 300 DPI PDF Poster Export: Test your memory before exams and export print-ready A4/A3 posters.

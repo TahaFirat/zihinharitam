@@ -81,11 +81,11 @@ export const APP_RELEASE_CONFIG = {
 
   quotas: {
     freeActiveMapsLimit: 3,
-    freeNodesPerMapLimit: 45,
-    freeSearchCarouselSlots: 6,
-    freeNoteCropsLimit: 3,
-    freeSmartMapGenerationsLimit: 1,
-    freeAiStickerDrawsLimit: 1,
+    freeNodesPerMapLimit: 60,
+    freeSearchCarouselSlots: 18,
+    freeNoteCropsLimit: 5,
+    freeSmartMapGenerationsLimit: 2,
+    freeAiStickerDrawsLimit: 999,
     trashRetentionDays: 30,
   },
 

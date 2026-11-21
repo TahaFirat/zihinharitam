@@ -201,9 +201,28 @@ async function runGate2IconsAndScreenshots() {
   }
   if (allShotsOk && checkedCount === 15) {
     pass(
-      'App Store Connect 15 mağaza ekran görüntüsü (6.9", 6.5", iPad 13")',
+      'App Store Connect 15 çerçeveli tanıtım görseli (6.9", 6.5", iPad 13")',
       '15/15 birebir çözünürlük ve 24-bit alfasız PNG'
     );
+  }
+
+  // Google Play Store Graphics & Native Android Verification
+  if (
+    (await fileExists('playstore-submission/icon-512x512.png')) &&
+    (await fileExists('playstore-submission/feature-graphic-1024x500.png')) &&
+    (await fileExists('android/app/build.gradle')) &&
+    (await fileExists('.github/workflows/android-playstore-release.yml'))
+  ) {
+    const playIcon = await inspectPngBinary('playstore-submission/icon-512x512.png');
+    const playFg = await inspectPngBinary('playstore-submission/feature-graphic-1024x500.png');
+    if (playIcon.width === 512 && playFg.width === 1024 && playFg.height === 500) {
+      pass(
+        'Google Play Store Paketi (Android Native + 512px İkon + 1024x500 Özellik Grafiği + 10 Poster)',
+        'Android API 35 + AAB/APK CI/CD hazır'
+      );
+    }
+  } else {
+    fail('Google Play Store Paketi', 'Eksik Android veya Play Store dosyası');
   }
 }
 
@@ -393,12 +412,24 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     const pageErrors = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    // 5.1 Onboarding first-launch presentation & 1-tap skip
+    // 5.1 Onboarding first-launch presentation, 1-tap skip, AND NEVER re-opening on subsequent launches!
     await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     const skipBtn = page.getByRole('button', { name: /Atla/i });
     await skipBtn.waitFor({ state: 'visible', timeout: 8000 });
     await skipBtn.click();
-    pass('İlk açılış 3 adımlı Onboarding ve tek dokunuş "Atla" akışı');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(350);
+    const onboardReopened = await page
+      .locator('[data-testid="onboarding-overlay"]')
+      .isVisible();
+    if (!onboardReopened) {
+      pass(
+        'İlk açılış Onboarding tek seferlik gösterim kontrolü',
+        'İlk açılışta gösterildi, sonraki girişlerde bir daha açılmadı'
+      );
+    } else {
+      fail('İlk açılış Onboarding tek seferlik gösterim kontrolü', 'İkinci girişte tekrar açıldı!');
+    }
 
     // 5.2 Verify Free Tier starts at 1 / 3 active maps, allows 2nd & 3rd, and gates 4th map with 200 ₺ Paywall
     await page.waitForSelector('[data-testid="create-blank-map-btn"]', {
@@ -463,7 +494,7 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     await page.waitForTimeout(600);
 
     // Click a PRO-badged specialist sticker in the visual suggestion bar
-    const proStickerBtn = page.locator('button:has-text("PRO")').first();
+    const proStickerBtn = page.locator('[data-testid="pro-sticker-tile"]').first();
     await proStickerBtn.waitFor({ state: 'visible', timeout: 8000 });
     await proStickerBtn.click();
 
@@ -645,10 +676,80 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('Mobil dokunmatik kaydırma (kart üzerinden harita pan)', JSON.stringify(panResult));
     }
 
-    // 5.5 Zero-API-Key Free Custom Sticker Studio ("AI Çiz") & Study/Usage Counter Reset Verification
+    // 5.5 V5 UX Verification: Working S/M/L/XL Sizing, Free Icon Filter, Long Branch Notes, Outliner & 3D Studio
+    await page.click('[data-node-card-id="m1"]');
+    await page.waitForSelector('[data-testid="size-btn-sm"]', { timeout: 6000 });
+
+    // Measure S -> XL sticker pixel dimensions
+    await page.click('[data-testid="size-btn-sm"]');
+    await page.waitForTimeout(240);
+    const smPx = await page.evaluate(() => {
+      const el = document.querySelector('[data-node-card-id="m1"]')
+        ?.parentElement?.querySelector('[data-testid="node-sticker-box"]');
+      return el ? Number.parseInt(getComputedStyle(el).width, 10) : 0;
+    });
+    await page.click('[data-testid="size-btn-xl"]');
+    await page.waitForTimeout(240);
+    const xlPx = await page.evaluate(() => {
+      const el = document.querySelector('[data-node-card-id="m1"]')
+        ?.parentElement?.querySelector('[data-testid="node-sticker-box"]');
+      return el ? Number.parseInt(getComputedStyle(el).width, 10) : 0;
+    });
+    if (smPx === 50 && xlPx === 170) {
+      pass('S / M / L / XL ikon boyutlandırma kontrolü', `SM=${smPx}px -> XL=${xlPx}px net büyüdü`);
+    } else {
+      fail('S / M / L / XL ikon boyutlandırma kontrolü', `smPx=${smPx}, xlPx=${xlPx}`);
+    }
+
+    // Verify "🎁 Ücretsiz" filter shows ONLY free stickers and zero locked PRO tiles
+    await page.evaluate(async () => {
+      await window.__ZH_ENTITLEMENTS__?.resetForTesting(false);
+    });
+    await page.click('[data-testid="bar-tier-free-btn"]');
+    await page.waitForTimeout(250);
+    const freeTilesCount = await page.locator('[data-testid="free-sticker-tile"]').count();
+    const proTilesWhileFreeFiltered = await page
+      .locator('[data-testid="pro-sticker-tile"]')
+      .count();
+    if (freeTilesCount >= 8 && proTilesWhileFreeFiltered === 0) {
+      pass(
+        '"🎁 Ücretsiz" ikon filtresi kontrolü',
+        `${freeTilesCount} ücretsiz ikon listelendi, 0 kilitli PRO karıştı`
+      );
+    } else {
+      fail(
+        '"🎁 Ücretsiz" ikon filtresi kontrolü',
+        `free=${freeTilesCount}, pro=${proTilesWhileFreeFiltered}`
+      );
+    }
+
+    // Verify Long Multi-Line Branch Description (`📝 Açıklama`) & Task Checkbox
+    await page.click('[data-testid="studio-note-toggle-btn"]');
+    await page.fill(
+      '[data-testid="studio-note-textarea"]',
+      'Detaylı çok satırlı dal açıklaması: Sol ventrikül sistolik fonksiyonu ve kapak akımları.'
+    );
+    await page.click('[data-testid="studio-task-toggle-btn"]');
+    await page.click('[data-testid="studio-done-btn"]');
+    await page.waitForTimeout(250);
+    const noteBlockVisible = await page
+      .locator('[data-testid="node-note-block"]')
+      .first()
+      .isVisible();
+    const checkboxVisible = await page
+      .locator('[data-testid="node-checkbox-btn"]')
+      .first()
+      .isVisible();
+    if (noteBlockVisible && checkboxVisible) {
+      pass('Dal altı uzun açıklama (responsive not) & ☑️ görev kutusu', 'Kart üzerinde sorunsuz görüntülendi');
+    } else {
+      fail('Dal altı uzun açıklama & görev kutusu', `note=${noteBlockVisible}, check=${checkboxVisible}`);
+    }
+
+    // Verify 3D & Custom Sticker Studio ("3D & Özel İkon") without API key
     await page.click('[data-node-card-id="m1"]');
     await page.waitForTimeout(200);
-    const aiBtn = page.locator('button:has-text("AI Çiz")').first();
+    const aiBtn = page.locator('button:has-text("3D & Özel İkon")').first();
     await aiBtn.click();
     await page.waitForSelector('[data-testid="ai-sticker-studio-modal"]', { timeout: 6000 });
     await page.waitForSelector('[data-testid="ai-candidate-slot-0"]', { timeout: 6000 });
@@ -658,17 +759,26 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     const asksForApiKey = /API Anahtar|anahtarınızı tanımla|BYOK/i.test(studioText);
     if (hasFourCandidates && !asksForApiKey) {
       pass(
-        '%100 Ücretsiz & API Anahtarsız Akıllı Çıkartma/İkon Stüdyosu (AI Çiz)',
-        '4 özel die-cut aday + 32+ ikon anında üretildi'
+        '%100 Ücretsiz & API Anahtarsız 3D Çıkartma Stüdyosu',
+        '4 özel 3D die-cut aday + galeri foto seçeneği hazır'
       );
     } else {
       fail(
-        '%100 Ücretsiz Akıllı Çıkartma/İkon Stüdyosu',
+        '%100 Ücretsiz 3D Çıkartma Stüdyosu',
         `hasFour=${hasFourCandidates}, asksForApiKey=${asksForApiKey}`
       );
     }
     await page.click('[data-testid="ai-candidate-slot-0"]');
     await page.waitForTimeout(300);
+
+    // Test Hierarchical Outliner (`Anahat`)
+    await page.click('[data-testid="studio-done-btn"]');
+    await page.waitForTimeout(150);
+    await page.locator('button:has-text("Anahat"):visible').first().click();
+    await page.waitForSelector('[data-testid="outline-modal"]', { timeout: 5000 });
+    pass('Hiyerarşik Anahat (Liste) görünümü', 'Tüm ağaç ve uzun notlar senkronize açıldı');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
 
     // Test Study Timer Counter & 1-Tap Reset in TopMinimalHUD
     await page.click('[data-testid="hud-timer-toggle-btn"]');

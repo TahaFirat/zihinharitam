@@ -23,6 +23,8 @@ import {
   Timer,
   Play,
   Pause,
+  Pencil,
+  ListTree,
 } from 'lucide-react';
 import {
   DEPARTMENT_LABELS,
@@ -42,6 +44,7 @@ interface TopMinimalHUDProps {
   defaultNodeStyle: NodeVisualStyle;
   onToggleDefaultNodeStyle: () => void;
   onOpenCommandPalette: () => void;
+  onOpenOutline: () => void;
   onRenameMap: (title: string) => void;
   onNavigateHome: () => void;
   onOpenSettings: () => void;
@@ -73,6 +76,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
   defaultNodeStyle,
   onToggleDefaultNodeStyle,
   onOpenCommandPalette,
+  onOpenOutline,
   onRenameMap,
   onNavigateHome,
   onOpenSettings,
@@ -207,16 +211,18 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
         ) : (
           <button
             type="button"
+            data-testid="hud-rename-map-btn"
             onClick={() => setEditingTitle(true)}
-            title="Harita adını düzenlemek için dokunun"
-            className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-0.5 text-left hover:bg-slate-500/10"
+            title="Ağaç / Harita adını değiştirmek için dokunun"
+            className="group flex min-w-0 items-center gap-1.5 rounded-xl px-2 py-1 text-left hover:bg-sky-500/10"
           >
             <span className="text-sm leading-none" aria-hidden="true">
               {contextEmoji || deptMeta.emoji}
             </span>
-            <span className="max-w-[92px] truncate text-xs font-bold tracking-tight sm:max-w-[170px] sm:text-sm md:max-w-[230px]">
+            <span className="max-w-[96px] truncate text-xs font-extrabold tracking-tight sm:max-w-[170px] sm:text-sm md:max-w-[230px]">
               {mapTitle}
             </span>
+            <Pencil className="h-3 w-3 shrink-0 text-sky-500 opacity-75 transition group-hover:scale-110 group-hover:opacity-100" />
           </button>
         )}
 
@@ -327,6 +333,18 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
           <kbd className="hidden rounded bg-slate-500/15 px-1 py-0.5 font-mono text-[10px] opacity-75 xl:inline">
             ⌘K
           </kbd>
+        </button>
+
+        {/* Hierarchical Outliner View (`📋 Anahat`) */}
+        <button
+          type="button"
+          data-testid="hud-outline-btn"
+          onClick={onOpenOutline}
+          title="Hiyerarşik Anahat & Uzun Notlar Görünümü"
+          className="hidden h-9 items-center gap-1.5 rounded-xl bg-indigo-500/12 px-2.5 text-xs font-extrabold text-indigo-700 hover:bg-indigo-500/20 active:scale-95 sm:flex dark:text-indigo-300"
+        >
+          <ListTree className="h-4 w-4" />
+          <span className="hidden xl:inline">Anahat</span>
         </button>
 
         {/* Desktop & iPad Undo/Redo */}
@@ -575,6 +593,17 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = ({
                 borderColor: 'var(--hud-border)',
               }}
             >
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenOutline();
+                  setMoreMenuOpen(false);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-500/10 dark:text-indigo-300"
+              >
+                <ListTree className="h-4 w-4" />
+                Anahat & Uzun Notlar Listesi
+              </button>
               <button
                 type="button"
                 onClick={() => {

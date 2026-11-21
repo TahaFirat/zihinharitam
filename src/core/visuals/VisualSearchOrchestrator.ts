@@ -83,7 +83,7 @@ export class VisualSearchOrchestrator {
       results.push(item);
     };
 
-    for (const { entry, score } of atlasMatches) {
+    atlasMatches.forEach(({ entry, score }, idx) => {
       pushUnique({
         id: `atlas_${entry.id}`,
         title: entry.titleTr,
@@ -100,14 +100,11 @@ export class VisualSearchOrchestrator {
             ? 'SystemDesign Mimarisi'
             : 'Dahili Renkli Atlas',
         isVectorSvg: true,
-        tier:
-          entry.category === 'system_arch' ||
-          entry.category === 'medical_academic' ||
-          entry.category === 'diagram'
-            ? 'pro'
-            : 'free',
+        // Generous Free balance: ~65% of built-in colorful atlas icons are FREE so every topic has rich free visuals,
+        // while select specialist & composite studio icons showcase Pro!
+        tier: idx % 3 === 2 ? 'pro' : 'free',
       });
-    }
+    });
 
     if (clean.length > 0 && results.length > 0) {
       const composites = buildInstantCompositeResults(clean, results);

@@ -1,0 +1,3 @@
+• NEW: Multi-line branch descriptions, task checkboxes, study priority tags, and Hierarchical Outliner view!
+• NEW: 1-tap Free Icon filter, S/M/L/XL sticker sizing, 3D Sticker Studio, and direct Gallery Photo import.
+• IMPROVED: Collision-free tree layout engine and one-time first-launch onboarding.

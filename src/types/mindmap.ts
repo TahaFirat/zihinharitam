@@ -41,6 +41,10 @@ export type NodeVisualStyle = 'card' | 'organic';
 
 export type StickerSizePreset = 'sm' | 'md' | 'lg' | 'xl';
 
+export type NodePriorityTag = 'important' | 'exam' | 'review';
+
+export type IconTierFilter = 'all' | 'free' | 'pro';
+
 export type MindMapFolder = 'general' | 'study_exam' | 'engineering';
 
 export type PaywallTriggerReason =
@@ -59,7 +63,7 @@ export interface StickerAsset {
   id: string;
   url: string; // Yerel Blob URL, SVG Data URL veya CDN WebP/PNG URL
   mode: VisualStyleMode;
-  source: 'library' | 'ai_pool' | 'note_crop' | 'sketch';
+  source: 'library' | 'ai_pool' | 'note_crop' | 'sketch' | 'user_photo';
   dieCutProcessed: boolean;
   aspectRatio: number;
   label?: string;
@@ -78,6 +82,10 @@ export interface MindNode {
   title: string;
   subtitle?: string;
   subtitleIsTemplateDefault?: boolean;
+  note?: string; // Uzun ders notu / detaylı alt açıklama (çok satırlı, responsive)
+  noteCollapsed?: boolean; // Uzun açıklamanın kart üzerinde daraltılıp açılması
+  checked?: boolean | null; // Görev / çalışma ilerleme onay kutusu (Checklist)
+  priorityTag?: NodePriorityTag | null; // Önem / Sınavda Çıkar / Tekrar Et etiketi
   techBadge?: string; // Örn: "Port 443 • HTTPS", "O(log N)", "CMK m.272", "Av = -Rf/Rin"
   x: number;
   y: number;
@@ -141,7 +149,7 @@ export interface VisualSearchResult {
   rawUrl: string;
   mode: VisualStyleMode;
   category: Exclude<GalleryCategoryFilter, 'all'>;
-  source: 'library' | 'ai_pool' | 'note_crop' | 'sketch';
+  source: 'library' | 'ai_pool' | 'note_crop' | 'sketch' | 'user_photo';
   needsDieCut: boolean;
   aspectRatio: number;
   score: number;

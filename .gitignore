@@ -8,6 +8,9 @@ public/offline-packs/
 *.ipa
 *.xcarchive
 *.dSYM.zip
+*.aab
+*.apk
+playstore-dist/
 
 # Capacitor / Xcode Ephemeral & Pod Artifacts
 ios/App/Pods/
@@ -31,6 +34,8 @@ ios/App/*.xcodeproj/project.xcworkspace/xcuserdata/
 *.pem
 *.mobileprovision
 *.provisionprofile
+*.jks
+*.keystore
 
 # OS & Editor
 .DS_Store

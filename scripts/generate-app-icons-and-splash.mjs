@@ -8,9 +8,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const MASTER_PNG_PATH = path.join(ROOT, 'assets', 'app-icon-master.png');
 
-/**
- * Fallback & Favicon vibrant luminous SVG matching our sunlit sky-aqua-azure 3D master icon.
- */
 const MASTER_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
@@ -43,7 +40,6 @@ const MASTER_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" he
 </svg>`;
 
 const IOS_ICON_SLOTS = [
-  // iPhone
   { idiom: 'iphone', size: '20x20', scale: '2x', px: 40, filename: 'AppIcon-20@2x.png' },
   { idiom: 'iphone', size: '20x20', scale: '3x', px: 60, filename: 'AppIcon-20@3x.png' },
   { idiom: 'iphone', size: '29x29', scale: '2x', px: 58, filename: 'AppIcon-29@2x.png' },
@@ -52,7 +48,6 @@ const IOS_ICON_SLOTS = [
   { idiom: 'iphone', size: '40x40', scale: '3x', px: 120, filename: 'AppIcon-40@3x.png' },
   { idiom: 'iphone', size: '60x60', scale: '2x', px: 120, filename: 'AppIcon-60@2x.png' },
   { idiom: 'iphone', size: '60x60', scale: '3x', px: 180, filename: 'AppIcon-60@3x.png' },
-  // iPad
   { idiom: 'ipad', size: '20x20', scale: '1x', px: 20, filename: 'AppIcon-20@1x~ipad.png' },
   { idiom: 'ipad', size: '20x20', scale: '2x', px: 40, filename: 'AppIcon-20@2x~ipad.png' },
   { idiom: 'ipad', size: '29x29', scale: '1x', px: 29, filename: 'AppIcon-29@1x~ipad.png' },
@@ -62,7 +57,6 @@ const IOS_ICON_SLOTS = [
   { idiom: 'ipad', size: '76x76', scale: '1x', px: 76, filename: 'AppIcon-76@1x~ipad.png' },
   { idiom: 'ipad', size: '76x76', scale: '2x', px: 152, filename: 'AppIcon-76@2x~ipad.png' },
   { idiom: 'ipad', size: '83.5x83.5', scale: '2x', px: 167, filename: 'AppIcon-83.5@2x~ipad.png' },
-  // App Store Marketing 1024x1024 (Zero Alpha Required by Apple ITMS-90717!)
   { idiom: 'ios-marketing', size: '1024x1024', scale: '1x', px: 1024, filename: 'AppIcon-512@2x.png' },
 ];
 
@@ -74,7 +68,6 @@ async function renderOpaqueIconPng(masterBuffer, sizePx, flattenBg = '#0EA5E9') 
     .png({ compressionLevel: 9, palette: false })
     .toBuffer();
 
-  // Verify PNG IHDR colorType byte at offset 25 === 2 (24-bit Truecolor RGB, ZERO alpha)
   const colorType = buf[25];
   if (colorType !== 2) {
     throw new Error(
@@ -169,7 +162,6 @@ async function main() {
     'utf8'
   );
 
-  // Copy 1024x1024 marketing icon to appstore-submission/AppIcon-1024.png
   await fs.copyFile(
     path.join(appIconDir, 'AppIcon-512@2x.png'),
     path.join(submissionDir, 'AppIcon-1024.png')
@@ -200,9 +192,87 @@ async function main() {
   await fs.writeFile(path.join(publicDir, 'apple-touch-icon.png'), await renderOpaqueIconPng(masterBuffer, 180));
   await fs.writeFile(path.join(publicDir, 'favicon.svg'), MASTER_ICON_SVG, 'utf8');
 
+  // 4. Generate Native Android Launcher Icons & Splash Screens
+  const androidResDir = path.join(ROOT, 'android', 'app', 'src', 'main', 'res');
+  try {
+    await fs.access(androidResDir);
+    const mipmapSpecs = [
+      { folder: 'mipmap-mdpi', legacyPx: 48, fgPx: 108 },
+      { folder: 'mipmap-hdpi', legacyPx: 72, fgPx: 162 },
+      { folder: 'mipmap-xhdpi', legacyPx: 96, fgPx: 216 },
+      { folder: 'mipmap-xxhdpi', legacyPx: 144, fgPx: 324 },
+      { folder: 'mipmap-xxxhdpi', legacyPx: 192, fgPx: 432 },
+    ];
+
+    for (const m of mipmapSpecs) {
+      const mDir = path.join(androidResDir, m.folder);
+      await fs.mkdir(mDir, { recursive: true });
+
+      const squareBuf = await renderOpaqueIconPng(masterBuffer, m.legacyPx, '#0EA5E9');
+      await fs.writeFile(path.join(mDir, 'ic_launcher.png'), squareBuf);
+
+      const circleSvg = Buffer.from(
+        `<svg width="${m.legacyPx}" height="${m.legacyPx}" xmlns="http://www.w3.org/2000/svg"><circle cx="${
+          m.legacyPx / 2
+        }" cy="${m.legacyPx / 2}" r="${m.legacyPx / 2}" fill="#ffffff"/></svg>`
+      );
+      const roundBuf = await sharp(masterBuffer)
+        .resize(m.legacyPx, m.legacyPx, { fit: 'cover' })
+        .ensureAlpha()
+        .composite([{ input: circleSvg, blend: 'dest-in' }])
+        .png({ compressionLevel: 9 })
+        .toBuffer();
+      await fs.writeFile(path.join(mDir, 'ic_launcher_round.png'), roundBuf);
+
+      const innerPx = Math.round(m.fgPx * 0.68);
+      const innerIcon = await sharp(masterBuffer)
+        .resize(innerPx, innerPx, { fit: 'cover' })
+        .png()
+        .toBuffer();
+      const fgBuf = await sharp({
+        create: {
+          width: m.fgPx,
+          height: m.fgPx,
+          channels: 4,
+          background: { r: 14, g: 165, b: 233, alpha: 1 },
+        },
+      })
+        .composite([
+          {
+            input: innerIcon,
+            left: Math.round((m.fgPx - innerPx) / 2),
+            top: Math.round((m.fgPx - innerPx) / 2),
+          },
+        ])
+        .png({ compressionLevel: 9 })
+        .toBuffer();
+      await fs.writeFile(path.join(mDir, 'ic_launcher_foreground.png'), fgBuf);
+    }
+
+    const valuesDir = path.join(androidResDir, 'values');
+    await fs.mkdir(valuesDir, { recursive: true });
+    await fs.writeFile(
+      path.join(valuesDir, 'ic_launcher_background.xml'),
+      `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#0EA5E9</color>\n</resources>\n`,
+      'utf8'
+    );
+
+    const drawableDir = path.join(androidResDir, 'drawable');
+    await fs.mkdir(drawableDir, { recursive: true });
+    const androidSplash = await sharp(splashBuf)
+      .resize(1280, 1280, { fit: 'cover' })
+      .removeAlpha()
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    await fs.writeFile(path.join(drawableDir, 'splash.png'), androidSplash);
+    console.log('[Icons & Splash] ✓ Android mipmap-* adaptive/round ikonlar ve splash üretildi.');
+  } catch {
+    // android/ not present
+  }
+
   const meta1024 = await sharp(path.join(appIconDir, 'AppIcon-512@2x.png')).metadata();
   console.log(
-    `[Icons & Splash] 18 iOS ikon boyutu + 2732x2732 Splash + PWA ikonları üretildi. ` +
+    `[Icons & Splash] 18 iOS ikon boyutu + 2732x2732 Splash + PWA + Android ikonları üretildi. ` +
       `1024x1024 doğrulaması: ${meta1024.width}x${meta1024.height}, channels=${meta1024.channels}, hasAlpha=${meta1024.hasAlpha}`
   );
 }

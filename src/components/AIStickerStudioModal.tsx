@@ -7,6 +7,7 @@ import {
   Loader2,
   Search,
   Layers,
+  ImagePlus,
 } from 'lucide-react';
 import type {
   AcademicDepartment,
@@ -20,6 +21,7 @@ import {
   compileArtDirectorStickerPrompt,
   type AICandidateSlot,
 } from '../core/visuals/AIStickerDirector';
+import { triggerGalleryPhotoPicker } from '../core/visuals/PhotoStickerImporter';
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
@@ -59,7 +61,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
 }) => {
   const kb = useKeyboardInset();
   const [conceptText, setConceptText] = useState(initialConcept);
-  const [artStyle, setArtStyle] = useState<AIArtStyle>('hand_drawn');
+  const [artStyle, setArtStyle] = useState<AIArtStyle>('isometric_3d');
   const [categoryFilter, setCategoryFilter] = useState<QuickCategoryFilter>('all');
   const [seedBase, setSeedBase] = useState<number>(
     () => Math.floor(Math.random() * 9000) + 100
@@ -279,7 +281,22 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
               className="inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-xs font-extrabold text-white shadow-xs transition-transform active:scale-95 disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${anyLoading ? 'animate-spin' : ''}`} />
-              <span>Yeni Tasarımlar Üret</span>
+              <span>Yeni 3D Tasarımlar</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                triggerGalleryPhotoPicker(branchColor, (sticker) => {
+                  onApplySticker(sticker);
+                  void hapticSuccess();
+                  onClose();
+                })
+              }
+              className="inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-3.5 py-2 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+              <span>Galeriden Foto Ekle</span>
             </button>
           </div>
 

@@ -5,13 +5,28 @@ import React, {
   useMemo,
   useCallback,
 } from 'react';
-import { Plus, Eye, Sparkles, ChevronRight, X, Link2, Trash2, Move } from 'lucide-react';
+import {
+  Plus,
+  Eye,
+  Sparkles,
+  ChevronRight,
+  X,
+  Link2,
+  Trash2,
+  Move,
+  Check,
+  Pencil,
+  Image as ImageIcon,
+  CheckSquare,
+  ChevronDown,
+} from 'lucide-react';
 import type {
   AcademicDepartment,
   CollaboratorPresence,
   CrossLink,
   ExamRecallMode,
   MindNode,
+  NodePriorityTag,
   NodeVisualStyle,
   StickerSizePreset,
   ViewportTransform,
@@ -62,6 +77,10 @@ interface CanvasStageProps {
   onFinishEditing: () => void;
   onUpdateNodeTitle: (nodeId: string, title: string) => void;
   onDeleteNode?: (nodeId: string) => void;
+  onToggleNodeCheck?: (nodeId: string) => void;
+  onToggleNoteCollapse?: (nodeId: string) => void;
+  onStartCrossLink?: (fromNodeId: string) => void;
+  onOpenStickerGallery?: (nodeId: string) => void;
   onCommitBatchNodePositions: (updates: Record<string, { x: number; y: number }>) => void;
   onCreateChildBranch: (
     parentId: string,
@@ -127,35 +146,56 @@ function collectSubtreeIds(
   return collected;
 }
 
-function resolveStickerSizeClasses(
+const PRIORITY_BADGE_META: Record<
+  NodePriorityTag,
+  { label: string; emoji: string; cls: string }
+> = {
+  important: {
+    label: 'Önemli',
+    emoji: '🔥',
+    cls: 'border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300',
+  },
+  exam: {
+    label: 'Sınavda Çıkar',
+    emoji: '🎓',
+    cls: 'border-amber-500/45 bg-amber-500/15 text-amber-800 dark:text-amber-200',
+  },
+  review: {
+    label: 'Tekrar Et',
+    emoji: '❓',
+    cls: 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-300',
+  },
+};
+
+function resolveStickerSizePixels(
   size: StickerSizePreset | undefined,
   isRoot: boolean,
   isOrganic: boolean
-): string {
+): { px: number; preset: StickerSizePreset } {
   const effective: StickerSizePreset = size ?? (isOrganic ? 'lg' : 'md');
   if (isRoot) {
     switch (effective) {
       case 'sm':
-        return 'h-26 w-26 sm:h-30 sm:w-30';
+        return { px: 82, preset: 'sm' };
       case 'lg':
-        return 'h-40 w-40 sm:h-46 sm:w-46';
+        return { px: 168, preset: 'lg' };
       case 'xl':
-        return 'h-48 w-48 sm:h-54 sm:w-54';
+        return { px: 214, preset: 'xl' };
       case 'md':
       default:
-        return 'h-34 w-34 sm:h-40 sm:w-40';
+        return { px: 124, preset: 'md' };
     }
   }
   switch (effective) {
     case 'sm':
-      return 'h-16 w-16 sm:h-18 sm:w-18';
+      return { px: 50, preset: 'sm' };
     case 'lg':
-      return 'h-27 w-27 sm:h-31 sm:w-31';
+      return { px: 126, preset: 'lg' };
     case 'xl':
-      return 'h-34 w-34 sm:h-38 sm:w-38';
+      return { px: 170, preset: 'xl' };
     case 'md':
     default:
-      return 'h-22 w-22 sm:h-25 sm:w-25';
+      return { px: 86, preset: 'md' };
   }
 }
 
@@ -184,6 +224,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
   onFinishEditing,
   onUpdateNodeTitle,
   onDeleteNode,
+  onToggleNodeCheck,
+  onToggleNoteCollapse,
+  onStartCrossLink,
+  onOpenStickerGallery,
   onCommitBatchNodePositions,
   onCreateChildBranch,
   onCompleteCrossLink,
@@ -1576,11 +1620,24 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
           }`;
           const showSecondaryMeta =
             !isEditing && (!isSemanticFarZoom || isRoot || isSelected);
-          const stickerSizeCls = resolveStickerSizeClasses(
+          const stickerSizing = resolveStickerSizePixels(
             node.stickerSize,
             isRoot,
             isOrganic
           );
+          const priorityMeta = node.priorityTag
+            ? PRIORITY_BADGE_META[node.priorityTag]
+            : null;
+          const hasTaskCheck = typeof node.checked === 'boolean';
+          const isTaskDone = node.checked === true;
+          const cleanNote = node.note?.trim() ?? '';
+          const isLongNote =
+            cleanNote.length > 135 || cleanNote.split('\n').length > 3;
+          const isUntitledRoot =
+            isRoot &&
+            (!node.title ||
+              node.title.trim() === 'Yeni Zihin Haritası' ||
+              node.title.trim() === 'Merkez Konu');
 
           return (
             <div
@@ -1593,15 +1650,23 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
               style={{
                 transform: `translate3d(${node.x}px, ${node.y}px, 0) translate(-50%, -50%)`,
                 opacity: isDimmedByFocus ? 0.2 : 1,
-                zIndex: isEditing ? 30 : isSelected ? 20 : isRoot ? 15 : 10,
+                zIndex: isEditing ? 30 : isSelected ? 22 : isRoot ? 15 : 10,
               }}
               className="mind-node-wrapper pointer-events-auto absolute top-0 left-0 flex flex-col items-center will-change-transform select-none"
             >
-              {/* DIE-CUT VISUAL STICKER (`onError` Self-Healing Offline Fallback) */}
+              {/* DIE-CUT VISUAL STICKER (`onError` Self-Healing Offline Fallback + Exact S/M/L/XL Pixel Sizing) */}
               {node.sticker && !hideVisualInExam && (
                 <div
                   key={stickerAnimKey}
-                  className={`animate-sticker-pop absolute bottom-full left-1/2 mb-1 flex -translate-x-1/2 items-center justify-center ${stickerSizeCls}`}
+                  data-testid="node-sticker-box"
+                  data-sticker-size={stickerSizing.preset}
+                  style={{
+                    width: `${stickerSizing.px}px`,
+                    height: `${stickerSizing.px}px`,
+                    transition:
+                      'width 190ms cubic-bezier(0.22, 1, 0.36, 1), height 190ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                  className="animate-sticker-pop absolute bottom-full left-1/2 mb-1.5 flex -translate-x-1/2 items-center justify-center"
                 >
                   <img
                     src={node.sticker.url}
@@ -1632,7 +1697,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                 </div>
               )}
 
-              {/* NODE TITLE, TECH BADGE & SUBTITLE (CARD OR BOXLESS ORGANIC STYLE) */}
+              {/* NODE TITLE, PRIORITY TAG, CHECKBOX, TECH BADGE & LONG DESCRIPTION NOTE */}
               {hideTextInExam ? (
                 <button
                   type="button"
@@ -1649,31 +1714,65 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                   style={{
                     backgroundColor: isSelected
                       ? darkMode
-                        ? 'rgba(30,41,59,0.92)'
-                        : 'rgba(255,255,255,0.94)'
+                        ? 'rgba(30,41,59,0.94)'
+                        : 'rgba(255,255,255,0.96)'
                       : darkMode
-                      ? 'rgba(15,20,29,0.88)'
-                      : 'rgba(250,249,245,0.90)',
+                      ? 'rgba(15,20,29,0.90)'
+                      : 'rgba(250,249,245,0.92)',
                     boxShadow: isSelected
                       ? `0 0 0 2px ${node.branchColor}66, 0 6px 16px rgba(15,23,42,0.10)`
                       : 'none',
                   }}
-                  className={`relative flex min-w-[116px] max-w-[304px] flex-col items-center rounded-2xl px-3.5 py-1.5 text-center ${
+                  className={`relative flex min-w-[116px] max-w-[308px] flex-col items-center rounded-2xl px-3.5 py-1.5 text-center ${
                     linkingFromNodeId && !isLinkSource
                       ? 'hover:ring-2 hover:ring-violet-500'
                       : ''
                   }`}
                 >
-                  <div
-                    style={{
-                      color: 'var(--node-text)',
-                      textShadow: darkMode
-                        ? '0 1px 6px rgba(15,23,42,0.95)'
-                        : '0 1px 5px rgba(255,255,255,0.98), 0 0 2px rgba(255,255,255,0.95)',
-                    }}
-                    className="node-title-balanced text-[14px] leading-snug font-black tracking-tight sm:text-[15px]"
-                  >
-                    {node.title || 'Yeni Konu'}
+                  {priorityMeta && showSecondaryMeta && (
+                    <span
+                      className={`mb-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.2 text-[9.5px] font-black tracking-tight ${priorityMeta.cls}`}
+                    >
+                      <span>{priorityMeta.emoji}</span>
+                      <span>{priorityMeta.label}</span>
+                    </span>
+                  )}
+
+                  <div className="flex items-center justify-center gap-1.5">
+                    {hasTaskCheck && examMode === 'off' && (
+                      <button
+                        type="button"
+                        data-testid="node-checkbox-btn"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticSuccess();
+                          onToggleNodeCheck?.(node.id);
+                        }}
+                        title={isTaskDone ? 'Tamamlandı (Geri al)' : 'Tamamlandı olarak işaretle'}
+                        style={{
+                          borderColor: isTaskDone ? '#10B981' : node.branchColor,
+                          backgroundColor: isTaskDone ? '#10B981' : 'transparent',
+                        }}
+                        className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border-2 text-white transition active:scale-90"
+                      >
+                        {isTaskDone && <Check className="h-3 w-3 stroke-[3]" />}
+                      </button>
+                    )}
+
+                    <div
+                      style={{
+                        color: 'var(--node-text)',
+                        textShadow: darkMode
+                          ? '0 1px 6px rgba(15,23,42,0.95)'
+                          : '0 1px 5px rgba(255,255,255,0.98), 0 0 2px rgba(255,255,255,0.95)',
+                      }}
+                      className={`node-title-balanced text-[14px] leading-snug font-black tracking-tight sm:text-[15px] ${
+                        isTaskDone ? 'line-through opacity-65' : ''
+                      }`}
+                    >
+                      {node.title || 'Yeni Konu'}
+                    </div>
                   </div>
 
                   <div
@@ -1702,6 +1801,48 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     >
                       {node.techBadge}
                     </span>
+                  )}
+
+                  {/* RESPONSIVE MULTI-LINE BRANCH DESCRIPTION (`node.note`) */}
+                  {showSecondaryMeta && cleanNote.length > 0 && (
+                    <div
+                      data-testid="node-note-block"
+                      style={{
+                        borderColor: `${node.branchColor}38`,
+                        backgroundColor: darkMode
+                          ? 'rgba(15,23,42,0.68)'
+                          : 'rgba(248,250,252,0.92)',
+                      }}
+                      className="mt-1.5 w-full min-w-[228px] max-w-[288px] rounded-xl border px-3 py-2 text-left sm:min-w-[256px]"
+                    >
+                      <p
+                        style={{ color: 'var(--node-subtext)' }}
+                        className={`text-[11.5px] leading-relaxed font-medium break-words whitespace-pre-wrap ${
+                          node.noteCollapsed ? 'line-clamp-2' : ''
+                        }`}
+                      >
+                        {cleanNote}
+                      </p>
+                      {isLongNote && onToggleNoteCollapse && (
+                        <button
+                          type="button"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void hapticLight();
+                            onToggleNoteCollapse(node.id);
+                          }}
+                          className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-extrabold text-sky-600 hover:underline dark:text-sky-400"
+                        >
+                          <ChevronDown
+                            className={`h-3 w-3 transition-transform ${
+                              node.noteCollapsed ? '' : 'rotate-180'
+                            }`}
+                          />
+                          <span>{node.noteCollapsed ? 'Devamını Gör' : 'Daralt'}</span>
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {examMode === 'off' && !linkingFromNodeId && (
@@ -1797,8 +1938,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                   }}
                   className={`animate-card-reveal relative flex flex-col items-center rounded-2xl border-2 px-4 py-2 text-center backdrop-blur-md ${
                     isRoot
-                      ? 'min-w-[180px] max-w-[310px] px-5 py-2.5'
-                      : 'min-w-[122px] max-w-[304px]'
+                      ? 'min-w-[180px] max-w-[316px] px-5 py-2.5'
+                      : 'min-w-[122px] max-w-[312px]'
                   } ${
                     linkingFromNodeId && !isLinkSource
                       ? 'hover:ring-2 hover:ring-violet-500'
@@ -1809,6 +1950,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     className="mb-1 h-1 w-8 rounded-full"
                     style={{ backgroundColor: node.branchColor }}
                   />
+
+                  {priorityMeta && showSecondaryMeta && (
+                    <span
+                      className={`mb-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.2 text-[9.5px] font-black tracking-tight ${priorityMeta.cls}`}
+                    >
+                      <span>{priorityMeta.emoji}</span>
+                      <span>{priorityMeta.label}</span>
+                    </span>
+                  )}
 
                   {isEditing && !kbSnap.isTouchDevice ? (
                     <input
@@ -1847,14 +1997,44 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                       }}
                     />
                   ) : (
-                    <div
-                      className={`node-title-balanced leading-snug font-extrabold ${
-                        isRoot ? 'text-base sm:text-lg' : 'text-[13.5px] sm:text-sm'
-                      }`}
-                      style={{ color: 'var(--node-text)' }}
-                    >
-                      {node.title || 'Yeni Konu'}
+                    <div className="flex items-center justify-center gap-1.5">
+                      {hasTaskCheck && examMode === 'off' && (
+                        <button
+                          type="button"
+                          data-testid="node-checkbox-btn"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void hapticSuccess();
+                            onToggleNodeCheck?.(node.id);
+                          }}
+                          title={isTaskDone ? 'Tamamlandı (Geri al)' : 'Tamamlandı olarak işaretle'}
+                          style={{
+                            borderColor: isTaskDone ? '#10B981' : node.branchColor,
+                            backgroundColor: isTaskDone ? '#10B981' : 'transparent',
+                          }}
+                          className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border-2 text-white transition active:scale-90"
+                        >
+                          {isTaskDone && <Check className="h-3 w-3 stroke-[3]" />}
+                        </button>
+                      )}
+
+                      <div
+                        className={`node-title-balanced leading-snug font-extrabold ${
+                          isRoot ? 'text-base sm:text-lg' : 'text-[13.5px] sm:text-sm'
+                        } ${isTaskDone ? 'line-through opacity-65' : ''}`}
+                        style={{ color: 'var(--node-text)' }}
+                      >
+                        {node.title || 'Yeni Konu'}
+                      </div>
                     </div>
+                  )}
+
+                  {isUntitledRoot && !isSelected && !isEditing && examMode === 'off' && (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-500/12 px-2 py-0.5 text-[10px] font-extrabold text-sky-600 dark:text-sky-300">
+                      <Pencil className="h-2.5 w-2.5" />
+                      <span>Dokun: Ağaç İsmi & İkon Seç</span>
+                    </span>
                   )}
 
                   {showSecondaryMeta && node.subtitle && (
@@ -1876,6 +2056,48 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                     >
                       {node.techBadge}
                     </span>
+                  )}
+
+                  {/* RESPONSIVE MULTI-LINE BRANCH DESCRIPTION (`node.note`) */}
+                  {showSecondaryMeta && cleanNote.length > 0 && (
+                    <div
+                      data-testid="node-note-block"
+                      style={{
+                        borderColor: `${node.branchColor}38`,
+                        backgroundColor: darkMode
+                          ? 'rgba(15,23,42,0.55)'
+                          : 'rgba(248,250,252,0.92)',
+                      }}
+                      className="mt-1.5 w-full min-w-[228px] max-w-[292px] rounded-xl border px-3 py-2 text-left sm:min-w-[256px]"
+                    >
+                      <p
+                        style={{ color: 'var(--node-subtext)' }}
+                        className={`text-[11.5px] leading-relaxed font-medium break-words whitespace-pre-wrap ${
+                          node.noteCollapsed ? 'line-clamp-2' : ''
+                        }`}
+                      >
+                        {cleanNote}
+                      </p>
+                      {isLongNote && onToggleNoteCollapse && (
+                        <button
+                          type="button"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void hapticLight();
+                            onToggleNoteCollapse(node.id);
+                          }}
+                          className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-extrabold text-sky-600 hover:underline dark:text-sky-400"
+                        >
+                          <ChevronDown
+                            className={`h-3 w-3 transition-transform ${
+                              node.noteCollapsed ? '' : 'rotate-180'
+                            }`}
+                          />
+                          <span>{node.noteCollapsed ? 'Devamını Gör' : 'Daralt'}</span>
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {/* DRAG-TO-BRANCH & SINGLE-TAP `+` HANDLES (44x44 HIG Hit-Slop) */}
@@ -1982,6 +2204,85 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                   )}
                 </div>
               )}
+
+              {/* FLOATING CONTEXTUAL NODE QUICK-ACTION PILL (Effortless Naming, Icons/Photos, Cross-Link & Task) */}
+              {isSelected &&
+                !isEditing &&
+                !linkingFromNodeId &&
+                examMode === 'off' &&
+                !kbSnap.isKeyboardOpen && (
+                  <div
+                    data-testid="node-floating-actions"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      backgroundColor: 'var(--hud-bg)',
+                      borderColor: 'var(--hud-border)',
+                    }}
+                    className="absolute top-full left-1/2 z-30 mt-3.5 flex -translate-x-1/2 items-center gap-1 rounded-2xl border px-1.5 py-1 text-[10.5px] font-extrabold whitespace-nowrap shadow-xl backdrop-blur-xl"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void hapticLight();
+                        onStartEditing(node.id);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-xl bg-sky-500/15 px-2 py-1 text-sky-700 hover:bg-sky-500/25 active:scale-95 dark:text-sky-300"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      <span>{isRoot ? 'Ağaç İsmi' : 'İsim Düzenle'}</span>
+                    </button>
+
+                    {onOpenStickerGallery && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticLight();
+                          onOpenStickerGallery(node.id);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-xl bg-violet-500/15 px-2 py-1 text-violet-700 hover:bg-violet-500/25 active:scale-95 dark:text-violet-300"
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                        <span>İkon / Foto</span>
+                      </button>
+                    )}
+
+                    {onStartCrossLink && Object.keys(nodes).length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticLight();
+                          onStartCrossLink(node.id);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-xl bg-indigo-500/15 px-2 py-1 text-indigo-700 hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
+                      >
+                        <Link2 className="h-3 w-3" />
+                        <span>Bağlantı</span>
+                      </button>
+                    )}
+
+                    {onToggleNodeCheck && !isRoot && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticLight();
+                          onToggleNodeCheck(node.id);
+                        }}
+                        className={`inline-flex items-center gap-1 rounded-xl px-2 py-1 active:scale-95 ${
+                          hasTaskCheck
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-emerald-500/12 text-emerald-700 hover:bg-emerald-500/22 dark:text-emerald-300'
+                        }`}
+                      >
+                        <CheckSquare className="h-3 w-3" />
+                        <span>Görev</span>
+                      </button>
+                    )}
+                  </div>
+                )}
             </div>
           );
         })}

@@ -480,12 +480,31 @@ export class AIStickerDirector {
         clean,
         mapContext,
         branchColor,
-        24
+        28
       );
-      if (offlineWave.results.length > 0) {
+      const collected: VisualSearchResult[] = [...offlineWave.results];
+
+      // Multi-word Turkish decomposition fallback so users NEVER hit a missing-concept dead end!
+      const words = clean
+        .split(/[\s,;/+-]+/)
+        .map((w) => w.trim())
+        .filter((w) => w.length >= 3);
+      if (collected.length < 8 && words.length > 1) {
+        for (const word of words.slice(0, 3)) {
+          const wordRes = await VisualSearchOrchestrator.searchOfflineWave(
+            word,
+            mapContext,
+            branchColor,
+            10
+          );
+          collected.push(...wordRes.results);
+        }
+      }
+
+      if (collected.length > 0) {
         const seen = new Set<string>();
         const merged: VisualSearchResult[] = [];
-        for (const r of [...offlineWave.results, ...wave1.results]) {
+        for (const r of [...collected, ...wave1.results]) {
           if (!seen.has(r.id)) {
             seen.add(r.id);
             merged.push(r);

@@ -8,6 +8,7 @@ import {
   ZoomOut,
   Undo2,
   Trash2,
+  ListTree,
 } from 'lucide-react';
 import { useKeyboardInset } from './core/native/useKeyboardInset';
 import type {
@@ -18,6 +19,7 @@ import type {
   MindMapDocument,
   MindMapFolder,
   MindNode,
+  NodePriorityTag,
   NodeVisualStyle,
   PaywallTriggerReason,
   ProactiveBranchSuggestion,
@@ -40,6 +42,7 @@ import {
   computeTreeMeta,
   findBestOpenBranchPosition,
   resolveNewBranchColor,
+  resolveTreeCollisions,
 } from './core/canvas/RadialAutoLayout';
 import { generateMapThumbnailDataUrl } from './core/canvas/ThumbnailGenerator';
 import { EntitlementManager } from './core/monetization/EntitlementManager';
@@ -56,11 +59,14 @@ import { MiniMapRadar } from './components/MiniMapRadar';
 import { NoteCropperModal } from './components/NoteCropperModal';
 import { QuickSketchPopover } from './components/QuickSketchPopover';
 import { ExportSheet } from './components/ExportSheet';
+import { OutlineModal } from './components/OutlineModal';
 import { HomeWorkspace } from './components/HomeWorkspace';
 import { LifetimePaywallModal } from './components/LifetimePaywallModal';
 import {
   OnboardingOverlay,
-  ONBOARDING_STORAGE_KEY,
+  hasCompletedOnboardingSync,
+  checkNativeOnboardingCompleted,
+  persistOnboardingCompleted,
 } from './components/OnboardingOverlay';
 import {
   SettingsModal,
@@ -110,7 +116,7 @@ function shouldShowInitialOnboarding(): boolean {
     ) {
       return false;
     }
-    return localStorage.getItem(ONBOARDING_STORAGE_KEY) !== '1';
+    return !hasCompletedOnboardingSync();
   } catch {
     return false;
   }
@@ -166,6 +172,7 @@ export const App: React.FC = () => {
   // Modals, Sheets & Commercial Paywall State
   const [stickerDrawerOpen, setStickerDrawerOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const [aiStudioOpen, setAiStudioOpen] = useState(false);
   const [aiStudioInitialQuery, setAiStudioInitialQuery] = useState<string | null>(
     null
@@ -262,8 +269,26 @@ export const App: React.FC = () => {
     let mounted = true;
     const init = async () => {
       try {
+        const nativeDone = await checkNativeOnboardingCompleted();
+        if (nativeDone && mounted) {
+          setShowOnboarding(false);
+        }
+
         await LocalStore.purgeExpiredTrash(30);
         let existing = await LocalStore.listMaps();
+
+        // If user already created extra maps or edited their starter map previously, never show onboarding again
+        const hasPreviousUserActivity =
+          existing.length > 1 ||
+          existing.some(
+            (m) => !m.id.startsWith('tpl_') || m.updatedAt - m.createdAt > 15000
+          );
+        if (hasPreviousUserActivity) {
+          persistOnboardingCompleted();
+          if (mounted) {
+            setShowOnboarding(false);
+          }
+        }
 
         // One-time V4 Migration: prune extra V3 auto-seeded `tpl_*` templates so Free users start at 1 / 3 maps
         const alreadyMigrated =
@@ -901,13 +926,14 @@ export const App: React.FC = () => {
 
       setDoc((prev) => {
         const parent = prev.nodes[parentId];
+        const nextNodes: Record<string, MindNode> = {
+          ...prev.nodes,
+          ...(parent ? { [parentId]: { ...parent, collapsed: false } } : {}),
+          [newId]: newNode,
+        };
         return {
           ...prev,
-          nodes: {
-            ...prev.nodes,
-            ...(parent ? { [parentId]: { ...parent, collapsed: false } } : {}),
-            [newId]: newNode,
-          },
+          nodes: resolveTreeCollisions(nextNodes, prev.rootNodeId),
           updatedAt: Date.now(),
         };
       });
@@ -1167,8 +1193,74 @@ export const App: React.FC = () => {
     []
   );
 
-  const handleChangeStickerSize = useCallback(
-    (nodeId: string, stickerSize: StickerSizePreset) => {
+  const handleUpdateNodeNote = useCallback((nodeId: string, note: string) => {
+    setDoc((prev) => {
+      const target = prev.nodes[nodeId];
+      if (!target) return prev;
+      const nextNodes: Record<string, MindNode> = {
+        ...prev.nodes,
+        [nodeId]: {
+          ...target,
+          note: note || undefined,
+          noteCollapsed: false,
+        },
+      };
+      return {
+        ...prev,
+        nodes: resolveTreeCollisions(nextNodes, prev.rootNodeId),
+        updatedAt: Date.now(),
+      };
+    });
+  }, []);
+
+  const handleToggleNodeNoteCollapse = useCallback((nodeId: string) => {
+    setDoc((prev) => {
+      const target = prev.nodes[nodeId];
+      if (!target) return prev;
+      const nextNodes: Record<string, MindNode> = {
+        ...prev.nodes,
+        [nodeId]: {
+          ...target,
+          noteCollapsed: !target.noteCollapsed,
+        },
+      };
+      return {
+        ...prev,
+        nodes: resolveTreeCollisions(nextNodes, prev.rootNodeId),
+        updatedAt: Date.now(),
+      };
+    });
+  }, []);
+
+  const handleToggleNodeCheck = useCallback(
+    (nodeId: string) => {
+      pushHistory(doc);
+      setDoc((prev) => {
+        const target = prev.nodes[nodeId];
+        if (!target) return prev;
+        // Cycle: no checkbox -> unchecked (false) -> checked (true) -> unchecked (false)
+        // Wait: if clicked from canvas checkbox when already boolean, flip false<->true; if null/undefined, enable as false (ready to check) or true?
+        // Enabling as false first lets user add a task checkbox cleanly, and clicking checkbox marks it true!
+        const nextChecked =
+          typeof target.checked === 'boolean' ? !target.checked : false;
+        return {
+          ...prev,
+          nodes: {
+            ...prev.nodes,
+            [nodeId]: {
+              ...target,
+              checked: nextChecked,
+            },
+          },
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [doc, pushHistory]
+  );
+
+  const handleChangeNodePriorityTag = useCallback(
+    (nodeId: string, priorityTag: NodePriorityTag | null) => {
       pushHistory(doc);
       setDoc((prev) => {
         const target = prev.nodes[nodeId];
@@ -1179,9 +1271,32 @@ export const App: React.FC = () => {
             ...prev.nodes,
             [nodeId]: {
               ...target,
-              stickerSize,
+              priorityTag,
             },
           },
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [doc, pushHistory]
+  );
+
+  const handleChangeStickerSize = useCallback(
+    (nodeId: string, stickerSize: StickerSizePreset) => {
+      pushHistory(doc);
+      setDoc((prev) => {
+        const target = prev.nodes[nodeId];
+        if (!target) return prev;
+        const nextNodes: Record<string, MindNode> = {
+          ...prev.nodes,
+          [nodeId]: {
+            ...target,
+            stickerSize,
+          },
+        };
+        return {
+          ...prev,
+          nodes: resolveTreeCollisions(nextNodes, prev.rootNodeId),
           updatedAt: Date.now(),
         };
       });
@@ -1450,6 +1565,7 @@ export const App: React.FC = () => {
   const anyModalOpen =
     stickerDrawerOpen ||
     commandPaletteOpen ||
+    outlineOpen ||
     aiStudioOpen ||
     smartGenModal.open ||
     noteCropperOpen ||
@@ -1514,6 +1630,7 @@ export const App: React.FC = () => {
         if (e.key === 'Escape') {
           setStickerDrawerOpen(false);
           setCommandPaletteOpen(false);
+          setOutlineOpen(false);
           setAiStudioOpen(false);
           setSmartGenModal((s) => ({ ...s, open: false }));
           setNoteCropperOpen(false);
@@ -1680,6 +1797,7 @@ export const App: React.FC = () => {
             defaultNodeStyle={defaultNodeStyle}
             onToggleDefaultNodeStyle={handleToggleDefaultNodeStyle}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            onOpenOutline={() => setOutlineOpen(true)}
             onRenameMap={(newTitle) => {
               pushHistory(doc);
               setDoc((prev) => {
@@ -1790,6 +1908,17 @@ export const App: React.FC = () => {
             onFinishEditing={handleFinishEditing}
             onUpdateNodeTitle={handleUpdateNodeTitle}
             onDeleteNode={handleDeleteNode}
+            onToggleNodeCheck={handleToggleNodeCheck}
+            onToggleNoteCollapse={handleToggleNodeNoteCollapse}
+            onStartCrossLink={(fromId) => {
+              setSelectedNodeId(null);
+              setEditingNodeId(null);
+              setLinkingFromNodeId(fromId);
+            }}
+            onOpenStickerGallery={(nodeId) => {
+              setSelectedNodeId(nodeId);
+              setStickerDrawerOpen(true);
+            }}
             onCommitBatchNodePositions={handleCommitBatchNodePositions}
             onCreateChildBranch={handleCreateChildBranch}
             onCompleteCrossLink={handleCompleteCrossLink}
@@ -1845,6 +1974,9 @@ export const App: React.FC = () => {
             proactiveSuggestions={proactiveSuggestions}
             nodeScreenPos={activeNodeScreenPos}
             onUpdateNodeTitle={handleUpdateNodeTitle}
+            onUpdateNodeNote={handleUpdateNodeNote}
+            onToggleNodeCheck={handleToggleNodeCheck}
+            onChangePriorityTag={handleChangeNodePriorityTag}
             onRequestEditTitle={() => {
               if (activeStudioNode) {
                 setEditingNodeId(activeStudioNode.id);
@@ -2042,6 +2174,14 @@ export const App: React.FC = () => {
                     <Search className="h-3.5 w-3.5 text-violet-500" />
                     <span>İkon Ara</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setOutlineOpen(true)}
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 py-1.5 hover:bg-slate-500/10 active:scale-95"
+                  >
+                    <ListTree className="h-3.5 w-3.5 text-indigo-500" />
+                    <span>Anahat</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -2050,6 +2190,10 @@ export const App: React.FC = () => {
             isOpen={stickerDrawerOpen}
             initialQuery={targetModalNode?.title ?? ''}
             branchColor={targetModalNode?.branchColor ?? '#0EA5E9'}
+            currentStickerSize={targetModalNode?.stickerSize ?? 'md'}
+            onChangeStickerSize={(sz) =>
+              handleChangeStickerSize(targetModalNodeId, sz)
+            }
             mapContext={mapContext}
             onClose={() => setStickerDrawerOpen(false)}
             onApplySticker={(sticker) =>
@@ -2059,6 +2203,43 @@ export const App: React.FC = () => {
             onOpenAIStudio={(customQuery) =>
               handleRequestOpenAIStudio(customQuery)
             }
+          />
+
+          <OutlineModal
+            isOpen={outlineOpen}
+            nodes={doc.nodes}
+            rootNodeId={doc.rootNodeId}
+            onClose={() => setOutlineOpen(false)}
+            onUpdateNodeTitle={handleUpdateNodeTitle}
+            onUpdateNodeNote={handleUpdateNodeNote}
+            onToggleNodeCheck={handleToggleNodeCheck}
+            onAddChildBranch={(parentId) => {
+              const parent = doc.nodes[parentId];
+              if (!parent) return;
+              const pos = findBestOpenBranchPosition(
+                parent,
+                doc.nodes,
+                doc.rootNodeId
+              );
+              const col = resolveNewBranchColor(
+                parent,
+                doc.nodes,
+                doc.rootNodeId
+              );
+              handleCreateChildBranch(parent.id, pos.x, pos.y, col);
+            }}
+            onOpenStickerPickerForNode={(nodeId) => {
+              setSelectedNodeId(nodeId);
+              setStickerDrawerOpen(true);
+            }}
+            onJumpToNode={(node) => {
+              setSelectedNodeId(node.id);
+              setRadarJump((prev) => ({
+                x: node.x,
+                y: node.y,
+                seq: (prev?.seq ?? 0) + 1,
+              }));
+            }}
           />
 
           <CommandPaletteModal

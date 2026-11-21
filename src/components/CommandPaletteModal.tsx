@@ -9,8 +9,11 @@ import {
   Maximize2,
   Layers,
   Loader2,
+  Gift,
+  ImagePlus,
 } from 'lucide-react';
 import type {
+  IconTierFilter,
   MindNode,
   NodeVisualStyle,
   StickerAsset,
@@ -20,6 +23,7 @@ import {
   EntitlementManager,
   useEntitlements,
 } from '../core/monetization/EntitlementManager';
+import { triggerGalleryPhotoPicker } from '../core/visuals/PhotoStickerImporter';
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { normalizeTrToken } from '../core/visuals/SemanticTaxonomyTR';
@@ -66,6 +70,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createAsNewBranch, setCreateAsNewBranch] = useState(false);
+  const [tierFilter, setTierFilter] = useState<IconTierFilter>('all');
 
   const seqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -311,8 +316,43 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           {/* 25,209+ Offline Vector Sticker Instant Picker */}
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[11px] font-extrabold tracking-wider uppercase opacity-55">
-                25.000+ Çevrimdışı Vektör Çıkartma ({offlineHits.length})
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-extrabold tracking-wider uppercase opacity-55">
+                  25.000+ Çevrimdışı İkon ({offlineHits.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTierFilter((p) => (p === 'free' ? 'all' : 'free'))}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold ${
+                    tierFilter === 'free'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+                  }`}
+                >
+                  <Gift className="h-3 w-3" />
+                  <span>Sadece Ücretsiz</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    triggerGalleryPhotoPicker(branchColor, (sticker) => {
+                      if (createAsNewBranch) {
+                        onCreateBranchWithSticker(
+                          query.trim() || sticker.label || 'Fotoğraf',
+                          sticker
+                        );
+                      } else {
+                        onApplyStickerToActive(sticker);
+                      }
+                      void hapticSuccess();
+                      onClose();
+                    })
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-500/12 px-2 py-0.5 text-[10.5px] font-extrabold text-indigo-700 dark:text-indigo-300"
+                >
+                  <ImagePlus className="h-3 w-3" />
+                  <span>Galeriden Foto</span>
+                </button>
               </div>
               <div className="inline-flex items-center gap-1 rounded-xl bg-slate-500/10 p-0.5 text-[11px] font-extrabold">
                 <button
@@ -347,46 +387,57 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                {offlineHits.map((item, idx) => {
-                  const isProLocked = !EntitlementManager.isStickerFree(
+                {offlineHits
+                  .map((item, origIdx) => ({
                     item,
-                    idx,
-                    'command_palette'
-                  );
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => void handleChooseVisual(item, idx)}
-                      title={`${item.title} (${item.providerName})`}
-                      className="group relative flex flex-col items-center justify-center rounded-2xl border p-2 hover:-translate-y-0.5 hover:border-sky-500 hover:shadow-md active:scale-95"
-                      style={{
-                        backgroundColor: 'var(--hud-bg)',
-                        borderColor: 'var(--hud-border)',
-                      }}
-                    >
-                      {isProLocked && (
-                        <span className="pointer-events-none absolute top-1 right-1 rounded bg-amber-500 px-1 py-0.2 text-[8px] font-black text-slate-950">
-                          PRO
+                    origIdx,
+                    isFree: EntitlementManager.isStickerFree(
+                      item,
+                      origIdx,
+                      'command_palette'
+                    ),
+                  }))
+                  .filter((entry) => (tierFilter === 'free' ? entry.isFree : true))
+                  .map(({ item, origIdx, isFree }) => {
+                    const isProLocked = !isFree;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => void handleChooseVisual(item, origIdx)}
+                        title={`${item.title} (${item.providerName})`}
+                        className={`group relative flex flex-col items-center justify-center rounded-2xl border p-2 hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                          isProLocked
+                            ? 'border-amber-400/60 bg-gradient-to-br from-amber-500/12 to-violet-500/8'
+                            : 'hover:border-sky-500'
+                        }`}
+                        style={{
+                          backgroundColor: isProLocked ? undefined : 'var(--hud-bg)',
+                          borderColor: isProLocked ? undefined : 'var(--hud-border)',
+                        }}
+                      >
+                        {isProLocked && (
+                          <span className="pointer-events-none absolute top-1 right-1 rounded bg-amber-500 px-1 py-0.2 text-[8px] font-black text-slate-950">
+                            👑 PRO
+                          </span>
+                        )}
+                        <img
+                          src={item.previewUrl}
+                          alt={item.title}
+                          loading="lazy"
+                          className="h-12 w-12 object-contain group-hover:scale-108"
+                        />
+                        <span className="mt-1 line-clamp-1 w-full text-center text-[10px] font-bold opacity-75">
+                          {item.title}
                         </span>
-                      )}
-                      <img
-                        src={item.previewUrl}
-                        alt={item.title}
-                        loading="lazy"
-                        className="h-12 w-12 object-contain group-hover:scale-108"
-                      />
-                      <span className="mt-1 line-clamp-1 w-full text-center text-[10px] font-bold opacity-75">
-                        {item.title}
-                      </span>
-                      {busyId === item.id && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/80 dark:bg-slate-900/80">
-                          <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+                        {busyId === item.id && (
+                          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/80 dark:bg-slate-900/80">
+                            <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             )}
           </div>
