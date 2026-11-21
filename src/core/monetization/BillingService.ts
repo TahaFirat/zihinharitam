@@ -129,13 +129,18 @@ function getDefaultPlansMap(): Record<ProPlanTier, StoreProductInfo> {
 }
 
 /**
- * Unified Billing Adapter (Supports Monthly, Yearly & Lifetime Pro via StoreKit 2):
- * - On iOS (`Capacitor.getPlatform() === 'ios'`): Strictly uses Apple StoreKit 2 (`StoreKitPlugin.swift`).
- *   Never displays external payment links (100% Apple App Review Guideline 3.1.1 & 3.1.2 compliant).
- * - On Web / Dev Preview: Uses realistic local StoreKit Sandbox receipts so purchase & Restore Purchases
+ * Unified Native Billing Adapter (Apple StoreKit 2 on iOS + Google Play Billing v7.1 on Android):
+ * - On iOS (`Capacitor.getPlatform() === 'ios'`): Uses Apple StoreKit 2 (`StoreKitPlugin.swift`).
+ * - On Android (`Capacitor.getPlatform() === 'android'`): Uses Google Play Billing v7.1 (`PlayBillingPlugin.java`).
+ * - On Web / Dev Preview: Uses realistic local Sandbox receipts so purchase & Restore Purchases
  *   can be tested end-to-end offline and in automated verification suites.
  */
 export const BillingService = {
+  isNativeStorePlatform(): boolean {
+    const plat = Capacitor.getPlatform();
+    return Capacitor.isNativePlatform() && (plat === 'ios' || plat === 'android');
+  },
+
   isNativeIos(): boolean {
     return Capacitor.getPlatform() === 'ios';
   },
@@ -143,7 +148,7 @@ export const BillingService = {
   async fetchAllProPlans(): Promise<Record<ProPlanTier, StoreProductInfo>> {
     const defaults = getDefaultPlansMap();
 
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') {
+    if (this.isNativeStorePlatform()) {
       try {
         const { products } = await StoreKitBilling.getProducts({
           productIds: [...ALL_PRO_PRODUCT_IDS],
@@ -175,8 +180,8 @@ export const BillingService = {
     const planCfg = APP_RELEASE_CONFIG.iap.plans[tier] ?? APP_RELEASE_CONFIG.iap.plans.yearly;
     const productId = planCfg.productId;
 
-    // 1. Native Apple StoreKit 2 JWS-verified Purchase (Subscription or Non-Consumable)
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') {
+    // 1. Native Apple StoreKit 2 (iOS) or Google Play Billing v7.1 (Android)
+    if (this.isNativeStorePlatform()) {
       try {
         const res = await StoreKitBilling.purchaseLifetime({ productId });
         if (res.purchased) {
@@ -189,7 +194,7 @@ export const BillingService = {
           errorMessage:
             err instanceof Error
               ? err.message
-              : 'App Store satın alma işlemi tamamlanamadı.',
+              : 'Mağaza satın alma işlemi tamamlanamadı.',
         };
       }
     }
@@ -222,12 +227,12 @@ export const BillingService = {
   },
 
   async restorePurchases(): Promise<RestoreResult> {
-    // 1. Native Apple StoreKit 2 `AppStore.sync()` + `Transaction.currentEntitlements`
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') {
+    // 1. Native Apple StoreKit 2 (iOS) or Google Play Billing v7.1 (Android)
+    if (this.isNativeStorePlatform()) {
       try {
         const res = await StoreKitBilling.restorePurchases();
         if (res.isLifetimePro) {
-          await persistVerifiedEntitlement(true, 'restored_storekit2');
+          await persistVerifiedEntitlement(true, 'restored_native_store');
         }
         return {
           restored: res.restored,
@@ -240,7 +245,7 @@ export const BillingService = {
           errorMessage:
             err instanceof Error
               ? err.message
-              : 'App Store satın alımları eşitlenemedi.',
+              : 'Mağaza satın alımları eşitlenemedi.',
         };
       }
     }
@@ -279,11 +284,11 @@ export const BillingService = {
   async syncEntitlementsOnLaunch(): Promise<boolean> {
     const cached = await readCachedEntitlement();
 
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') {
+    if (this.isNativeStorePlatform()) {
       try {
         const res = await StoreKitBilling.checkEntitlements();
         if (res.isLifetimePro) {
-          await persistVerifiedEntitlement(true, 'launch_storekit2');
+          await persistVerifiedEntitlement(true, 'launch_native_store');
           return true;
         }
       } catch {

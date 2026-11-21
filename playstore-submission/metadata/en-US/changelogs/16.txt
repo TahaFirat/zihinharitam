@@ -1,0 +1,3 @@
+• NEW: Native Google Play Billing v7.1 subscriptions & Lifetime Pro support.
+• NEW: Multi-line branch descriptions, task checkboxes, Hierarchical Outliner & gallery photo import.
+• NEW: Free icon filter, S/M/L/XL sticker sizing & 3D custom sticker studio.

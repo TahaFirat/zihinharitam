@@ -83,8 +83,8 @@ jobs:
       - name: Stage Play Store Submission Package
         run: |
           mkdir -p playstore-dist
-          cp android/app/build/outputs/bundle/release/app-release.aab playstore-dist/ZihinHaritam-v1.0.2-b15-release.aab
-          cp android/app/build/outputs/apk/release/app-release.apk playstore-dist/ZihinHaritam-v1.0.2-b15-release.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab playstore-dist/ZihinHaritam-v1.0.2-b16-release.aab
+          cp android/app/build/outputs/apk/release/app-release.apk playstore-dist/ZihinHaritam-v1.0.2-b16-release.apk
           cp -r playstore-submission/* playstore-dist/ || true
           ls -lh playstore-dist/
 
@@ -99,10 +99,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.2-build15
-          name: ZihinHaritam v1.0.2 (Build 15 — iOS & Android Play Store)
+          name: ZihinHaritam v1.0.2 (Build 15/16 — iOS & Android Play Store)
           files: |
-            playstore-dist/ZihinHaritam-v1.0.2-b15-release.aab
-            playstore-dist/ZihinHaritam-v1.0.2-b15-release.apk
+            playstore-dist/ZihinHaritam-v1.0.2-b16-release.aab
+            playstore-dist/ZihinHaritam-v1.0.2-b16-release.apk
 
       - name: Upload directly to Google Play Console (when Service Account Secret is set)
         if: env.PLAY_SA_JSON != ''
@@ -110,7 +110,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.tahafirat.zihinharitam
-          releaseFiles: playstore-dist/ZihinHaritam-v1.0.2-b15-release.aab
+          releaseFiles: playstore-dist/ZihinHaritam-v1.0.2-b16-release.aab
           track: internal
           status: completed
           whatsNewDirectory: playstore-submission/metadata/tr-TR/changelogs
