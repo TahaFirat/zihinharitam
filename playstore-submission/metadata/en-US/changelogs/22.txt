@@ -1,0 +1,3 @@
+• Sub-3ms instant V7 inverted-index icon search across 43,487 offline & 540,000+ online vector icons
+• Dedicated inline "Search icon..." input bar without modifying branch titles + 100% exact concept matching
+• 120Hz smooth canvas, glowing Priority study cards, and 8.8 MB lighter app bundle

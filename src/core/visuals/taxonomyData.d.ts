@@ -12,12 +12,15 @@ export type OfflineTaxonomyDomain =
 export interface ExpandedSemanticQueryV3 {
   normalizedQuery: string;
   stemmedTokens: string[];
+  primaryEnTokens?: string[];
+  secondaryEnTokens?: string[];
   expandedEnTokens: string[];
   expandedTrTokens: string[];
   blockedTokens: string[];
   matchedAtlasIds: string[];
   detectedDomains: OfflineTaxonomyDomain[];
   isHomonym: boolean;
+  hasLexiconMatch?: boolean;
 }
 
 export function normalizeTrToken(raw: string): string;

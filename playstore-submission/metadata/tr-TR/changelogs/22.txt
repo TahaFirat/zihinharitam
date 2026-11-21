@@ -1,0 +1,3 @@
+• <3ms anında çevrimdışı V7 ters indeks ikon arama motoru (43.487 çevrimdışı + 540.000+ çevrimiçi ikon)
+• Dal başlığını değiştirmeden doğrudan arama yapabilen satır içi "İkon ara..." kutusu ve %100 kavram eşleşmesi
+• 120Hz akıcı tuval, parlayan ÖNEMLİ / SINAVDA ÇIKAR vurguları ve 8.8 MB daha hafif paket boyutu

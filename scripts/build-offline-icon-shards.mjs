@@ -10,9 +10,11 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT_DIR, 'public', 'offline-packs');
 const SHARDS_DIR = path.join(OUT_DIR, 'shards');
 const MANIFEST_PATH = path.join(OUT_DIR, 'search-manifest.json');
+const FAST_INDEX_PATH = path.join(OUT_DIR, 'fast-index-v7.json');
 const HASH_PATH = path.join(OUT_DIR, '.build-hash');
 
 const SHARD_COUNT = 40;
+const ICONS_PER_SHARD = 1110;
 
 const PACK_CONFIGS = [
   { prefix: 'fluent-emoji-flat', defaultMultiColor: true, qualityBoost: 1.34 },
@@ -67,7 +69,13 @@ function computeInputsHash() {
 }
 
 function shardsUpToDate(expectedHash) {
-  if (!fs.existsSync(HASH_PATH) || !fs.existsSync(MANIFEST_PATH)) return false;
+  if (
+    !fs.existsSync(HASH_PATH) ||
+    !fs.existsSync(MANIFEST_PATH) ||
+    !fs.existsSync(FAST_INDEX_PATH)
+  ) {
+    return false;
+  }
   const savedHash = fs.readFileSync(HASH_PATH, 'utf8').trim();
   if (savedHash !== expectedHash) return false;
   for (let i = 0; i < SHARD_COUNT; i++) {
@@ -297,7 +305,11 @@ function buildShards() {
       const { trTags, domain } = enrichEnglishIconTokensWithTurkish(allEnTokens, cfg.prefix);
 
       const fullId = `${cfg.prefix}:${iconKey}`;
-      const shardId = manifestItems.length % SHARD_COUNT;
+      // Contiguous locality-grouped shards so top colorful/3D hits reside together in Shards 0..9 (2-4 shard reads instead of 40!)
+      const shardId = Math.min(
+        SHARD_COUNT - 1,
+        Math.floor(manifestItems.length / ICONS_PER_SHARD)
+      );
 
       // V4 Freemium Tier Assignment:
       // ~1,520 general starter colorful icons (`tier: 'free'`), 23,600+ specialist/academic/medical/system-design/duotone (`tier: 'pro'`)
@@ -367,9 +379,9 @@ function buildShards() {
     fs.writeFileSync(shardFile, JSON.stringify(shardMaps[i]));
   }
 
-  // Write compact search-manifest.json
+  // Write compact search-manifest.json (kept for CLI/Node verification gates)
   const manifestPayload = {
-    version: 4,
+    version: 7,
     generatedAt: new Date().toISOString(),
     totalIcons: manifestItems.length,
     freeIcons: freeTierCounter,
@@ -378,12 +390,81 @@ function buildShards() {
     items: manifestItems,
   };
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifestPayload));
+
+  // Build pre-compiled Zero-CPU-Startup `fast-index-v7.json` for instant <3ms mobile/tablet Web Worker search!
+  const packList = PACK_CONFIGS.map((p) => p.prefix);
+  const packToIdx = new Map(packList.map((p, i) => [p, i]));
+  const domainList = [
+    'general',
+    'medicine_bio',
+    'system_cs',
+    'electronics',
+    'law',
+    'architecture',
+    'science',
+    'social_history',
+    'business',
+  ];
+  const domainToIdx = new Map(domainList.map((d, i) => [d, i]));
+
+  const rows = new Array(manifestItems.length);
+  const namePostings = Object.create(null);
+  const tagPostings = Object.create(null);
+  const vocabSet = new Set();
+
+  const tokenize = (s) =>
+    s
+      ? String(s)
+          .toLowerCase()
+          .split(/[\s\-_/.,:;()]+/)
+          .filter((t) => t.length >= 2)
+      : [];
+
+  for (let i = 0; i < manifestItems.length; i++) {
+    const it = manifestItems[i];
+    const colonIdx = it.id.indexOf(':');
+    const idKey = colonIdx >= 0 ? it.id.slice(colonIdx + 1) : it.id;
+    const defaultDerivedName = cleanIconDisplayName(idKey);
+    const compactName = it.name === defaultDerivedName ? '' : it.name;
+    const pIdx = packToIdx.get(it.pack) ?? 0;
+    const dIdx = domainToIdx.get(it.domain) ?? 0;
+    const flags = (it.isMultiColor ? 1 : 0) | (it.tier === 'free' ? 2 : 0);
+
+    rows[i] = [idKey, compactName, pIdx, dIdx, flags, it.shardId];
+
+    const nSet = new Set(tokenize(it.name));
+    for (const nt of nSet) {
+      if (!namePostings[nt]) namePostings[nt] = [];
+      namePostings[nt].push(i);
+      vocabSet.add(nt);
+    }
+
+    const tSet = new Set([...tokenize(it.enTags), ...tokenize(it.trTags)]);
+    for (const tg of tSet) {
+      if (nSet.has(tg)) continue;
+      if (!tagPostings[tg]) tagPostings[tg] = [];
+      tagPostings[tg].push(i);
+      vocabSet.add(tg);
+    }
+  }
+
+  const fastIndexPayload = {
+    version: 7,
+    totalIcons: manifestItems.length,
+    packs: packList,
+    domains: domainList,
+    rows,
+    namePostings,
+    tagPostings,
+    vocab: Array.from(vocabSet).sort(),
+  };
+  fs.writeFileSync(FAST_INDEX_PATH, JSON.stringify(fastIndexPayload));
   fs.writeFileSync(HASH_PATH, expectedHash);
 
   const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-  const manifestSizeMb = (fs.statSync(MANIFEST_PATH).size / (1024 * 1024)).toFixed(2);
+  const fastSizeMb = (fs.statSync(FAST_INDEX_PATH).size / (1024 * 1024)).toFixed(2);
   console.log(
-    `[offline-packs] SUCCESS: Compiled ${manifestItems.length} offline icons (${freeTierCounter} free starter + ${manifestItems.length - freeTierCounter} Pro specialist) across ${SHARD_COUNT} shards (manifest: ${manifestSizeMb} MB) in ${elapsed}s!`
+    `[offline-packs] SUCCESS: Compiled ${manifestItems.length} offline icons (${freeTierCounter} free + ${manifestItems.length - freeTierCounter} Pro) across ${SHARD_COUNT} locality-grouped shards (fast-index-v7: ${fastSizeMb} MB) in ${elapsed}s!`
   );
 }
 

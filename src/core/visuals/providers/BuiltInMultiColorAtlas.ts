@@ -1441,9 +1441,10 @@ export const EXTRA_MULTI_COLOR_ATLAS: BespokeVisualEntry[] = [
 ];
 
 /**
- * Unified 152+ Bespoke Multi-Color Sticker Atlas (`SystemDesignVisualPack` + `EXTRA_MULTI_COLOR_ATLAS`)
+ * Unified 164+ Bespoke Multi-Color Sticker Atlas (`SystemDesignVisualPack` + `EXTRA_MULTI_COLOR_ATLAS`)
+ * Strictly deduplicated by `id` so React keys are 100% unique across every view!
  */
-export const BUILT_IN_MULTI_COLOR_ATLAS: BespokeVisualEntry[] = [
+const RAW_COMBINED_ATLAS: BespokeVisualEntry[] = [
   ...EXTRA_MULTI_COLOR_ATLAS,
   ...SYSTEM_DESIGN_AND_ATLAS_PACK.map(
     (p): BespokeVisualEntry => ({
@@ -1456,6 +1457,15 @@ export const BUILT_IN_MULTI_COLOR_ATLAS: BespokeVisualEntry[] = [
     })
   ),
 ];
+
+const seenAtlasEntryIds = new Set<string>();
+export const BUILT_IN_MULTI_COLOR_ATLAS: BespokeVisualEntry[] = RAW_COMBINED_ATLAS.filter(
+  (entry) => {
+    if (seenAtlasEntryIds.has(entry.id)) return false;
+    seenAtlasEntryIds.add(entry.id);
+    return true;
+  }
+);
 
 export function getAtlasStickerById(id: string): BespokeVisualEntry | undefined {
   return BUILT_IN_MULTI_COLOR_ATLAS.find((entry) => entry.id === id);
@@ -1551,46 +1561,54 @@ export function searchBuiltInAtlasV3(
     let rawScore = 0;
 
     // 0. Direct Taxonomy Cluster Pack ID Match (highest semantic authority)
-    if (directMatchedAtlasSet.has(entry.id)) {
-      rawScore += 90;
+    const isDirectPackMatch = directMatchedAtlasSet.has(entry.id);
+    const isExactPhraseMatch = allPhraseSet.has(normFull);
+    if (isDirectPackMatch) {
+      rawScore += 110;
+    }
+    if (isExactPhraseMatch) {
+      rawScore += 85;
     }
 
-    // 1. Exact full query match against keyword phrase
-    if (allPhraseSet.has(normFull)) {
-      rawScore += 65;
-    }
-
-    // 2. Exact token matches against user's query tokens
+    // 2. Exact token matches against user's query tokens (require multi-token or direct keyword match so generic words like "kitap" or "para" don't hijack specialist diagrams!)
+    let matchedQueryTokenCount = 0;
     for (const qt of queryTokens) {
       if (allPhraseSet.has(qt) || allWordTokens.has(qt)) {
-        rawScore += 32;
+        matchedQueryTokenCount++;
+        rawScore += 28;
       }
     }
 
-    // 3. Safe Turkish stem match (strictly bounded length delta <= 3 to prevent 'mikro-' or 'eko-' collisions)
+    // 3. Safe Turkish stem match (strictly bounded length delta <= 3)
     for (const stem of queryStems) {
       if (stem === 'mikro' || stem === 'ekono' || stem === 'ucan') continue;
       for (const wt of allWordTokens) {
         if (wt.length >= 4 && wt.startsWith(stem) && wt.length - stem.length <= 3) {
-          rawScore += 18;
+          rawScore += 14;
           break;
         }
       }
     }
 
-    // 4. Expanded semantic English & Turkish concept tokens
-    for (const enTok of expandedEnSet) {
-      if (allPhraseSet.has(enTok) || allWordTokens.has(enTok)) {
-        rawScore += 22;
+    // 4. Expanded semantic tokens ONLY boost when entry already has a direct/phrase/multi-token anchor
+    if (isDirectPackMatch || isExactPhraseMatch || matchedQueryTokenCount >= 2) {
+      for (const enTok of expandedEnSet) {
+        if (allPhraseSet.has(enTok) || allWordTokens.has(enTok)) {
+          rawScore += 16;
+        }
       }
-    }
-    for (const trTok of expandedTrSet) {
-      if (allPhraseSet.has(trTok) || allWordTokens.has(trTok)) {
-        rawScore += 24;
+      for (const trTok of expandedTrSet) {
+        if (allPhraseSet.has(trTok) || allWordTokens.has(trTok)) {
+          rawScore += 18;
+        }
       }
     }
 
-    if (rawScore < 20) continue;
+    // Strict relevance gate: do NOT return tangential specialist diagrams for single everyday words like "kitap", "araba", "kedi", "para"!
+    if (!isDirectPackMatch && !isExactPhraseMatch && matchedQueryTokenCount < 2) {
+      continue;
+    }
+    if (rawScore < 45) continue;
 
     // 5. Context Tie-Breaker ONLY on genuine matches (1.18x for homonyms, 1.05x same discipline)
     if (expanded.isHomonym && entry.discipline === discipline) {

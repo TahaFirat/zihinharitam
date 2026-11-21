@@ -46,9 +46,27 @@ const DISCIPLINE_DEFAULT_OFFLINE_SEEDS: Record<DisciplineProfile, string> = {
   law_governance: 'adalet mahkeme sozlesme kanun muhur',
   architecture_civil: 'kemer kubbe sutun plan kopru bina',
   exact_sciences: 'atom matematik teleskop denklem grafik',
-  humanities_social: 'tarih felsefe kitap harita sanat',
-  business_economics: 'finans strateji grafik buyume hedef',
+  humanities_social: 'fikir hedef kitap yildiz takvim harita',
+  business_economics: 'hedef fikir grafik roket odul takvim',
 };
+
+const PLACEHOLDER_NODE_TITLES = new Set([
+  'yeni konu',
+  'yeni zihin haritasi',
+  'merkez konu',
+  'ana konu',
+  'alt dal',
+  'basliksiz',
+]);
+
+export function sanitizeNodeSearchQuery(rawQuery: string): string {
+  const clean = rawQuery.trim();
+  if (!clean) return '';
+  if (PLACEHOLDER_NODE_TITLES.has(normalizeTrToken(clean))) {
+    return '';
+  }
+  return clean;
+}
 
 const federatedCache = new Map<string, FederatedGalleryResponse>();
 // Lazy worker init: avoids parsing manifest/shards during cold startup to keep launch instant & device cool!
@@ -65,16 +83,20 @@ export class VisualSearchOrchestrator {
     mapContext: MapContextAnalysis,
     _branchColor = '#0EA5E9'
   ): FederatedGalleryResponse {
-    const clean = query.trim();
+    const clean = sanitizeNodeSearchQuery(query);
     const offlineDomain = mapDisciplineToOfflineDomain(mapContext.discipline);
     const expanded = expandSemanticQueryV3(clean, offlineDomain);
-    const atlasMatches = searchBuiltInAtlasV3(clean, mapContext.discipline, 32);
+    const atlasMatches = searchBuiltInAtlasV3(clean, mapContext.discipline, 24);
 
     const results: VisualSearchResult[] = [];
+    const seenIds = new Set<string>();
     const seenUrls = new Set<string>();
 
     const pushUnique = (item: VisualSearchResult) => {
-      if (!item.previewUrl || seenUrls.has(item.previewUrl)) return;
+      if (!item.previewUrl || seenIds.has(item.id) || seenUrls.has(item.previewUrl)) {
+        return;
+      }
+      seenIds.add(item.id);
       seenUrls.add(item.previewUrl);
       results.push(item);
     };
@@ -125,16 +147,16 @@ export class VisualSearchOrchestrator {
     query: string,
     mapContext: MapContextAnalysis,
     branchColor = '#0EA5E9',
-    limit = 96
+    limit = 56
   ): Promise<FederatedGalleryResponse> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    const clean = query.trim();
+    const clean = sanitizeNodeSearchQuery(query);
     const wave1 = this.getInstantWave1Results(clean, mapContext, branchColor);
 
     const effectiveWorkerQuery =
       clean.length > 0
         ? clean
-        : DISCIPLINE_DEFAULT_OFFLINE_SEEDS[mapContext.discipline] || 'bilim teknoloji';
+        : DISCIPLINE_DEFAULT_OFFLINE_SEEDS[mapContext.discipline] || 'fikir hedef kitap yildiz';
 
     const workerRes = await OfflineVisualSearchClient.searchShards(
       effectiveWorkerQuery,
@@ -174,8 +196,10 @@ export class VisualSearchOrchestrator {
 
     merged.sort((a, b) => b.score - a.score);
 
-    const elapsedMs =
+    const wallMs =
       (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+    const elapsedMs =
+      workerRes.elapsedMs > 0 ? Math.min(wallMs, workerRes.elapsedMs) : wallMs;
 
     const expanded =
       workerRes.expanded ??
@@ -204,15 +228,15 @@ export class VisualSearchOrchestrator {
     branchColor = '#0EA5E9',
     signal?: AbortSignal
   ): Promise<FederatedGalleryResponse> {
-    const clean = query.trim();
-    const cacheKey = `v3::${mapContext.discipline}::${branchColor}::${clean.toLocaleLowerCase('tr-TR')}`;
+    const clean = sanitizeNodeSearchQuery(query);
+    const cacheKey = `v7::${mapContext.discipline}::${branchColor}::${clean.toLocaleLowerCase('tr-TR')}`;
     const cached = federatedCache.get(cacheKey);
-    if (cached && cached.results.length >= 24) {
+    if (cached && cached.results.length >= 20) {
       return cached;
     }
 
-    // Step 1: Primary 100% Offline Wave (`<8ms`)
-    const offlineWave = await this.searchOfflineWave(clean, mapContext, branchColor, 120);
+    // Step 1: Primary 100% Offline Wave (`<4ms` via V7 Pre-Compiled Inverted Index)
+    const offlineWave = await this.searchOfflineWave(clean, mapContext, branchColor, 72);
 
     if (
       signal?.aborted ||
@@ -228,27 +252,31 @@ export class VisualSearchOrchestrator {
       expanded.blockedTokens.map((b) => normalizeTrToken(b))
     );
 
-    // Optional Cross-Lingual Wiki Bridge (bounded at 400ms, cancelable)
+    // Optional Cross-Lingual Wiki Bridge (bounded at 380ms, cancelable)
     const wikiBridge =
       clean.length >= 2
         ? await Promise.race([
             resolveViaTurkishWikipedia(clean, signal),
-            new Promise<null>((r) => setTimeout(() => r(null), 400)),
+            new Promise<null>((r) => setTimeout(() => r(null), 380)),
           ])
         : null;
 
     if (signal?.aborted) return offlineWave;
 
+    const primaryEnList = expanded.primaryEnTokens ?? expanded.expandedEnTokens;
     const enTerms = [
       ...(wikiBridge?.enTitle ? [wikiBridge.enTitle.toLowerCase()] : []),
-      ...expanded.expandedEnTokens.slice(0, 6),
+      ...primaryEnList.slice(0, 4),
     ];
     const trTerms = [clean, ...expanded.expandedTrTokens.slice(0, 4)];
     const primaryEn = enTerms[0] || clean;
 
     const settled = await Promise.race([
       Promise.allSettled([
-        searchIconifyLive(clean, enTerms, branchColor, signal),
+        searchIconifyLive(clean, enTerms, branchColor, signal, {
+          hasExactOfflineLexicon: Boolean(expanded.hasLexiconMatch),
+          blockedTokens: expanded.blockedTokens,
+        }),
         AIStickerDirector.searchSharedPool(clean, 4),
         searchArasaacPictograms(trTerms, enTerms, signal),
         searchWikimediaAtlas(
@@ -259,7 +287,7 @@ export class VisualSearchOrchestrator {
         ),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
-        setTimeout(() => r([]), 1250)
+        setTimeout(() => r([]), 1150)
       ),
     ]);
 
@@ -279,35 +307,45 @@ export class VisualSearchOrchestrator {
     const combined: VisualSearchResult[] = [];
     const seenUrls = new Set<string>();
     const seenIds = new Set<string>();
+    const seenIconifyIds = new Set<string>();
 
     const pushUnique = (item: VisualSearchResult) => {
       if (!item.previewUrl || seenUrls.has(item.previewUrl) || seenIds.has(item.id)) {
         return;
       }
+      if (item.iconifyId && seenIconifyIds.has(item.iconifyId)) {
+        return;
+      }
       seenUrls.add(item.previewUrl);
       seenIds.add(item.id);
+      if (item.iconifyId) seenIconifyIds.add(item.iconifyId);
       combined.push(item);
     };
 
-    // Keep offline vector precision hits at the top
-    for (const offItem of offlineWave.results.slice(0, 36)) {
+    // When offline already found strong primary matches (`offlineTopScore >= 0.92` & >= 12 hits),
+    // keep our instant colorful offline vectors anchored in Top #1..#16 and place online enrichment after them (`<= 0.89`)!
+    // When offline lacked an exact primary hit (`offlineTopScore < 0.92`, e.g. uncommon word translated live),
+    // let exact colorful live Iconify hits (`0.965..0.994`) rise straight to #1..#6!
+    const offlineHasStrongPrimary =
+      offlineWave.results.length >= 12 &&
+      (offlineWave.results[0]?.score ?? 0) >= 0.92;
+
+    for (const offItem of offlineWave.results) {
       pushUnique(offItem);
     }
 
-    // Interleave verified online enrichment (photos, scientific Wikimedia, ARASAAC)
     for (const s of settled) {
       if (s.status === 'fulfilled') {
         for (const remoteItem of s.value) {
           if (isRemoteItemRelevant(remoteItem)) {
-            pushUnique(remoteItem);
+            pushUnique(
+              offlineHasStrongPrimary
+                ? { ...remoteItem, score: Math.min(remoteItem.score, 0.89) }
+                : remoteItem
+            );
           }
         }
       }
-    }
-
-    // Append remaining offline shard hits up to 180+ visuals
-    for (const offItem of offlineWave.results.slice(36)) {
-      pushUnique(offItem);
     }
 
     // Zero-Miss Safety Net: if a rare/unusual query still has < 6 icons, seamlessly append
@@ -327,7 +365,7 @@ export class VisualSearchOrchestrator {
     combined.sort((a, b) => b.score - a.score);
 
     const response: FederatedGalleryResponse = {
-      results: combined.slice(0, 180),
+      results: combined.slice(0, 140),
       metaphorChips: offlineWave.metaphorChips,
       resolvedEnglish: primaryEn,
       elapsedMs: offlineWave.elapsedMs,

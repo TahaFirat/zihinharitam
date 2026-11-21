@@ -123,6 +123,7 @@ const TURKISH_STOPWORDS = new Set([
 const PROTECTED_ROOTS = new Set([
   'denge', 'ulke', 'ilke', 'madde', 'proje', 'bolge', 'belge', 'golge', 'hazine',
   'idare', 'irade', 'ihale', 'mahkeme', 'medrese', 'kulliye', 'sermaye', 'butce',
+  'kitabe', 'hikaye', 'makale', 'risale', 'mukavele', 'felsefe', 'belediye',
   'vergi', 'reaya', 'tasra', 'ordu', 'kale', 'cami', 'kopru', 'hucre', 'dalga',
   'parca', 'nokta', 'halka', 'kutle', 'enerji', 'teori', 'yapi', 'konu', 'soru',
   'baski', 'etki', 'tepki', 'katki', 'yetki', 'bitki', 'uyku', 'duygu', 'kaygi',
@@ -681,70 +682,77 @@ export const RAW_TAXONOMY_CLUSTERS = [
   ],
   [
     'social_history',
-    'cografya|harita|iklim|hava durumu|yagis|sicaklik|ruzgar|basinc|nufus|goc|yerlesme|tarim|sanayi|ulasim|turizm|akarsu|gol|deniz|okyanus|dag|ova|vadi|erozyon|ekoloji|cevre',
-    'globe|earth|map|compass|mountain|sun|cloud-rain|wind|thermometer|trees|droplet|anchor|ship|plane|recycle',
+    'cografya|fiziki cografya|yeryuzu|kita|harita bilgisi',
+    'globe|earth|world-map|map|compass|mountain',
     '',
     'sci_earth_tectonics',
   ],
   [
     'social_history',
-    'edebiyat|siir|roman|hikaye|tiyatro|destan|divan edebiyati|dilbilim|gramer|felsefe|etik|epistemoloji|mantik|sosyoloji|toplum|kultur|antropoloji|sanat|muzik|resim|sinema|egitim|pedagoji',
-    'feather|pen|book|book-open|theater|masks|palette|music|lightbulb|users|graduation-cap|school|library|message-circle',
+    'edebiyat|divan edebiyati|halk edebiyati|siir|roman|destan',
+    'scroll|fountain-pen|feather|open-book|book',
     '',
-    'law_constitution_book',
+    '',
   ],
 
   // ==================== 8. TEMEL BİLİMLER: FİZİK, KİMYA & MATEMATİK ====================
   [
     'science',
     'atom|cekirdek|proton|notron|elektron|orbital|kuantum|foton|radyoaktivite|fisyon|fuzyon|nukleer|parcacik|relativite|gorelilik',
-    'atom|orbit|radiation|sparkles|bolt|sun|planet|science|physics',
+    'atom|atom-symbol|orbit|radiation|radioactive|sparkles',
     '',
     'sci_atom_orbital_v3|sci_atom_quantum',
   ],
   [
     'science',
-    'fizik|mekanik|kuvvet|hareket|hiz|ivme|momentum|is|guc|kinetik|potansiyel|termodinamik|isi|entropi|akiskan|basinc|kaldirma kuvveti|optik|prizma|ayna|mercek|dalga|ses|manyetizma|miknatis',
-    'magnet|prism|rainbow|flame|thermometer|gauge|rocket|pendulum|scale|sun|eye|wave|bolt|physics',
+    'optik|prizma|isik kirilmasi|spektrum|tayf',
+    'rainbow|prism|crystal-ball|sun|eye',
     '',
-    'sci_prism_spectrum_v3|sci_optics_prism|sci_magnet_flux|sci_pendulum_wave',
+    'sci_prism_spectrum_v3|sci_optics_prism',
+  ],
+  [
+    'science',
+    'fizik|mekanik|kinematik|dinamik|sarkac|harmonik hareket',
+    'magnet|pendulum|gear|rocket|gauge|bolt',
+    '',
+    'sci_pendulum_wave|sci_magnet_flux',
   ],
   [
     'science',
     'kimya|element|periyodik tablo|bilesik|karisim|molekul|kovalent|iyonik|reaksiyon|tepkime|mol|stokiyometri|cozelti|asit|baz|ph|titrasyon|elektroliz|organik kimya|polimer|kataliz',
-    'flask|beaker|test-tube|atom|molecule|droplet|flame|pipette|filter|laboratory|chemistry',
+    'alembic|flask|beaker|test-tube|atom|molecule|droplet|petri-dish',
     '',
     'sci_molecule_bonds|bio_erlenmeyer_flask|sci_titration_acid|bio_test_tubes',
   ],
   [
     'science',
-    'matematik|cebir|geometri|trigonometri|kalkulus|turev|integral|limit|fonksiyon|polinom|logaritma|karmasik sayi|matris|lineer cebir|vektor|olasilik|istatistik|standart sapma|hipotez|kume|grafik',
-    'calculator|abacus|function|infinity|pi|sigma|chart-line|chart-bar|chart-pie|compass|ruler|triangle|cube|grid|math',
+    'matematik|cebir|geometri|trigonometri|kalkulus|turev|integral|limit|fonksiyon|polinom|logaritma|karmasik sayi|matris|lineer cebir',
+    'abacus|calculator|function|infinity|pi|sigma|triangular-ruler|chart-increasing',
     '',
-    'sci_calculus_integral|sci_gauss_bell|sci_polar_unit_circle',
+    'sci_calculus_integral|sci_polar_unit_circle',
   ],
   [
     'science',
-    'astronomi|uzay|evren|galaksi|yildiz|gunes|ay|gezegen|yorunge|kara delik|teleskop|uydu|roket|astronot|astrofizik',
-    'rocket|planet|saturn|moon|sun|star|sparkles|telescope|satellite|globe|orbit',
+    'olasilik|istatistik|standart sapma|hipotez|gauss|normal dagilim',
+    'bar-chart|pie-chart|chart-increasing|game-die|calculator',
+    '',
+    'sci_gauss_bell',
+  ],
+  [
+    'science',
+    'astronomi|uzay|evren|galaksi|yorunge|kara delik|astrofizik',
+    'telescope|ringed-planet|milky-way|rocket|satellite|star',
     '',
     'sci_atom_orbital_v3',
   ],
 
-  // ==================== 9. İKTİSAT, İŞLETME & GÜNLÜK KAVRAMLAR ====================
+  // ==================== 9. İKTİSAT & İŞLETME ====================
   [
     'business',
-    'iktisat|ekonomi|arz|talep|enflasyon|faiz|merkez bankasi|para|doviz|borsa|yatirim|finans|muhasebe|butce|vergi|gsyih|buyume|ticaret|ihracat|ithalat|pazarlama|girisimcilik|strateji|yonetim|lojistik',
-    'chart-line|trending-up|coins|dollar|bank|wallet|credit-card|briefcase|pie-chart|shopping-cart|truck|target|award|handshake',
+    'iktisat|ekonomi|arz ve talep|arz talep|enflasyon|faiz|merkez bankasi|gsyih|makro iktisat|mikro iktisat',
+    'chart-increasing|chart-line|trending-up|coins|bank|balance-scale',
     '',
-    'soc_supply_demand|sci_gauss_bell',
-  ],
-  [
-    'general',
-    'hedef|planlama|takvim|zaman|gorev|proje|fikir|yaraticilik|inovasyon|problem cozme|karar|analiz|rapor|sunum|iletisim|takim|basari|motivasyon|kitap|not|sinav|calisma|arastirma',
-    'target|calendar|clock|check-circle|lightbulb|sparkles|puzzle|clipboard|presentation|users|trophy|star|book|pencil|search',
-    '',
-    '',
+    'soc_supply_demand',
   ],
 ];
 
@@ -913,22 +921,14 @@ export const HOMONYM_DISCIPLINE_RULES = {
   },
 };
 
-// Precompile fast lookup tables on first load
+// Precompile fast lookup tables on first load (1-to-1 Exact Lexicon FIRST, Academic Domain Clusters SECOND!)
 const trPhraseMap = new Map();
 const enToTrReverseMap = new Map();
 
-for (const row of RAW_TAXONOMY_CLUSTERS) {
-  const [domain, trPipe, enPipe, blockedPipe = '', packsPipe = ''] = row;
-  const trTerms = trPipe.split('|').map((s) => normalizeTrToken(s)).filter(Boolean);
-  const enTokens = enPipe.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean);
-  const blockedTokens = blockedPipe.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean);
-  const packIds = packsPipe.split('|').map((s) => s.trim()).filter(Boolean);
-
-  const clusterObj = { domain, trTerms, enTokens, blockedTokens, packIds };
-
-  for (const tr of trTerms) {
+function registerClusterInLookup(clusterObj) {
+  for (const tr of clusterObj.trTerms) {
     const existing = trPhraseMap.get(tr) || [];
-    existing.push(clusterObj);
+    if (!existing.includes(clusterObj)) existing.push(clusterObj);
     trPhraseMap.set(tr, existing);
 
     const stemmed = tr.split(' ').map(stemTurkishSafe).join(' ');
@@ -939,8 +939,9 @@ for (const row of RAW_TAXONOMY_CLUSTERS) {
     }
   }
 
-  // Reverse index English visual tokens -> Turkish synonyms & domain for build-time shard tagging!
-  for (const en of enTokens) {
+  // Tight reverse tagging: attach ONLY the first 3 primary Turkish synonyms so unrelated siblings never cross-tag!
+  const maxTrReverse = clusterObj.isExactLexicon ? 3 : 2;
+  for (const en of clusterObj.enTokens) {
     const cleanEn = en.replace(/[^a-z0-9-]/g, '');
     if (!cleanEn) continue;
     let entry = enToTrReverseMap.get(cleanEn);
@@ -948,35 +949,25 @@ for (const row of RAW_TAXONOMY_CLUSTERS) {
       entry = { trSet: new Set(), domains: new Set() };
       enToTrReverseMap.set(cleanEn, entry);
     }
-    entry.domains.add(domain);
-    for (const tr of trTerms.slice(0, 8)) {
+    entry.domains.add(clusterObj.domain);
+    for (const tr of clusterObj.trTerms.slice(0, maxTrReverse)) {
       entry.trSet.add(tr);
     }
   }
 }
 
+// 1. Register strict 1-to-1 DIRECT_TR_EN_PAIRS & EXTRA_DOMAIN_LEXICON FIRST (`isExactLexicon: true`)
 for (const [trWord, enArr] of Object.entries(DIRECT_TR_EN_PAIRS)) {
   const normTr = normalizeTrToken(trWord);
-  const clusterObj = {
+  if (!normTr) continue;
+  registerClusterInLookup({
     domain: 'general',
     trTerms: [normTr],
-    enTokens: enArr,
+    enTokens: enArr.map((s) => s.trim().toLowerCase()).filter(Boolean),
     blockedTokens: [],
     packIds: [],
-  };
-  const existing = trPhraseMap.get(normTr) || [];
-  existing.push(clusterObj);
-  trPhraseMap.set(normTr, existing);
-
-  for (const en of enArr) {
-    let entry = enToTrReverseMap.get(en);
-    if (!entry) {
-      entry = { trSet: new Set(), domains: new Set() };
-      enToTrReverseMap.set(en, entry);
-    }
-    entry.domains.add('general');
-    entry.trSet.add(normTr);
-  }
+    isExactLexicon: true,
+  });
 }
 
 for (const [domain, rows] of Object.entries(EXTRA_DOMAIN_LEXICON)) {
@@ -985,34 +976,32 @@ for (const [domain, rows] of Object.entries(EXTRA_DOMAIN_LEXICON)) {
     if (!trPart || !enPart) continue;
     const trTerms = trPart.split(',').map((s) => normalizeTrToken(s)).filter(Boolean);
     const enTokens = enPart.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-    const clusterObj = {
+    registerClusterInLookup({
       domain,
       trTerms,
       enTokens,
       blockedTokens: [],
       packIds: [],
-    };
-    for (const tr of trTerms) {
-      const existing = trPhraseMap.get(tr) || [];
-      existing.push(clusterObj);
-      trPhraseMap.set(tr, existing);
-      const stemmed = tr.split(' ').map(stemTurkishSafe).join(' ');
-      if (stemmed && stemmed !== tr) {
-        const ex2 = trPhraseMap.get(stemmed) || [];
-        if (!ex2.includes(clusterObj)) ex2.push(clusterObj);
-        trPhraseMap.set(stemmed, ex2);
-      }
-    }
-    for (const en of enTokens) {
-      let entry = enToTrReverseMap.get(en);
-      if (!entry) {
-        entry = { trSet: new Set(), domains: new Set() };
-        enToTrReverseMap.set(en, entry);
-      }
-      entry.domains.add(domain);
-      for (const tr of trTerms.slice(0, 6)) entry.trSet.add(tr);
-    }
+      isExactLexicon: true,
+    });
   }
+}
+
+// 2. Register Specialist Academic Clusters (`RAW_TAXONOMY_CLUSTERS`)
+for (const row of RAW_TAXONOMY_CLUSTERS) {
+  const [domain, trPipe, enPipe, blockedPipe = '', packsPipe = ''] = row;
+  const trTerms = trPipe.split('|').map((s) => normalizeTrToken(s)).filter(Boolean);
+  const enTokens = enPipe.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const blockedTokens = blockedPipe.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const packIds = packsPipe.split('|').map((s) => s.trim()).filter(Boolean);
+  registerClusterInLookup({
+    domain,
+    trTerms,
+    enTokens,
+    blockedTokens,
+    packIds,
+    isExactLexicon: false,
+  });
 }
 
 /**
@@ -1027,11 +1016,9 @@ export function enrichEnglishIconTokensWithTurkish(enTokens, packPrefix) {
     domainVotes.set('medicine_bio', 4);
     trTags.add('tip');
     trTags.add('saglik');
-    trTags.add('klinik');
   } else if (packPrefix === 'devicon' || packPrefix === 'skill-icons' || packPrefix === 'logos') {
     domainVotes.set('system_cs', 4);
     trTags.add('yazilim');
-    trTags.add('teknoloji');
   }
 
   for (const tok of enTokens) {
@@ -1054,17 +1041,14 @@ export function enrichEnglishIconTokensWithTurkish(enTokens, packPrefix) {
   }
 
   return {
-    trTags: Array.from(trTags).slice(0, 18).join(' '),
+    trTags: Array.from(trTags).slice(0, 10).join(' '),
     domain: bestDomain,
   };
 }
 
 /**
- * Expands a Turkish or English user query into high-precision BM25 search tokens,
+ * Expands a Turkish or English user query into high-precision Primary & Secondary visual tokens,
  * matched built-in Atlas IDs, and strict Prefix-Collision blocked tokens!
- *
- * ZERO CONTEXT POLLUTION:
- * `disciplineHint` NEVER injects unrelated words; it ONLY disambiguates homonyms (`köprü`, `kapak`, `ağ`, `hücre`, `kuyruk`, `kemer`, `dalga`).
  */
 export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_cs') {
   const norm = normalizeTrToken(rawQuery);
@@ -1072,12 +1056,15 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     return {
       normalizedQuery: '',
       stemmedTokens: [],
+      primaryEnTokens: [],
+      secondaryEnTokens: [],
       expandedEnTokens: [],
       expandedTrTokens: [],
       blockedTokens: [],
       matchedAtlasIds: [],
       detectedDomains: [],
       isHomonym: false,
+      hasLexiconMatch: false,
     };
   }
 
@@ -1087,25 +1074,32 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   const stemmedWords = words.map(stemTurkishSafe).filter(Boolean);
   const stemmedPhrase = stemmedWords.join(' ');
 
-  const expandedEn = new Set();
-  const expandedTr = new Set([norm, ...stemmedWords.filter((w) => w.length >= 3 && !TURKISH_STOPWORDS.has(w))]);
+  const primaryEn = new Set();
+  const secondaryEn = new Set();
+  const expandedTr = new Set([
+    norm,
+    ...stemmedWords.filter((w) => w.length >= 3 && !TURKISH_STOPWORDS.has(w)),
+  ]);
   const blocked = new Set();
   const atlasIds = new Set();
   const domains = new Set();
   let isHomonym = false;
 
-  // 1. Check Homonym Table first (e.g., `köprü`, `kapak`, `ağ`, `hücre`, `kuyruk`, `kemer`, `dalga`)
-  for (const st of [norm, stemmedPhrase, ...stemmedWords]) {
-    const hom = HOMONYM_DISCIPLINE_RULES[st];
-    if (hom && words.length <= 2) {
-      isHomonym = true;
-      const picked = hom[disciplineHint] || hom.default;
-      for (const e of picked.en) expandedEn.add(e);
-      for (const p of picked.packs) atlasIds.add(p);
+  // 1. Check Homonym Table ONLY when the user typed the 1-word ambiguous homonym alone (`köprü`, `kapak`, `ağ`, `hücre`, `kuyruk`, `kemer`, `dalga`)
+  if (words.length === 1) {
+    for (const st of [norm, stemmedPhrase, ...stemmedWords]) {
+      const hom = HOMONYM_DISCIPLINE_RULES[st];
+      if (hom) {
+        isHomonym = true;
+        const picked = hom[disciplineHint] || hom.default;
+        picked.en.slice(0, 4).forEach((e) => primaryEn.add(e));
+        picked.en.slice(4).forEach((e) => secondaryEn.add(e));
+        for (const p of picked.packs) atlasIds.add(p);
+      }
     }
   }
 
-  // 2. Full phrase match & multi-word n-gram matches (Highest specificity FIRST so primary concept tokens lead!)
+  // 2. Full phrase match & multi-word n-gram matches (Highest specificity FIRST!)
   const phraseClusters = [];
   const wordClusters = [];
   const tryLookup = (key, targetArr) => {
@@ -1131,21 +1125,26 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   }
 
   for (let i = 0; i < words.length; i++) {
-    // Prevent 3-letter ambiguous fragments like `ser` (from `şer'i`) or `has` from hijacking unrelated medical/math clusters when phrase already matched!
     if (phraseClusters.length > 0 && stemmedWords[i].length <= 3) continue;
     tryLookup(words[i], wordClusters);
     tryLookup(stemmedWords[i], wordClusters);
   }
 
+  // If an exact 1-to-1 lexicon entry (`isExactLexicon`) matched for a single-word everyday query,
+  // still harvest `blockedTokens` / `packIds` from specialist clusters, but keep ONLY tight tokens as `primaryEn`!
+  const hasExactLexiconHit =
+    phraseClusters.some((c) => c.isExactLexicon) ||
+    wordClusters.some((c) => c.isExactLexicon);
+
   const matchedClusters = [...phraseClusters, ...wordClusters];
 
-  // 3. Safe >=6-char prefix match ONLY inside same compound stem when zero exact matches found
-  if (matchedClusters.length === 0 && norm.length >= 6) {
+  // 3. Safe >=5-char prefix match while user is mid-typing a Turkish word (e.g. `mikroorg`, `helikop`, `ekokardi`)
+  if (matchedClusters.length === 0 && norm.length >= 5) {
     for (const [key, clusters] of trPhraseMap.entries()) {
       if (
-        key.length >= 6 &&
+        key.length >= 5 &&
         !key.includes(' ') &&
-        (key.startsWith(norm) || (norm.length >= 7 && norm.startsWith(key)))
+        (key.startsWith(norm) || (norm.length >= 6 && norm.startsWith(key)))
       ) {
         if (
           (norm.startsWith('mikro') && key.slice(0, 8) !== norm.slice(0, 8)) ||
@@ -1156,27 +1155,57 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
         for (const c of clusters) {
           if (!matchedClusters.includes(c)) matchedClusters.push(c);
         }
+        if (matchedClusters.length >= 4) break;
       }
     }
   }
 
-  for (const c of matchedClusters) {
+  for (const c of phraseClusters) {
     domains.add(c.domain);
-    for (const e of c.enTokens) expandedEn.add(e);
-    for (const t of c.trTerms.slice(0, 4)) expandedTr.add(t);
+    if (c.isExactLexicon) {
+      c.enTokens.forEach((e) => primaryEn.add(e));
+    } else {
+      c.enTokens.slice(0, 5).forEach((e) => primaryEn.add(e));
+      c.enTokens.slice(5).forEach((e) => secondaryEn.add(e));
+    }
+    for (const t of c.trTerms.slice(0, 3)) expandedTr.add(t);
     for (const b of c.blockedTokens) blocked.add(b);
     for (const p of c.packIds) atlasIds.add(p);
   }
 
-  // Only pass raw query words as English tokens if they are >= 3 chars AND not Turkish stopwords
-  // (Prevents 2-letter Turkish words like `ve`, `de`, `ki`, `su` from matching country flags like `circle-flags:ve`!)
-  for (const w of words) {
-    if (w.length >= 3 && !TURKISH_STOPWORDS.has(w)) {
-      // Only inject raw word if no Turkish taxonomy cluster already translated the query, OR if it looks like an English/tech term
-      if (matchedClusters.length === 0 || /^[a-z0-9-]+$/.test(w)) {
-        if (matchedClusters.length === 0) {
-          expandedEn.add(w);
-        }
+  for (const c of wordClusters) {
+    domains.add(c.domain);
+    for (const b of c.blockedTokens) blocked.add(b);
+    for (const p of c.packIds) atlasIds.add(p);
+
+    if (c.isExactLexicon) {
+      c.enTokens.forEach((e) => primaryEn.add(e));
+    } else if (!hasExactLexiconHit && phraseClusters.length === 0) {
+      c.enTokens.slice(0, 4).forEach((e) => primaryEn.add(e));
+      c.enTokens.slice(4).forEach((e) => secondaryEn.add(e));
+    } else {
+      c.enTokens.slice(0, 4).forEach((e) => secondaryEn.add(e));
+    }
+  }
+
+  // If no phrase/word cluster matched (only mid-typing prefix fallback), populate from matchedClusters
+  if (phraseClusters.length === 0 && wordClusters.length === 0) {
+    for (const c of matchedClusters) {
+      domains.add(c.domain);
+      c.enTokens.slice(0, 4).forEach((e) => primaryEn.add(e));
+      for (const b of c.blockedTokens) blocked.add(b);
+      for (const p of c.packIds) atlasIds.add(p);
+    }
+  }
+
+  // Always preserve any direct English/tech words typed by the user (e.g. `react`, `docker`, `python`, `redis`, `dragon`, `sushi`)!
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const sw = stemmedWords[i];
+    if (w.length >= 2 && !TURKISH_STOPWORDS.has(w)) {
+      const matchedTr = trPhraseMap.has(w) || trPhraseMap.has(sw);
+      if (!matchedTr && (w.length >= 3 || words.length === 1)) {
+        primaryEn.add(w);
       }
     }
   }
@@ -1209,19 +1238,31 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  // Ensure no blocked token accidentally sits in expandedEn
   for (const b of blocked) {
-    expandedEn.delete(b);
+    primaryEn.delete(b);
+    secondaryEn.delete(b);
   }
+  for (const p of primaryEn) {
+    secondaryEn.delete(p);
+  }
+
+  const primaryArr = Array.from(primaryEn);
+  const secondaryArr = Array.from(secondaryEn);
+
+  const hasLexiconMatch =
+    isHomonym || phraseClusters.length > 0 || wordClusters.length > 0;
 
   return {
     normalizedQuery: norm,
     stemmedTokens: stemmedWords,
-    expandedEnTokens: Array.from(expandedEn),
+    primaryEnTokens: primaryArr,
+    secondaryEnTokens: secondaryArr,
+    expandedEnTokens: [...primaryArr, ...secondaryArr],
     expandedTrTokens: Array.from(expandedTr),
     blockedTokens: Array.from(blocked),
     matchedAtlasIds: Array.from(atlasIds),
     detectedDomains: Array.from(domains),
     isHomonym,
+    hasLexiconMatch,
   };
 }

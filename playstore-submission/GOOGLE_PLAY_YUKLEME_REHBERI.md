@@ -4,9 +4,9 @@ Tüm teknik gereksinimler (**Android API 36 / Target SDK 36**, **Google Play Bil
 
 ---
 
-## 1. Kalıcı İmzalı Uygulama Paketleri (`versionCode: 21`, `versionName: 1.0.2`)
-- **Google Play Yükleme Dosyası (`.aab`)**: `playstore-submission/ZihinHaritam-v1.0.2-b21-release.aab`
-- **Doğrudan Android Cihazda Test İçin (`.apk`)**: `playstore-submission/ZihinHaritam-v1.0.2-b21-release.apk`
+## 1. Kalıcı İmzalı Uygulama Paketleri (`versionCode: 22`, `versionName: 1.0.2`)
+- **Google Play Yükleme Dosyası (`.aab`)**: `playstore-submission/ZihinHaritam-v1.0.2-b22-release.aab`
+- **Doğrudan Android Cihazda Test İçin (`.apk`)**: `playstore-submission/ZihinHaritam-v1.0.2-b22-release.apk`
 - **Paket Kimliği (`applicationId`)**: `com.tahafirat.zihinharitam`
 - **Kalıcı Yükleme Anahtarı (Saklayın / Yedekleyin)**: `.secrets/zihinharitam-upload.jks`
   - **Alias**: `zihinharitam-upload`

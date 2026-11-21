@@ -23,7 +23,10 @@ import {
 } from '../core/visuals/AIStickerDirector';
 import { triggerGalleryPhotoPicker } from '../core/visuals/PhotoStickerImporter';
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
-import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
+import {
+  sanitizeNodeSearchQuery,
+  VisualSearchOrchestrator,
+} from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
@@ -77,7 +80,11 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setConceptText(initialConcept || mapContext.parentTitle || 'Akademik Kavram');
+      const cleanInit =
+        sanitizeNodeSearchQuery(initialConcept) ||
+        sanitizeNodeSearchQuery(mapContext.parentTitle) ||
+        'Akademik Kavram';
+      setConceptText(cleanInit);
       setVariationRound(0);
       setBrokenFallbackIds(new Set());
       setCategoryFilter('all');

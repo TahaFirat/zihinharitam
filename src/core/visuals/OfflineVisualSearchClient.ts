@@ -114,6 +114,21 @@ class OfflineVisualSearchManager {
   private status: OfflineEngineStatus = { ready: false, totalIndexed: 0 };
   private listeners = new Set<(s: OfflineEngineStatus) => void>();
 
+  private prewarmScheduled = false;
+
+  public prewarm(): void {
+    if (this.worker || this.prewarmScheduled || typeof window === 'undefined') return;
+    this.prewarmScheduled = true;
+    const trigger = () => {
+      this.init();
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(trigger, { timeout: 450 });
+    } else {
+      window.setTimeout(trigger, 220);
+    }
+  }
+
   public init(): void {
     if (this.worker || typeof Worker === 'undefined') return;
     try {

@@ -43,7 +43,10 @@ import {
 } from '../core/monetization/EntitlementManager';
 import { triggerGalleryPhotoPicker } from '../core/visuals/PhotoStickerImporter';
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
-import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
+import {
+  sanitizeNodeSearchQuery,
+  VisualSearchOrchestrator,
+} from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 import {
   dismissNativeKeyboard,
@@ -78,8 +81,8 @@ interface KeyboardVisualBarProps {
   onRemoveSticker: (nodeId: string) => void;
   onChangeBranchColor: (nodeId: string, color: string) => void;
   onDeleteNode: (nodeId: string) => void;
-  onOpenGalleryDrawer: () => void;
-  onOpenAIStudio: () => void;
+  onOpenGalleryDrawer: (customQuery?: string) => void;
+  onOpenAIStudio: (customQuery?: string) => void;
   onOpenNoteCropper: () => void;
   onOpenQuickSketch: () => void;
   onStartCrossLink: (fromNodeId: string) => void;
@@ -152,6 +155,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
 
   const [styleMode, setStyleMode] = useState<VisualStyleMode | 'all'>('all');
   const [tierFilter, setTierFilter] = useState<IconTierFilter>('all');
+  const [customIconQuery, setCustomIconQuery] = useState('');
+  const [isSearchingCustomIcon, setIsSearchingCustomIcon] = useState(false);
   const [allFederated, setAllFederated] = useState<VisualSearchResult[]>([]);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set());
   const [loadingRemote, setLoadingRemote] = useState(false);
@@ -163,6 +168,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
+  const iconSearchInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
@@ -192,16 +198,22 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     };
   }, [activeNode?.id]);
 
-  const searchQuery = activeNode?.title ?? '';
+  const searchQuery = useMemo(() => {
+    const manual = customIconQuery.trim();
+    if (manual.length > 0) return manual;
+    return sanitizeNodeSearchQuery(activeNode?.title ?? '');
+  }, [customIconQuery, activeNode?.title]);
   const activeBranchColor = activeNode?.branchColor ?? '#0EA5E9';
 
   useEffect(() => {
+    setCustomIconQuery('');
+    setIsSearchingCustomIcon(false);
     setShowTechBadgeInput(false);
     setShowNoteEditor(false);
     setBrokenIds(new Set());
   }, [activeNode?.id]);
 
-  // 0ms Built-In Atlas -> 16ms Offline 25,209-icon Shard Search -> 185ms Online Enrichment
+  // 0ms Built-In Atlas -> <3ms V7 Pre-Compiled Inverted Index Worker -> 155ms Live 546K Enrichment
   useEffect(() => {
     if (!activeNode) return;
 
@@ -213,56 +225,68 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       mapContext,
       activeBranchColor
     );
-    setAllFederated(wave1.results);
+    if (wave1.results.length > 0) {
+      setAllFederated(wave1.results);
+    }
     if (carouselRef.current) {
       carouselRef.current.scrollLeft = 0;
     }
 
-    const offlineTimer = window.setTimeout(async () => {
-      const offlineWave = await VisualSearchOrchestrator.searchOfflineWave(
-        searchQuery,
-        mapContext,
-        activeBranchColor,
-        110
-      );
-      if (seq !== requestSeqRef.current || controller.signal.aborted) return;
+    let cancelled = false;
+    let onlineTimer: number | undefined;
+
+    void VisualSearchOrchestrator.searchOfflineWave(
+      searchQuery,
+      mapContext,
+      activeBranchColor,
+      48
+    ).then((offlineWave) => {
+      if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
+        return;
+      }
       setAllFederated(offlineWave.results);
       if (typeof offlineWave.elapsedMs === 'number') {
         setOfflineMs(Math.max(1, Math.round(offlineWave.elapsedMs)));
       }
-    }, 16);
 
-    let onlineTimer: number | undefined;
-    if (
-      searchQuery.trim().length >= 2 &&
-      typeof navigator !== 'undefined' &&
-      navigator.onLine
-    ) {
-      onlineTimer = window.setTimeout(async () => {
-        if (seq !== requestSeqRef.current || controller.signal.aborted) return;
-        setLoadingRemote(true);
-        try {
-          const fullRes = await VisualSearchOrchestrator.searchFederatedGallery(
-            searchQuery,
-            mapContext,
-            activeBranchColor,
-            controller.signal
-          );
-          if (seq === requestSeqRef.current && !controller.signal.aborted) {
-            setAllFederated(fullRes.results);
+      // Only trigger online 546K+ enrichment on the compact bar when offline had sparse or weak matches (`<16` hits or top `<0.92`)!
+      // Common words (`kedi`, `limon`, `araba`, `kitap`, `roket`, `kalp`, `mahkeme`) stay 100% instant (<3ms), zero-network & zero-shift!
+      const needsOnlineEnrichment =
+        searchQuery.trim().length >= 2 &&
+        typeof navigator !== 'undefined' &&
+        navigator.onLine &&
+        (offlineWave.results.length < 16 ||
+          (offlineWave.results[0]?.score ?? 0) < 0.92);
+
+      if (needsOnlineEnrichment) {
+        onlineTimer = window.setTimeout(async () => {
+          if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
+            return;
           }
-        } finally {
-          if (seq === requestSeqRef.current && !controller.signal.aborted) {
-            setLoadingRemote(false);
+          setLoadingRemote(true);
+          try {
+            const fullRes = await VisualSearchOrchestrator.searchFederatedGallery(
+              searchQuery,
+              mapContext,
+              activeBranchColor,
+              controller.signal
+            );
+            if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
+              setAllFederated(fullRes.results);
+            }
+          } finally {
+            if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
+              setLoadingRemote(false);
+            }
           }
-        }
-      }, 185);
-    } else {
-      setLoadingRemote(false);
-    }
+        }, 120);
+      } else {
+        setLoadingRemote(false);
+      }
+    });
 
     return () => {
-      clearTimeout(offlineTimer);
+      cancelled = true;
       if (onlineTimer !== undefined) clearTimeout(onlineTimer);
       controller.abort();
     };
@@ -326,7 +350,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
 
   const isTightAboveKeyboard = kb.isKeyboardOpen && kb.viewportH < 360;
   const isSlimKeyboardMode =
-    kb.isKeyboardOpen && (kb.isPhone || kb.isTablet) && !showNoteEditor;
+    kb.isKeyboardOpen &&
+    (kb.isPhone || kb.isTablet) &&
+    !showNoteEditor &&
+    !isSearchingCustomIcon;
 
   const handleSelectVisual = async (
     item: VisualSearchResult,
@@ -449,7 +476,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           const dy = swipeStartYRef.current - e.changedTouches[0].clientY;
           swipeStartYRef.current = null;
           if (dy > 48 && !showNoteEditor) {
-            onOpenGalleryDrawer();
+            onOpenGalleryDrawer(searchQuery);
           }
         }
       }}
@@ -480,7 +507,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         {useFullWidthBottomSheet && !isSlimKeyboardMode && (
           <button
             type="button"
-            onClick={onOpenGalleryDrawer}
+            onClick={() => onOpenGalleryDrawer(searchQuery)}
             title="Tam Görsel Galerisi İçin Yukarı Kaydırın"
             className="mx-auto mb-1 flex w-full items-center justify-center py-0.5"
           >
@@ -634,9 +661,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               <button
                 type="button"
                 onPointerDown={(e) => e.preventDefault()}
-                onClick={onOpenGalleryDrawer}
+                onClick={() => onOpenGalleryDrawer(searchQuery)}
                 title="43.000+ Çevrimdışı & 540.000+ Görsel Galerisi"
-                className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl border border-sky-500/40 bg-sky-500/15 text-sky-700 active:scale-95 dark:text-sky-300"
+                className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl border border-sky-500/40 bg-sky-500/15 text-sky-700 active:scale-95 dark:text-indigo-300 dark:text-sky-300"
               >
                 <Search className="h-3.5 w-3.5" />
               </button>
@@ -730,7 +757,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               </span>
               <button
                 type="button"
-                onClick={onOpenGalleryDrawer}
+                onClick={() => onOpenGalleryDrawer(searchQuery)}
                 className="shrink-0 rounded-lg bg-sky-500 px-2 py-0.5 text-[10px] font-extrabold text-white"
               >
                 Tüm İkonlar
@@ -788,9 +815,56 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           </div>
         )}
 
-        {/* ROW 1: Free/Pro Filter + Style Tabs + Gallery Photo Import + 3D Studio + Gallery */}
+        {/* ROW 1: Dedicated Instant Icon Search + Free/Pro Filter + Style Tabs + Gallery Photo Import + 3D Studio + Gallery */}
         {!isSlimKeyboardMode && (
           <div className="no-scrollbar mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            {/* Dedicated Instant Icon Search Input (Searches 540K+ icons independently WITHOUT changing branch title!) */}
+            <div
+              className="flex min-h-[34px] w-[148px] shrink-0 items-center gap-1 rounded-xl border bg-white/85 px-2 shadow-2xs focus-within:w-[178px] focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 sm:w-[172px] sm:focus-within:w-[205px] dark:bg-slate-900/85"
+              style={{ borderColor: customIconQuery ? '#0EA5E9' : 'var(--hud-border)' }}
+              title="Dal başlığını değiştirmeden istediğiniz ikonu anında arayın (örn. roket, kedi, kılıç)"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+              <input
+                ref={iconSearchInputRef}
+                type="text"
+                data-testid="bar-dedicated-icon-search"
+                value={customIconQuery}
+                onFocus={() => setIsSearchingCustomIcon(true)}
+                onBlur={() => setIsSearchingCustomIcon(false)}
+                onChange={(e) => setCustomIconQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setCustomIconQuery('');
+                    iconSearchInputRef.current?.blur();
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    iconSearchInputRef.current?.blur();
+                  }
+                }}
+                placeholder="İkon ara..."
+                className="allow-text-input min-w-0 flex-1 bg-transparent text-xs font-extrabold outline-none"
+                style={{ color: 'var(--node-text)' }}
+              />
+              {customIconQuery.length > 0 && (
+                <button
+                  type="button"
+                  data-testid="bar-dedicated-icon-clear"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setCustomIconQuery('');
+                    iconSearchInputRef.current?.focus();
+                  }}
+                  aria-label="İkon aramasını temizle"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-500/15 opacity-80 hover:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
             {/* 1-Tap Free vs Pro Filter (`[Tümü | 🎁 Ücretsiz | 👑 Pro 3D]`) */}
             <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-emerald-500/25 bg-emerald-500/8 p-0.5">
               <button
@@ -882,7 +956,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             <button
               type="button"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={onOpenGalleryDrawer}
+              onClick={() => onOpenGalleryDrawer(searchQuery)}
               title="43.000+ Çevrimdışı & 540.000+ Online Görsel Galerisi"
               className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-2.5 text-[11.5px] font-extrabold whitespace-nowrap text-sky-700 hover:bg-sky-500/25 active:scale-95 dark:text-sky-300"
             >
@@ -893,7 +967,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             <button
               type="button"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={onOpenAIStudio}
+              onClick={() => onOpenAIStudio(searchQuery)}
               title="3D & Özel Tasarım Çıkartma Stüdyosu (%100 Ücretsiz)"
               className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 text-[11.5px] font-extrabold whitespace-nowrap text-white shadow-xs active:scale-95"
             >
@@ -1010,7 +1084,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   <button
                     type="button"
                     onPointerDown={(e) => e.preventDefault()}
-                    onClick={onOpenAIStudio}
+                    onClick={() => onOpenAIStudio(searchQuery)}
                     className="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-1.5 font-extrabold text-white"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
@@ -1060,7 +1134,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                     <img
                       src={item.previewUrl}
                       alt={item.title}
-                      loading="lazy"
+                      loading={origIdx < 16 ? 'eager' : 'lazy'}
                       decoding="async"
                       draggable={false}
                       onError={() => {

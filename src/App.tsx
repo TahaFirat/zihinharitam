@@ -47,6 +47,7 @@ import {
 import { generateMapThumbnailDataUrl } from './core/canvas/ThumbnailGenerator';
 import { EntitlementManager } from './core/monetization/EntitlementManager';
 import { TopicContextIntelligence } from './core/visuals/TopicContextIntelligence';
+import { OfflineVisualSearchClient } from './core/visuals/OfflineVisualSearchClient';
 import { VisualSearchOrchestrator } from './core/visuals/VisualSearchOrchestrator';
 import { CanvasStage } from './components/CanvasStage';
 import { TopMinimalHUD } from './components/TopMinimalHUD';
@@ -171,6 +172,9 @@ export const App: React.FC = () => {
 
   // Modals, Sheets & Commercial Paywall State
   const [stickerDrawerOpen, setStickerDrawerOpen] = useState(false);
+  const [stickerDrawerCustomQuery, setStickerDrawerCustomQuery] = useState<
+    string | null
+  >(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [aiStudioOpen, setAiStudioOpen] = useState(false);
@@ -237,6 +241,11 @@ export const App: React.FC = () => {
   const pushHistory = useCallback((snapshot: MindMapDocument) => {
     setPastDocs((prev) => [...prev.slice(-34), snapshot]);
     setFutureDocs([]);
+  }, []);
+
+  // Pre-warm V7 Pre-Compiled Offline Icon Search Engine in background idle time so 1st tap is <3ms!
+  useEffect(() => {
+    OfflineVisualSearchClient.prewarm();
   }, []);
 
   // Theme preference synchronization (`light` | `dark` | `system`)
@@ -2059,9 +2068,12 @@ export const App: React.FC = () => {
             onRemoveSticker={handleRemoveSticker}
             onChangeBranchColor={handleChangeBranchColor}
             onDeleteNode={handleDeleteNode}
-            onOpenGalleryDrawer={() => setStickerDrawerOpen(true)}
-            onOpenAIStudio={() =>
-              handleRequestOpenAIStudio(activeStudioNode?.title || null)
+            onOpenGalleryDrawer={(customQuery) => {
+              setStickerDrawerCustomQuery(customQuery ?? null);
+              setStickerDrawerOpen(true);
+            }}
+            onOpenAIStudio={(customQuery) =>
+              handleRequestOpenAIStudio(customQuery || activeStudioNode?.title || null)
             }
             onOpenNoteCropper={handleRequestOpenNoteCropper}
             onOpenQuickSketch={() => setSketchPopoverOpen(true)}
@@ -2246,14 +2258,19 @@ export const App: React.FC = () => {
 
           <StickerGalleryDrawer
             isOpen={stickerDrawerOpen}
-            initialQuery={targetModalNode?.title ?? ''}
+            initialQuery={
+              stickerDrawerCustomQuery ?? targetModalNode?.title ?? ''
+            }
             branchColor={targetModalNode?.branchColor ?? '#0EA5E9'}
             currentStickerSize={targetModalNode?.stickerSize ?? 'md'}
             onChangeStickerSize={(sz) =>
               handleChangeStickerSize(targetModalNodeId, sz)
             }
             mapContext={mapContext}
-            onClose={() => setStickerDrawerOpen(false)}
+            onClose={() => {
+              setStickerDrawerOpen(false);
+              setStickerDrawerCustomQuery(null);
+            }}
             onApplySticker={(sticker) =>
               handleApplySticker(targetModalNodeId, sticker)
             }

@@ -40,7 +40,7 @@ const TRIGGER_HEADERS: Record<
       'Mevcut 3 haritan her zaman açık kalır. Sınırsız harita, 540.000+ ikon ve sınav modu için sana en uygun planı seç.',
   },
   node_limit: {
-    badge: '45 Düğüm Sınırına Ulaşıldı',
+    badge: '60 Düğüm Sınırına Ulaşıldı',
     title: 'Dev Akademik Haritalar İçin Sınırları Kaldır',
     subtitle:
       'Harita başına sınırsız dal, alt konu ve çapraz mimari bağlantı ile tüm ders müfredatını tek posterde topla.',
@@ -362,7 +362,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
                   Yıllık Pro Abonelik
                 </div>
                 <div className="text-[11px] font-semibold opacity-75">
-                  Aylık sadece <strong>250 ₺</strong>’ye gelir • 12 ay tam erişim
+                  Aylık sadece <strong>249 ₺</strong>’ye gelir • 12 ay tam erişim
                 </div>
               </div>
             </div>

@@ -10,6 +10,6 @@ Zihin Haritası: ZihinHaritam, iPhone ve iPad için tasarlanmış en hızlı ve 
 
 ÜCRETSİZ KATMAN VE ESNEK PRO PLANLARI
 • Ücretsiz olarak 3 aktif görsel zihin haritası, harita başına 60 düğüm ve 3.600+ başlangıç ikonu her zaman açıktır.
-• İhtiyacınıza göre esnek Aylık Pro (500 ₺/ay), %50 avantajlı Yıllık Pro (2.999 ₺/yıl — aylık 250 ₺'ye gelir) veya aboneliksiz tek seferlik Ömür Boyu Pro (4.999 ₺) planlarından birini seçerek sınırsız harita, 43.000+ çevrimdışı ve 540.000+ çevrimiçi uzmanlık çıkartması, tam sınav modu ve 300 DPI PDF/SVG çıktısını açabilirsiniz.
+• İhtiyacınıza göre esnek Aylık Pro (499 ₺/ay), %50 avantajlı Yıllık Pro (2.999 ₺/yıl — aylık 249 ₺'ye gelir) veya aboneliksiz tek seferlik Ömür Boyu Pro (4.999 ₺) planlarından birini seçerek sınırsız harita, 43.000+ çevrimdışı ve 540.000+ çevrimiçi uzmanlık çıkartması, tam sınav modu ve 300 DPI PDF/SVG çıktısını açabilirsiniz.
 • Gizlilik Politikası: https://tahafirat.github.io/zihinharitam/privacy.html
 • Kullanım Koşulları (EULA): https://tahafirat.github.io/zihinharitam/terms.html

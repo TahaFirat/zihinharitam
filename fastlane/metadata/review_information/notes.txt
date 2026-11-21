@@ -1,38 +1,35 @@
 Dear Apple App Review Team,
 
-Thank you for reviewing ZihinHaritam (MindSticker)! We attached our latest physical-device QA update: Version 1.0.2 (Build 14), refreshed all iPhone & iPad active-usage screenshots (Guideline 2.3.3), verified live Support, Privacy & Terms pages (https://tahafirat.github.io/zihinharitam/), and answered all 6 Guideline 2.1 items below:
+Thank you for reviewing ZihinHaritam (MindSticker)! We attached Version 1.0.2 (Build 18) with sub-3ms instant offline icon search, dedicated inline icon search bar, 120Hz smooth canvas rendering, verified Support/Privacy/EULA links (https://tahafirat.github.io/zihinharitam/), and complete Guideline 2.1 & 3.1.2 details below:
 
-1. Physical Device Testing & Scope (Version 1.0.2 — Build 14):
-- Tested on physical iPhone hardware verifying uninterrupted touch panning from anywhere on the canvas (including over nodes, with long-press to move nodes), instant 1-tap branch deletion right on the selected node and editor bar with 1-tap Undo toast, 1-handed zoom/center controls, compact keyboard accessory bar, and StoreKit 2 flows.
+1. Physical Device Testing & Scope (Version 1.0.2 — Build 18):
+- Tested across iPhone & iPad viewports verifying smooth 60/120Hz touch panning/pinching, centered responsive bottom Studio Dock, dedicated inline icon search bar ("İkon ara..."), S/M/L/XL sticker sizing, glowing priority tags ("Önemli / Sınavda Çıkar"), 1-tap Undo toast, and native StoreKit 2 flows.
 - Confirmations:
-  * Account login/deletion: NONE (no sign-in; stored locally on-device in IndexedDB).
+  * Account login/deletion: NONE (no sign-in required; all mind maps stored locally on-device in IndexedDB).
   * User-generated content: NONE (no public feed, social sharing, or chat).
-  * Paid content: 3 regionalized StoreKit 2 options — Monthly Pro (com.tahafirat.zihinharitam.pro_monthly: TRY 249.99/mo, USD $4.99/mo), Yearly Pro (com.tahafirat.zihinharitam.pro_yearly: TRY 1,499.99/yr, USD $29.99/yr), and Non-Consumable Lifetime Pro (com.tahafirat.zihinharitam.lifetime_pro: TRY 2,499.99, USD $49.99) + "Restore Purchases" (AppStore.sync()).
+  * Paid content (Guideline 3.1.2 compliant): 3 localized StoreKit 2 options — Monthly Pro (com.tahafirat.zihinharitam.pro_monthly: TRY 499.99/mo, USD $9.99/mo), Yearly Pro (com.tahafirat.zihinharitam.pro_yearly: TRY 2,999.99/yr, USD $59.99/yr), and Non-Consumable Lifetime Pro (com.tahafirat.zihinharitam.lifetime_pro: TRY 4,999.99, USD $99.99) + prominent "Satın Alımları Geri Yükle" (Restore Purchases via AppStore.sync()), EULA & Privacy Policy links.
 
 2. Purpose, Audience, Value & Portfolio Distinction:
-- Audience & Value: Visual dual-coding mind mapping & Active Recall study studio for university students, exam candidates, and educators. Combines tapered Bezier mind maps, 25,200+ instant (<8ms) offline academic icons, on-device textbook diagram cropping into die-cut stickers, Apple Pencil sketching, one-tap Exam Recall, and 300 DPI PDF/SVG export.
-- Portfolio Distinction (4.3): Sole visual mind-mapping & diagramming app on our account—shares zero UI, database, or scope with Void Carver (arcade game) or quiz trainers.
+- Audience & Value: Visual dual-coding mind mapping & Active Recall study studio for students, exam candidates, and educators. Combines tapered Bezier mind maps, 43,487 instant (<3ms) offline vector icons + 540,000+ online icons, textbook diagram cropping into die-cut stickers, Apple Pencil sketching, Exam Recall mode, and 300 DPI PDF/SVG export.
+- Portfolio Distinction (4.3): Sole visual mind-mapping & diagramming app on our account—shares zero UI, database, or scope with any game or quiz app.
 
-3. Setup & Main Feature Instructions (No Login / No Files Needed):
-- Cold launch opens Home Workspace with 5 preloaded academic templates.
+3. Quick Feature Testing Guide (Zero Login / Zero Files Needed):
+- Cold launch opens Home Workspace with 6 preloaded academic templates (including Cardiology, System Design, Constitutional Law, Ottoman Land System).
 - Quick UI Guide (TR -> EN):
-  * Templates / "+ Boş Görsel Harita" (+ Blank Map): 3 free maps (45 nodes/map, ~1,500 icons).
-  * Tap node / "+ Yeni Dal" (+ New Branch): Type any term ("kalp", "sunucu", "mahkeme", "atom") for instant offline stickers; tap "AI Çiz" for custom stickers or Camera icon (built-in sample notebook diagram included).
+  * Templates / "+ Boş Görsel Harita" (+ Blank Map): 3 free active maps (up to 60 nodes/map, 3,600+ free icons).
+  * Tap any node / "+ Yeni Dal": Type any concept in the node title or the dedicated "İkon ara..." search box ("kedi", "araba", "kalp", "mahkeme", "roket") for instant <3ms icons; tap "3D & Özel İkon" for custom stickers or Camera ("Nottan Kes") with built-in sample diagram.
+  * "Önemli" flame button: Cycles high-visibility "ÖNEMLİ" / "SINAVDA ÇIKAR" / "TEKRAR ET" study badges.
   * Graduation Cap (Top HUD): Active Recall Exam Mode; tap hidden nodes to reveal.
-  * Share (Top-Right): Export PNG, SVG, 300 DPI PDF. Gear: Settings, .zihin backup, Legal docs, "Satın Alımları Geri Yükle" (Restore Purchases).
-  * Test IAP: Tap "Kilidi Aç" (Pro pill), any "PRO" sticker, or 4th map to test StoreKit 2 Sandbox & Restore.
+  * Share (Top-Right): Export PNG, SVG, 300 DPI A4/A3 PDF. Gear: Settings, .zihin backup, Legal docs, Restore Purchases.
+  * Test StoreKit 2 IAP: Tap "Pro" pill in top HUD, any "PRO" sticker, or 4th map to test Sandbox purchase & Restore.
 
-4. External Services, Tools & Platforms:
-- Core & Payments (On-Device): Capacitor 7 (WKWebView + Swift), native Apple StoreKit 2 (StoreKitPlugin.swift). ZERO third-party payment SDKs, ZERO ads, ZERO tracking SDKs (NSPrivacyTracking = false).
-- Local Engine: IndexedDB (Dexie.js, Yjs), MiniSearch Worker (25,209 offline icons), ONNX WASM (@imgly/background-removal), jsPDF.
-- Optional Online APIs (user-triggered): Open-license search (Wikimedia Commons, Openverse, ARASAAC) & optional "AI Çiz" (Pollinations.ai Flux or local BYOK keys for Gemini/OpenAI/Fal/Together) sending only non-personal concept keywords.
+4. External Services & Privacy:
+- Native StoreKit 2 (StoreKitPlugin.swift) only; ZERO third-party payment SDKs, ZERO ads, ZERO tracking SDKs (NSPrivacyTracking = false).
+- Local Engine: IndexedDB (Dexie.js), Web Worker Inverted Index (43,487 offline icons), jsPDF. Optional user-triggered open-license icon/image lookup sends only non-personal concept keywords.
 
-5. Regional Differences:
-- None. Identical across all 175 App Store regions, zero geo-restrictions. Primary UI is Turkish (any text supported); StoreKit 2 localizes Pro pricing regionally (Turkey: TRY 249.99/mo, 1,499.99/yr, 2,499.99 lifetime; Global/US: USD $4.99/mo, $29.99/yr, $49.99 lifetime).
-
-6. Regulated Industry & Third-Party Material:
-- Non-Regulated Student Utility: Sample Cardiology/Law templates are study outlines only—NOT medical or legal advice.
-- Open-Source Assets Only: Permissive MIT, Apache-2.0, CC0, CC-BY icons + original SVGs: https://tahafirat.github.io/zihinharitam/terms.html
+5. Regional & Third-Party Compliance:
+- Available across all 175 App Store regions with localized StoreKit 2 pricing.
+- Sample Cardiology/Law/History templates are educational outlines only (not medical/legal advice). All bundled icons use permissive open licenses (MIT, Apache-2.0, CC0, CC-BY): https://tahafirat.github.io/zihinharitam/terms.html
 
 Best regards,
 Taha Firat

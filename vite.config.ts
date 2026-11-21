@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -7,6 +9,28 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'prune-legacy-search-manifest',
+      closeBundle() {
+        // `fast-index-v7.json` (2.43 MB) supersedes `search-manifest.json` (8.76 MB) at runtime;
+        // stripping the build-time manifest from `dist/` saves ~8.8 MB in both Android .aab and iOS .ipa!
+        const legacyManifest = path.resolve(
+          process.cwd(),
+          'dist',
+          'offline-packs',
+          'search-manifest.json'
+        );
+        const fastIndex = path.resolve(
+          process.cwd(),
+          'dist',
+          'offline-packs',
+          'fast-index-v7.json'
+        );
+        if (fs.existsSync(fastIndex) && fs.existsSync(legacyManifest)) {
+          fs.unlinkSync(legacyManifest);
+        }
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
@@ -33,17 +57,24 @@ export default defineConfig({
         ],
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
-        globIgnores: ['**/*.wasm'],
+        globIgnores: [
+          '**/*.wasm',
+          'offline-packs/shards/**',
+          'offline-packs/search-manifest.json',
+        ],
         runtimeCaching: [
           {
             urlPattern: /\/offline-packs\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'mindmap-offline-packs-v4',
+              cacheName: 'mindmap-offline-packs-v7',
               expiration: {
-                maxEntries: 40,
+                maxEntries: 44,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
               },
             },
@@ -74,7 +105,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom'],
           icons: ['lucide-react'],
-          search: ['minisearch', 'rbush'],
+          search: ['rbush'],
           collab: ['yjs', 'y-indexeddb', 'dexie'],
           export: ['jspdf'],
         },

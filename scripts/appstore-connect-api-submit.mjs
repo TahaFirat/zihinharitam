@@ -874,7 +874,7 @@ async function ensureLifetimeProIap(client, appId) {
 }
 
 async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) {
-  console.log(`\n[6b/8] Otomatik Yenilenen Abonelikler (Aylık 500 ₺ / $9.99 & Yıllık 2.999 ₺ / $59.99) yapılandırılıyor...`);
+  console.log(`\n[6b/8] Otomatik Yenilenen Abonelikler (Aylık 499 ₺ / $9.99 & Yıllık 2.999 ₺ / $59.99) yapılandırılıyor...`);
   const groupsResp = await client.request('GET', `/v1/apps/${appId}/subscriptionGroups`);
   let group = (groupsResp?.data || []).find(
     (g) => g.attributes?.referenceName === 'ZihinHaritam Pro'

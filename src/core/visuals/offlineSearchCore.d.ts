@@ -12,6 +12,17 @@ export interface OfflineManifestItem {
   shardId: number;
 }
 
+export interface FastIndexV7Payload {
+  version: number;
+  totalIcons: number;
+  packs: string[];
+  domains: OfflineTaxonomyDomain[];
+  rows: Array<[string, string, number, number, number, number]>;
+  namePostings: Record<string, number[]>;
+  tagPostings: Record<string, number[]>;
+  vocab: string[];
+}
+
 export interface OfflineSearchHit extends OfflineManifestItem {
   normalizedScore: number;
   bm25Score: number;
@@ -20,6 +31,7 @@ export interface OfflineSearchHit extends OfflineManifestItem {
 export class OfflineBM25Engine {
   constructor(manifestItems?: OfflineManifestItem[]);
   loadManifest(items: OfflineManifestItem[]): void;
+  loadFastIndexV7(fastJson: FastIndexV7Payload): void;
   search(
     rawQuery: string,
     options?: {

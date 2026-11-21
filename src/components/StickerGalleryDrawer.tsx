@@ -28,7 +28,10 @@ import { retintRawSvgMarkupToBranch } from '../core/visuals/DuotoneStickerColori
 import { triggerGalleryPhotoPicker } from '../core/visuals/PhotoStickerImporter';
 import { buildDuotoneVectorStickerDataUri } from '../core/visuals/PureVectorStickerizer';
 import type { MapContextAnalysis } from '../core/visuals/TopicContextIntelligence';
-import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
+import {
+  sanitizeNodeSearchQuery,
+  VisualSearchOrchestrator,
+} from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
@@ -76,9 +79,10 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
 }) => {
   const { isLifetimePro } = useEntitlements();
   const kb = useKeyboardInset();
-  const [query, setQuery] = useState(initialQuery);
+  const [query, setQuery] = useState(() => sanitizeNodeSearchQuery(initialQuery));
   const [category, setCategory] = useState<GalleryCategoryFilter>('all');
   const [tierFilter, setTierFilter] = useState<IconTierFilter>('all');
+  const [displayLimit, setDisplayLimit] = useState(60);
   const [matchBranchColor, setMatchBranchColor] = useState(true);
   const [selectedCornerBadge, setSelectedCornerBadge] = useState<string | null>(null);
 
@@ -93,41 +97,48 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setQuery(initialQuery);
+      setQuery(sanitizeNodeSearchQuery(initialQuery));
       setCategory('all');
+      setDisplayLimit(60);
       setBrokenIds(new Set());
     }
   }, [isOpen, initialQuery]);
+
+  useEffect(() => {
+    setDisplayLimit(60);
+  }, [query, category, tierFilter]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const seq = ++seqRef.current;
     const controller = new AbortController();
-    const effectiveQuery = query.trim();
+    const effectiveQuery = sanitizeNodeSearchQuery(query);
 
     const wave1 = VisualSearchOrchestrator.getInstantWave1Results(
       effectiveQuery,
       mapContext,
       branchColor
     );
-    setAllResults(wave1.results);
+    if (wave1.results.length > 0) {
+      setAllResults(wave1.results);
+    }
     setMetaphorChips(wave1.metaphorChips);
 
-    const offlineTimer = window.setTimeout(async () => {
-      const offRes = await VisualSearchOrchestrator.searchOfflineWave(
-        effectiveQuery,
-        mapContext,
-        branchColor,
-        180
-      );
-      if (seq !== seqRef.current || controller.signal.aborted) return;
+    let cancelled = false;
+    void VisualSearchOrchestrator.searchOfflineWave(
+      effectiveQuery,
+      mapContext,
+      branchColor,
+      84
+    ).then((offRes) => {
+      if (cancelled || seq !== seqRef.current || controller.signal.aborted) return;
       setAllResults(offRes.results);
       setMetaphorChips(offRes.metaphorChips);
       if (typeof offRes.elapsedMs === 'number') {
         setOfflineMs(Math.max(1, Math.round(offRes.elapsedMs)));
       }
-    }, 16);
+    });
 
     let onlineTimer: number | undefined;
     if (
@@ -154,13 +165,13 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             setLoadingOnline(false);
           }
         }
-      }, 170);
+      }, 155);
     } else {
       setLoadingOnline(false);
     }
 
     return () => {
-      clearTimeout(offlineTimer);
+      cancelled = true;
       if (onlineTimer !== undefined) clearTimeout(onlineTimer);
       controller.abort();
     };
@@ -549,8 +560,9 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8">
-              {visibleEntries.map(({ item, isFree }) => {
+            <>
+              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8">
+                {visibleEntries.slice(0, displayLimit).map(({ item, isFree }) => {
                 let displaySrc = item.previewUrl;
                 if (item.isDuotoneColorizable && item.rawSvgMarkup) {
                   const targetColor = matchBranchColor ? branchColor : '#334155';
@@ -632,7 +644,23 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                   </button>
                 );
               })}
-            </div>
+              </div>
+              {visibleEntries.length > displayLimit && (
+                <div className="mt-4 flex justify-center pb-2">
+                  <button
+                    type="button"
+                    data-testid="gallery-load-more-btn"
+                    onClick={() => setDisplayLimit((prev) => prev + 60)}
+                    className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl border border-sky-500/40 bg-sky-500/12 px-5 py-2 text-xs font-extrabold text-sky-700 hover:bg-sky-500/20 active:scale-95 dark:text-sky-300"
+                  >
+                    <span>
+                      Daha Fazla İkon Göster (+
+                      {Math.min(60, visibleEntries.length - displayLimit)})
+                    </span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

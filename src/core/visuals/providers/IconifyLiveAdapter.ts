@@ -83,6 +83,13 @@ const SET_PRIORITY_BOOST: Record<string, number> = {
 const translationCache = new Map<string, string>();
 const searchResponseCache = new Map<string, VisualSearchResult[]>();
 
+const NOISY_LIVE_WORDS = new Set([
+  'mouth', 'kissing', 'grinning', 'crying', 'weary', 'zany', 'winking',
+  'pouting', 'angry', 'frowning', 'drooling', 'vomiting', 'zombie',
+  'vampire', 'halloween', 'christmas', 'santa', 'pirate', 'casino',
+  'poker', 'bikini', 'poo', 'poop', 'toilet', 'biking', 'juggling',
+]);
+
 /**
  * Fast, free, no-key Turkish -> English translation fallback (MyMemory API)
  * so ANY Turkish word not in the 3,900+ offline dictionary still finds exact
@@ -175,20 +182,26 @@ function classifyLivePrefix(prefix: string): {
  * Automatically translates unknown Turkish words to English, prioritizes colorful/3D sets,
  * and tints monochrome icons to match the active branch color.
  */
+export interface SearchIconifyLiveOptions {
+  hasExactOfflineLexicon?: boolean;
+  blockedTokens?: string[];
+}
+
 export async function searchIconifyLive(
   rawQuery: string,
   enTerms: string[],
   branchColor: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: SearchIconifyLiveOptions
 ): Promise<VisualSearchResult[]> {
   const clean = rawQuery.trim();
   if (clean.length < 2) return [];
 
-  const cacheKey = `${clean.toLowerCase()}::${enTerms.slice(0, 2).join(',')}::${branchColor}`;
+  const cacheKey = `v7::${clean.toLowerCase()}::${enTerms.slice(0, 2).join(',')}::${branchColor}`;
   const cached = searchResponseCache.get(cacheKey);
   if (cached) return cached;
 
-  // Build candidate English search terms; if query looks Turkish & not already translated, translate live!
+  // Build candidate English search terms; ALWAYS translate live when the Turkish word wasn't in our offline lexicon!
   const candidateQueries: string[] = [];
   for (const term of enTerms) {
     const t = term.trim().toLowerCase();
@@ -200,16 +213,18 @@ export async function searchIconifyLive(
 
   const normalizedClean = clean.toLowerCase();
   const needsLiveTrTranslation =
+    !options?.hasExactOfflineLexicon ||
     candidateQueries.length === 0 ||
-    (candidateQueries.length === 1 && candidateQueries[0] === normalizedClean);
+    candidateQueries[0] === normalizedClean;
 
+  let liveTranslatedEn: string | null = null;
   if (needsLiveTrTranslation) {
-    const liveEn = await Promise.race([
+    liveTranslatedEn = await Promise.race([
       translateTurkishToEnglishLive(clean, signal),
-      new Promise<null>((r) => setTimeout(() => r(null), 550)),
+      new Promise<null>((r) => setTimeout(() => r(null), 580)),
     ]);
-    if (liveEn && !candidateQueries.includes(liveEn)) {
-      candidateQueries.unshift(liveEn);
+    if (liveTranslatedEn && !candidateQueries.includes(liveTranslatedEn)) {
+      candidateQueries.unshift(liveTranslatedEn);
     }
   }
 
@@ -220,10 +235,23 @@ export async function searchIconifyLive(
   const primaryQuery = candidateQueries[0];
   const secondaryQuery = candidateQueries[1];
   const colorHex = branchColor.replace('#', '');
+  const blockedSet = new Set(
+    (options?.blockedTokens ?? []).map((b) => b.toLowerCase())
+  );
+  const primaryWords = primaryQuery.split(/[\s-_]+/).filter((w) => w.length >= 2);
+  const allowNoisy = primaryWords.some((w) => NOISY_LIVE_WORDS.has(w));
 
-  const fetchBatch = async (q: string, limit: number): Promise<string[]> => {
+  const COLORFUL_PREFIX_FILTER =
+    'fluent-emoji-flat,fluent-color,noto,twemoji,streamline-color,streamline-emojis,openmoji,icon-park,flat-color-icons,meteocons,logos,devicon,skill-icons,healthicons';
+
+  const fetchBatch = async (
+    q: string,
+    limit: number,
+    prefixes?: string
+  ): Promise<string[]> => {
     try {
-      const url = `${ICONIFY_API}/search?query=${encodeURIComponent(q)}&limit=${limit}`;
+      const prefixParam = prefixes ? `&prefixes=${encodeURIComponent(prefixes)}` : '';
+      const url = `${ICONIFY_API}/search?query=${encodeURIComponent(q)}&limit=${limit}${prefixParam}`;
       const res = await fetch(url, { signal });
       if (!res.ok) return [];
       const data = (await res.json()) as { icons?: string[] };
@@ -233,19 +261,23 @@ export async function searchIconifyLive(
     }
   };
 
+  // Query colorful/3D collections FIRST so live search never floods top slots with monochrome UI glyphs!
   const batches = await Promise.all([
-    fetchBatch(primaryQuery, 48),
+    fetchBatch(primaryQuery, 32, COLORFUL_PREFIX_FILTER),
+    fetchBatch(primaryQuery, 32),
     secondaryQuery && secondaryQuery !== primaryQuery
-      ? fetchBatch(secondaryQuery, 32)
+      ? fetchBatch(secondaryQuery, 24, COLORFUL_PREFIX_FILTER)
       : Promise.resolve([]),
   ]);
 
   if (signal?.aborted) return [];
 
-  const allIconIds = Array.from(new Set([...batches[0], ...batches[1]]));
+  const allIconIds = Array.from(
+    new Set([...batches[0], ...batches[2], ...batches[1]])
+  );
   if (allIconIds.length === 0) return [];
 
-  // Score & diversify across collections so users get rich colorful + 3D + vector variety
+  // Score with Iconify Exact-Name + Short-Name Specificity so exact 546,996-catalog matches rise straight to #1..#8!
   const prefixCounts = new Map<string, number>();
   const scored: VisualSearchResult[] = [];
 
@@ -257,20 +289,51 @@ export async function searchIconifyLive(
     const name = fullId.slice(colonIdx + 1);
     if (!name || name.length < 2) continue;
 
-    // Max 5 icons per collection so results stay diverse
+    const cleanName = name
+      .toLowerCase()
+      .replace(/-(duotone|original|plain|light|dark|16|20|24|28|32|48)$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .trim();
+    const nameWords = cleanName.split(/\s+/).filter(Boolean);
+
+    if (nameWords.some((w) => blockedSet.has(w))) continue;
+    if (!allowNoisy && nameWords.some((w) => NOISY_LIVE_WORDS.has(w))) continue;
+
+    // Max 6 icons per collection so results stay diverse
     const curCount = prefixCounts.get(prefix) ?? 0;
-    if (curCount >= 5) continue;
+    if (curCount >= 6) continue;
     prefixCounts.set(prefix, curCount + 1);
 
     const { category, mode, isColor } = classifyLivePrefix(prefix);
     const boost = SET_PRIORITY_BOOST[prefix] ?? (isColor ? 1.15 : 1.0);
-    const rankScore = Math.max(0.45, 0.92 - i * 0.006) * boost;
 
+    const isExactName =
+      cleanName === primaryQuery.replace(/-/g, ' ') ||
+      (liveTranslatedEn && cleanName === liveTranslatedEn.replace(/-/g, ' ')) ||
+      (secondaryQuery && cleanName === secondaryQuery.replace(/-/g, ' '));
+
+    const matchedWordCount = primaryWords.filter((pw) =>
+      nameWords.includes(pw)
+    ).length;
+    const extraWords = Math.max(0, nameWords.length - Math.max(1, matchedWordCount));
+
+    let rankScore: number;
+    if (isExactName && isColor) {
+      // Exact colorful hit in 546K catalog -> promotes right into Top #1..#6 when offline had no exact primary match!
+      rankScore = Math.min(0.994, 0.965 + (boost - 1) * 0.08);
+    } else if (isExactName) {
+      rankScore = 0.915;
+    } else {
+      const base = Math.max(0.45, 0.85 - i * 0.005 - extraWords * 0.045);
+      rankScore = Math.min(0.925, base * (isColor ? 1.08 : 0.96));
+    }
+
+    // Always specify explicit 128x128 pixel dimensions so SVGs never render at 1em/0px blank size inside <img>!
     const svgUrl = isColor
-      ? `${ICONIFY_API}/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`
+      ? `${ICONIFY_API}/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg?width=128&height=128`
       : `${ICONIFY_API}/${encodeURIComponent(prefix)}/${encodeURIComponent(
           name
-        )}.svg?color=%23${encodeURIComponent(colorHex)}`;
+        )}.svg?width=128&height=128&color=%23${encodeURIComponent(colorHex)}`;
 
     const displayTitle = name
       .replace(/[-_]+/g, ' ')

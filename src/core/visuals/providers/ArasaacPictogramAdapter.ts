@@ -10,36 +10,26 @@ interface ArasaacEntry {
  * Queries both `/tr/search/` and `/en/search/` in parallel for authentic hand-drawn educational illustrations.
  */
 export async function searchArasaacPictograms(
-  turkishTerms: string[],
+  _turkishTerms: string[],
   englishTerms: string[],
   signal?: AbortSignal
 ): Promise<VisualSearchResult[]> {
-  const trPrimary = turkishTerms[0]?.trim();
-  const enPrimary = englishTerms[0]?.trim();
-  const enSecondary = englishTerms[1]?.trim();
+  const isCleanAsciiWord = (w?: string): w is string =>
+    Boolean(w && w.length >= 3 && /^[a-z]+$/.test(w));
 
-  const endpoints: Array<{ url: string; lang: 'tr' | 'en'; fallbackLabel: string }> = [];
+  const enPrimary = englishTerms[0]?.trim().toLowerCase();
+  const enSecondary = englishTerms[1]?.trim().toLowerCase();
 
-  if (trPrimary && trPrimary.length >= 3 && !trPrimary.includes(' ')) {
-    endpoints.push({
-      url: `https://api.arasaac.org/v1/pictograms/tr/search/${encodeURIComponent(trPrimary)}`,
-      lang: 'tr',
-      fallbackLabel: trPrimary,
-    });
-  }
-  if (enPrimary && enPrimary.length >= 3 && !enPrimary.includes(' ')) {
+  const endpoints: Array<{ url: string; lang: 'en'; fallbackLabel: string }> = [];
+
+  if (isCleanAsciiWord(enPrimary)) {
     endpoints.push({
       url: `https://api.arasaac.org/v1/pictograms/en/search/${encodeURIComponent(enPrimary)}`,
       lang: 'en',
       fallbackLabel: enPrimary,
     });
   }
-  if (
-    enSecondary &&
-    enSecondary !== enPrimary &&
-    enSecondary.length >= 3 &&
-    !enSecondary.includes(' ')
-  ) {
+  if (isCleanAsciiWord(enSecondary) && enSecondary !== enPrimary) {
     endpoints.push({
       url: `https://api.arasaac.org/v1/pictograms/en/search/${encodeURIComponent(enSecondary)}`,
       lang: 'en',
@@ -55,10 +45,10 @@ export async function searchArasaacPictograms(
       if (!res.ok) return [];
       const json = (await res.json()) as ArasaacEntry[];
       if (!Array.isArray(json)) return [];
-      return json.slice(0, 14).map((item, idx) => ({
+      return json.slice(0, 12).map((item, idx) => ({
         id: item._id,
         label: item.keywords?.[0]?.keyword || ep.fallbackLabel,
-        rankBoost: ep.lang === 'tr' ? 0.04 : 0,
+        rankBoost: 0,
         idx,
       }));
     })
