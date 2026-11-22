@@ -753,17 +753,24 @@ async function ensureLifetimeProIap(client, appId) {
     // Availability already configured
   }
 
-  // Ensure Regional Pricing for Lifetime Pro: Global Base USA ($99.99) + Custom Regional TUR (₺4.999,99)
+  // Ensure Regional Pricing for Lifetime Pro: Global Base USA ($69.99) + Custom Regional TUR (₺3.499,99)
   try {
     const findIapPricePoint = async (territory, targetValues) => {
+      const candidates = new Map();
       let url = `/v2/inAppPurchases/${iap.id}/pricePoints?filter[territory]=${territory}&limit=200`;
       while (url) {
         const ppResp = await client.request('GET', url);
-        const found = (ppResp?.data || []).find((p) =>
-          targetValues.includes(String(p.attributes?.customerPrice))
-        );
-        if (found) return found;
+        for (const p of ppResp?.data || []) {
+          const val = String(p.attributes?.customerPrice);
+          if (targetValues.includes(val) && !candidates.has(val)) {
+            candidates.set(val, p);
+          }
+        }
+        if (candidates.has(targetValues[0])) return candidates.get(targetValues[0]);
         url = ppResp?.links?.next || null;
+      }
+      for (const tv of targetValues) {
+        if (candidates.has(tv)) return candidates.get(tv);
       }
       return null;
     };
@@ -863,7 +870,7 @@ async function ensureLifetimeProIap(client, appId) {
     }
   }
 
-  // Also configure Auto-Renewable Subscriptions: Monthly (₺499,99 / $9.99) & Yearly (₺2.999,99 / $59.99)
+  // Also configure Auto-Renewable Subscriptions: Monthly (₺349,99 / $6.99) & Yearly (₺2.099,99 / $39.99)
   try {
     await ensureAutoRenewableSubscriptions(client, appId, paywallShotPath);
   } catch (subErr) {
@@ -1042,17 +1049,24 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
       // Already configured
     }
 
-    // Regional Prices: Set USA base + equalized territories, then override TUR custom regional price!
+    // Regional Prices: Set USA base + TUR exact regional price FIRST, then equalized territories!
     try {
       const findSubPricePoint = async (territory, targets) => {
+        const candidates = new Map();
         let url = `/v1/subscriptions/${sub.id}/pricePoints?filter[territory]=${territory}&limit=200`;
         while (url) {
           const ppResp = await client.request('GET', url);
-          const found = (ppResp?.data || []).find((p) =>
-            targets.includes(String(p.attributes?.customerPrice))
-          );
-          if (found) return found;
+          for (const p of ppResp?.data || []) {
+            const val = String(p.attributes?.customerPrice);
+            if (targets.includes(val) && !candidates.has(val)) {
+              candidates.set(val, p);
+            }
+          }
+          if (candidates.has(targets[0])) return candidates.get(targets[0]);
           url = ppResp?.links?.next || null;
+        }
+        for (const tv of targets) {
+          if (candidates.has(tv)) return candidates.get(tv);
         }
         return null;
       };
@@ -1078,21 +1092,22 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
       });
 
       if ((!hasMatchingUsa || !hasMatchingTur) && usaPt) {
-        // Equalize all territories from USA base first, then override TUR custom regional price!
+        // Prioritize TUR & USA first, then equalize remaining territories from USA base!
         let eqUrl = `/v1/subscriptionPricePoints/${encodeURIComponent(usaPt.id)}/equalizations?include=territory&limit=200`;
-        const eqPoints = [{ territoryId: 'USA', pointId: usaPt.id }];
+        const eqPoints = [];
+        if (turPt) {
+          eqPoints.push({ territoryId: 'TUR', pointId: turPt.id });
+        }
+        eqPoints.push({ territoryId: 'USA', pointId: usaPt.id });
         while (eqUrl) {
           const eqResp = await client.request('GET', eqUrl);
           for (const pt of eqResp?.data || []) {
             const tId = pt.relationships?.territory?.data?.id;
-            if (tId && tId !== 'TUR') {
+            if (tId && tId !== 'TUR' && tId !== 'USA') {
               eqPoints.push({ territoryId: tId, pointId: pt.id });
             }
           }
           eqUrl = eqResp?.links?.next || null;
-        }
-        if (turPt) {
-          eqPoints.push({ territoryId: 'TUR', pointId: turPt.id });
         }
 
         // Tomorrow ISO date fallback if Apple requires a future startDate on already-active subs
