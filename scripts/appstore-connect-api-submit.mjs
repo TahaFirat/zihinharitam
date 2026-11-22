@@ -1446,14 +1446,29 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
       // Already attached or already submitted
     }
 
-    // Ensure READY_TO_SUBMIT Auto-Renewable Subscriptions (pro_monthly & pro_yearly) are ALSO submitted for Apple Review!
+    // Ensure READY_TO_SUBMIT Auto-Renewable Subscriptions (pro_monthly & pro_yearly) & their Group are bundled via ASC API 4.4+ subscriptionVersions!
     const readySubscriptions = [];
+    const readyGroupVersionIds = new Set();
     try {
       const grpResp = await client.request(
         'GET',
         `/v1/apps/${appId}/subscriptionGroups`
       );
       for (const grp of grpResp?.data || []) {
+        try {
+          const gvResp = await client.request(
+            'GET',
+            `/v1/subscriptionGroups/${grp.id}/versions`
+          );
+          for (const gv of gvResp?.data || []) {
+            if (gv.attributes?.state === 'PREPARE_FOR_SUBMISSION') {
+              readyGroupVersionIds.add(gv.id);
+            }
+          }
+        } catch {
+          // Non-fatal
+        }
+
         const subsResp = await client.request(
           'GET',
           `/v1/subscriptionGroups/${grp.id}/subscriptions`
@@ -1463,7 +1478,16 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
           const pid = sub.attributes?.productId;
           console.log(`  -> Abonelik durumu (${pid}): ${st}`);
           if (st === 'READY_TO_SUBMIT' || st === 'DEVELOPER_ACTION_NEEDED') {
-            readySubscriptions.push({ id: sub.id, productId: pid, state: st });
+            let subVersionId = null;
+            try {
+              const svResp = await client.request('GET', `/v1/subscriptions/${sub.id}/versions`);
+              subVersionId =
+                (svResp?.data || []).find((v) => v.attributes?.state === 'PREPARE_FOR_SUBMISSION')
+                  ?.id || null;
+            } catch {
+              // Ignore
+            }
+            readySubscriptions.push({ id: sub.id, productId: pid, state: st, subVersionId });
           }
         }
       }
@@ -1472,40 +1496,44 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
     }
 
     for (const sub of readySubscriptions) {
-      let submittedSub = false;
-      // Method A: Apple modern Review Submission Item (ASC API 4.x)
+      if (sub.subVersionId) {
+        try {
+          await client.request('POST', '/v1/reviewSubmissionItems', {
+            data: {
+              type: 'reviewSubmissionItems',
+              relationships: {
+                reviewSubmission: { data: { type: 'reviewSubmissions', id: submissionId } },
+                subscriptionVersion: {
+                  data: { type: 'subscriptionVersions', id: sub.subVersionId },
+                },
+              },
+            },
+          });
+          console.log(
+            `  -> Abonelik (${sub.productId}) subscriptionVersion=${sub.subVersionId} ile inceleme paketine eklendi!`
+          );
+        } catch (errA) {
+          console.log(`  -> Abonelik subscriptionVersion bilgisi (${sub.productId}): ${errA.message}`);
+        }
+      }
+    }
+
+    for (const gvId of readyGroupVersionIds) {
       try {
         await client.request('POST', '/v1/reviewSubmissionItems', {
           data: {
             type: 'reviewSubmissionItems',
             relationships: {
               reviewSubmission: { data: { type: 'reviewSubmissions', id: submissionId } },
-              subscription: { data: { type: 'subscriptions', id: sub.id } },
+              subscriptionGroupVersion: {
+                data: { type: 'subscriptionGroupVersions', id: gvId },
+              },
             },
           },
         });
-        console.log(`  -> Abonelik (${sub.productId}) reviewSubmissionItems ile inceleme paketine eklendi!`);
-        submittedSub = true;
-      } catch (errA) {
-        console.log(`  -> Abonelik reviewSubmissionItems denemesi (${sub.productId}): ${errA.message}`);
-      }
-
-      // Method B: Classic subscriptionSubmissions endpoint (links first-time subscription to review queue)
-      if (!submittedSub) {
-        try {
-          await client.request('POST', '/v1/subscriptionSubmissions', {
-            data: {
-              type: 'subscriptionSubmissions',
-              relationships: {
-                subscription: { data: { type: 'subscriptions', id: sub.id } },
-              },
-            },
-          });
-          console.log(`  -> Abonelik (${sub.productId}) subscriptionSubmissions ile Apple incelemesine eklendi!`);
-          submittedSub = true;
-        } catch (errB) {
-          console.log(`  -> Abonelik subscriptionSubmissions denemesi (${sub.productId}): ${errB.message}`);
-        }
+        console.log(`  -> Abonelik Grubu (subscriptionGroupVersion=${gvId}) inceleme paketine eklendi!`);
+      } catch (errG) {
+        console.log(`  -> Abonelik Grubu bilgi (${gvId}): ${errG.message}`);
       }
     }
 
