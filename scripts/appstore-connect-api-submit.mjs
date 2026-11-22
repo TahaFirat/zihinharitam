@@ -1474,7 +1474,7 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
             `/v1/subscriptionGroups/${grp.id}/versions`
           );
           for (const gv of gvResp?.data || []) {
-            if (gv.attributes?.state === 'PREPARE_FOR_SUBMISSION') {
+            if (['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'].includes(gv.attributes?.state)) {
               readyGroupVersionIds.add(gv.id);
             }
           }
@@ -1495,8 +1495,11 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
             try {
               const svResp = await client.request('GET', `/v1/subscriptions/${sub.id}/versions`);
               subVersionId =
-                (svResp?.data || []).find((v) => v.attributes?.state === 'PREPARE_FOR_SUBMISSION')
-                  ?.id || null;
+                (svResp?.data || []).find((v) =>
+                  ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'].includes(
+                    v.attributes?.state
+                  )
+                )?.id || null;
             } catch {
               // Ignore
             }
