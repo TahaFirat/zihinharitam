@@ -669,8 +669,10 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('Mobil dokunmatik kaydırma (kart üzerinden harita pan)', JSON.stringify(panResult));
     }
 
-    // 5.5 V5 UX Verification: Working S/M/L/XL Sizing, Free Icon Filter, Long Branch Notes, Outliner & 3D Studio
+    // 5.5 V9 UX Verification: 3-Tab Dock (S/M/L/XL Sizing, Gamified Free/Pro Filter, Long Notes, Outliner, 3D Studio, Samsung/Apple Notes Drawing Suite & Guide)
     await page.click('[data-node-card-id="m1"]');
+    await page.waitForSelector('[data-testid="dock-tab-style"]', { timeout: 6000 });
+    await page.click('[data-testid="dock-tab-style"]');
     await page.waitForSelector('[data-testid="size-btn-sm"]', { timeout: 6000 });
 
     // Measure S -> XL sticker pixel dimensions
@@ -695,6 +697,8 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     }
 
     // Verify "🎁 Ücretsiz" filter shows ONLY free stickers and zero locked PRO tiles
+    await page.click('[data-testid="dock-tab-icons"]');
+    await page.waitForSelector('[data-testid="bar-tier-free-btn"]', { timeout: 6000 });
     await page.evaluate(async () => {
       await window.__ZH_ENTITLEMENTS__?.resetForTesting(false);
     });
@@ -716,7 +720,7 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       );
     }
 
-    // Verify Long Multi-Line Branch Description (`📝 Açıklama`) & Task Checkbox
+    // Verify Long Multi-Line Branch Description (`📝 Not & Önem`) & Task Checkbox
     await page.click('[data-testid="studio-note-toggle-btn"]');
     await page.fill(
       '[data-testid="studio-note-textarea"]',
@@ -739,10 +743,10 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('Dal altı uzun açıklama & görev kutusu', `note=${noteBlockVisible}, check=${checkboxVisible}`);
     }
 
-    // Verify 3D & Custom Sticker Studio ("3D & Özel İkon") without API key
+    // Verify 3D & Custom Sticker Studio ("3D Özel") without API key
     await page.click('[data-node-card-id="m1"]');
     await page.waitForTimeout(200);
-    const aiBtn = page.locator('button:has-text("3D & Özel İkon")').first();
+    const aiBtn = page.locator('button:has-text("3D Özel")').first();
     await aiBtn.click();
     await page.waitForSelector('[data-testid="ai-sticker-studio-modal"]', { timeout: 6000 });
     await page.waitForSelector('[data-testid="ai-candidate-slot-0"]', { timeout: 6000 });
@@ -764,16 +768,17 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     await page.click('[data-testid="ai-candidate-slot-0"]');
     await page.waitForTimeout(300);
 
-    // Test Hierarchical Outliner (`Anahat`)
+    // Test Study Tab: Hierarchical Outliner (`Anahat`) + Study Timer Counter & 1-Tap Reset
     await page.click('[data-testid="studio-done-btn"]');
     await page.waitForTimeout(150);
-    await page.locator('button:has-text("Anahat"):visible').first().click();
+    await page.click('[data-testid="hud-tab-study"]');
+    await page.waitForSelector('[data-testid="hud-outline-btn"]', { timeout: 5000 });
+    await page.click('[data-testid="hud-outline-btn"]');
     await page.waitForSelector('[data-testid="outline-modal"]', { timeout: 5000 });
     pass('Hiyerarşik Anahat (Liste) görünümü', 'Tüm ağaç ve uzun notlar senkronize açıldı');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
 
-    // Test Study Timer Counter & 1-Tap Reset in TopMinimalHUD
     await page.click('[data-testid="hud-timer-toggle-btn"]');
     await page.waitForSelector('[data-testid="study-timer-pill"]', { timeout: 4000 });
     await page.click('[data-testid="study-timer-play-btn"]');
@@ -786,20 +791,51 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('Çalışma & Sınav Sayacı sıfırlama kontrolü', timerText);
     }
 
-    // Test Freehand Tablet/Phone Canvas Drawing Mode (Pen / Highlighter / Shapes / Palm Rejection)
+    // Test Full Samsung Notes & Apple Pencil Pro Drawing Suite (Pen, Pencil, Highlighter, Laser, Lasso, Eraser, Sticky Notes, Paper Style, Palm Rejection)
     await page.click('[data-testid="hud-draw-toggle-btn"]');
     await page.waitForSelector('[data-testid="canvas-drawing-toolbar"]', { timeout: 4000 });
     const hasPenTool = await page.locator('[data-testid="ink-tool-pen"]').isVisible();
-    const hasHighlighter = await page.locator('[data-testid="ink-tool-highlighter"]').isVisible();
+    const hasPencilTool = await page.locator('[data-testid="ink-tool-pencil"]').isVisible();
+    const hasLaserTool = await page.locator('[data-testid="ink-tool-laser"]').isVisible();
+    const hasLassoTool = await page.locator('[data-testid="ink-tool-lasso"]').isVisible();
+    const hasStickyBtn = await page.locator('[data-testid="ink-add-sticky-btn"]').isVisible();
+    const hasPaperBtn = await page.locator('[data-testid="ink-paper-style-btn"]').isVisible();
     const hasPalmReject = await page.locator('[data-testid="ink-palm-reject-btn"]').isVisible();
+    await page.click('[data-testid="ink-add-sticky-btn"]');
+    await page.waitForTimeout(150);
+    const stickyAppeared = (await page.locator('[data-testid^="canvas-sticky-"]').count()) >= 1;
     await page.click('[data-testid="ink-close-btn"]');
-    if (hasPenTool && hasHighlighter && hasPalmReject) {
+    if (
+      hasPenTool &&
+      hasPencilTool &&
+      hasLaserTool &&
+      hasLassoTool &&
+      hasStickyBtn &&
+      hasPaperBtn &&
+      hasPalmReject &&
+      stickyAppeared
+    ) {
       pass(
-        'Tablet & Telefon serbest çizim modu (Kalem, Fosforlu, Ok, Kutu, Silgi, Avuç İçi Reddi)',
-        'Araç çubuğu sorunsuz açıldı ve kapandı'
+        'Samsung Notes & Apple Pencil Pro çizim paketi (Kalem, Kurşun, Fosforlu, Lazer, Kement, Silgi, Yapışkan Not, Kağıt Deseni, Sadece Kalem)',
+        'Tüm araçlar ve taşınabilir yapışkan not doğrulandı'
       );
     } else {
-      fail('Serbest çizim modu kontrolü', `pen=${hasPenTool}, hl=${hasHighlighter}, palm=${hasPalmReject}`);
+      fail(
+        'Samsung Notes & Apple Pencil Pro çizim paketi',
+        `pen=${hasPenTool}, pencil=${hasPencilTool}, laser=${hasLaserTool}, lasso=${hasLassoTool}, sticky=${stickyAppeared}`
+      );
+    }
+
+    // Test Always-Accessible Interactive Guide (`Rehber`) inside Top HUD More Menu
+    await page.click('[data-testid="hud-more-menu-btn"]');
+    await page.waitForSelector('[data-testid="hud-guide-btn"]', { timeout: 4000 });
+    await page.click('[data-testid="hud-guide-btn"]');
+    const guideVisible = await page.locator('[data-testid="onboarding-overlay"]').isVisible();
+    if (guideVisible) {
+      pass('Her zaman erişilebilir Uygulama Tanıtım Rehberi (Rehber)', 'Menüden tek dokunuşla açıldı');
+      await page.click('[data-testid="onboarding-skip-btn"]');
+    } else {
+      fail('Her zaman erişilebilir Uygulama Tanıtım Rehberi', 'Rehber açılmadı');
     }
 
     if (pageErrors.length === 0) {

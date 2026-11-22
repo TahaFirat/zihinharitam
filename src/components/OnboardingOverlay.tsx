@@ -52,9 +52,9 @@ interface OnboardingOverlayProps {
 
 const STEPS = [
   {
-    step: '1 / 3',
+    step: '1 / 4',
     title: 'Dalı Parmağınla Çek & Yaz',
-    desc: 'Merkez konunun yanındaki + noktasından parmağınla veya Apple Pencil ile çekerek organik renkli dallar oluştur.',
+    desc: 'Merkez konunun yanındaki + noktasından parmağınla veya kalemle çekerek organik renkli dallar oluştur. Sesle dikte de desteklenir!',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />
@@ -83,9 +83,9 @@ const STEPS = [
     ),
   },
   {
-    step: '2 / 3',
-    title: 'Yazarken Binlerce Renkli Çıkartmayı Seç',
-    desc: 'Konu başlığını yazdığın anda 43.000+ çevrimdışı ve 540.000+ online tıp, tarih, mühendislik ve hukuk çıkartması klavyenin üstünde belirir.',
+    step: '2 / 4',
+    title: 'Yazarken Renkli Oyunlaştırılmış İkonları Seç',
+    desc: 'Türkçe veya İngilizce yazdığın anda 43.000+ çevrimdışı ve 540.000+ canlı renkli 3D ikon saniyeler içinde karşına gelir.',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />
@@ -115,9 +115,25 @@ const STEPS = [
     ),
   },
   {
-    step: '3 / 3',
-    title: 'Sınav Moduyla Hatırla & Poster Paylaş',
-    desc: 'Başlıkları veya alt dalları gizleyerek kendini test et; haritanı 300 DPI A4/A3 çalışma posteri olarak dışa aktar.',
+    step: '3 / 4',
+    title: 'S-Pen & Apple Pencil ile Doğrudan Haritaya Çiz',
+    desc: 'Üstteki "Çiz" sekmesine dokun: Kalem, Kurşun, Fosforlu, Lazer, Oto-Şekil, Kement, Yapışkan Not, Defter Desenleri ve kalem silgi tuşu hazır!',
+    renderArt: () => (
+      <svg viewBox="0 0 280 140" className="h-32 w-full">
+        <rect width="280" height="140" rx="20" fill="#F4F2EA" />
+        <rect x="34" y="24" width="84" height="72" rx="14" fill="#FEF08A" stroke="#EAB308" strokeWidth="2" />
+        <rect x="46" y="42" width="56" height="5" rx="2.5" fill="#713F12" />
+        <rect x="46" y="56" width="42" height="5" rx="2.5" fill="#A16207" />
+        <path d="M138 92 C164 40, 198 112, 240 42" stroke="#0EA5E9" strokeWidth="6" strokeLinecap="round" fill="none" />
+        <path d="M138 66 L236 66" stroke="#FACC15" strokeOpacity="0.45" strokeWidth="14" strokeLinecap="round" />
+        <circle cx="238" cy="42" r="9" fill="#F43F5E" opacity="0.85" />
+      </svg>
+    ),
+  },
+  {
+    step: '4 / 4',
+    title: 'Sınav Moduyla Hatırla & 300 DPI Poster Paylaş',
+    desc: 'Üstteki "Çalış" sekmesinden Sınav Modunu, Odaklanmayı veya Kronometreyi aç; haritanı çizimlerinle birlikte 300 DPI PDF poster olarak paylaş.',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />

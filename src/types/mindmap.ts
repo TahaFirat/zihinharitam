@@ -109,16 +109,32 @@ export interface CrossLink {
 
 export type InkToolType =
   | 'pen'
+  | 'pencil'
   | 'highlighter'
+  | 'laser'
   | 'line'
   | 'arrow'
   | 'rect'
   | 'ellipse'
+  | 'lasso'
   | 'eraser';
+
+export type EraserMode = 'stroke' | 'area';
+
+export type PaperStyleType = 'dots' | 'grid' | 'lined' | 'blank' | 'warm';
+
+export interface CanvasStickyNote {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  width?: number;
+}
 
 export interface CanvasInkStroke {
   id: string;
-  tool: Exclude<InkToolType, 'eraser'>;
+  tool: Exclude<InkToolType, 'eraser' | 'lasso' | 'laser'>;
   color: string;
   width: number;
   opacity: number;
@@ -134,6 +150,8 @@ export interface MindMapDocument {
   nodes: Record<string, MindNode>;
   crossLinks?: CrossLink[];
   inkStrokes?: CanvasInkStroke[];
+  stickyNotes?: CanvasStickyNote[];
+  paperStyle?: PaperStyleType;
   createdAt: number;
   updatedAt: number;
   darkMode?: boolean;

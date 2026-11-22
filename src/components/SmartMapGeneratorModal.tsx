@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -295,6 +295,114 @@ async function buildSmartMapFromOutlineText(
   };
 }
 
+const WIKI_SKIP_SECTION_RE =
+  /^(kaynakca|kaynaklar|dis baglantilar|ayrica bakiniz|notlar|dipnotlar|galeri|bibliyografya|okuma listesi|references|external links|see also|notes|bibliography|further reading)$/i;
+
+function normalizeAsciiSimple(str: string): string {
+  return str
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim();
+}
+
+/**
+ * Queries Turkish Wikipedia live (zero API key, <1.3s timeout) to extract real factual sub-headings
+ * for ANY custom mind-map title (e.g., "Güneş Sistemi", "Mitoz Bölünme", "Osmanlı Yükselme")
+ * and automatically pairs each sub-branch with a vibrant gamified offline vector icon!
+ */
+async function fetchLiveWikipediaSubBranches(
+  topicTitle: string,
+  mapContext: MapContextAnalysis,
+  existingSiblingTitles: string[],
+  signal: AbortSignal
+): Promise<ProactiveBranchSuggestion[]> {
+  const clean = topicTitle.trim();
+  const norm = normalizeAsciiSimple(clean);
+  if (
+    clean.length < 3 ||
+    /^(yeni gorsel harita|yeni harita|yeni konu|ana konu|baslik|genel zihin haritasi)$/.test(
+      norm
+    )
+  ) {
+    return [];
+  }
+
+  try {
+    const searchUrl = `https://tr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+      clean
+    )}&srlimit=1&format=json&origin=*`;
+    const sRes = await fetch(searchUrl, { signal });
+    if (!sRes.ok) return [];
+    const sJson = (await sRes.json()) as {
+      query?: { search?: Array<{ pageid: number; title: string }> };
+    };
+    const hit = sJson?.query?.search?.[0];
+    if (!hit?.pageid) return [];
+
+    const secUrl = `https://tr.wikipedia.org/w/api.php?action=parse&pageid=${hit.pageid}&prop=sections&format=json&origin=*`;
+    const secRes = await fetch(secUrl, { signal });
+    if (!secRes.ok) return [];
+    const secJson = (await secRes.json()) as {
+      parse?: { sections?: Array<{ line: string; toclevel: number }> };
+    };
+    const sections = secJson?.parse?.sections ?? [];
+    const existingSet = new Set(existingSiblingTitles.map(normalizeAsciiSimple));
+
+    const pickedHeadings: string[] = [];
+    for (const sec of sections) {
+      if (sec.toclevel > 2) continue;
+      const title = sec.line.replace(/<[^>]+>/g, '').trim();
+      const tNorm = normalizeAsciiSimple(title);
+      if (
+        title.length < 3 ||
+        title.length > 44 ||
+        WIKI_SKIP_SECTION_RE.test(tNorm) ||
+        existingSet.has(tNorm) ||
+        pickedHeadings.some((p) => normalizeAsciiSimple(p) === tNorm)
+      ) {
+        continue;
+      }
+      pickedHeadings.push(title);
+      if (pickedHeadings.length >= 6) break;
+    }
+
+    if (pickedHeadings.length < 2) return [];
+
+    const results: ProactiveBranchSuggestion[] = [];
+    for (let i = 0; i < pickedHeadings.length; i++) {
+      const heading = pickedHeadings[i];
+      const off = await VisualSearchOrchestrator.searchOfflineWave(
+        `${heading} ${clean}`,
+        mapContext,
+        BRANCH_PALETTE[i % BRANCH_PALETTE.length],
+        12
+      );
+      const bestIcon = off.results[0];
+      const sticker = bestIcon
+        ? await VisualSearchOrchestrator.materializeStickerSelection(bestIcon)
+        : TopicContextIntelligence.getProactiveSubBranches(clean, mapContext, [])[0]?.sticker;
+
+      if (sticker) {
+        results.push({
+          id: `wiki_sug_${hit.pageid}_${i}`,
+          title: heading,
+          techBadge: hit.title,
+          sticker,
+        });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   isOpen,
   initialTab = 'text_to_map',
@@ -311,15 +419,62 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [deptHint, setDeptHint] = useState<AcademicDepartment>('genel');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
+  const [liveWikiBranches, setLiveWikiBranches] = useState<ProactiveBranchSuggestion[]>([]);
+  const [loadingLiveBranches, setLoadingLiveBranches] = useState(false);
 
-  const proactiveList = useMemo(() => {
-    const targetTitle = activeNode?.title || mapContext.parentTitle || mapContext.label;
+  useEffect(() => {
+    if (isOpen) {
+      setTab(initialTab);
+      setAddedIds(new Set());
+    }
+  }, [isOpen, initialTab]);
+
+  const targetTitle = activeNode?.title || mapContext.parentTitle || mapContext.label;
+
+  const baseProactiveList = useMemo(() => {
     return TopicContextIntelligence.getProactiveSubBranches(
       targetTitle,
       mapContext,
       existingSiblingTitles
     );
-  }, [activeNode?.title, mapContext, existingSiblingTitles]);
+  }, [targetTitle, mapContext, existingSiblingTitles]);
+
+  useEffect(() => {
+    if (!isOpen || tab !== 'proactive_branches') {
+      setLiveWikiBranches([]);
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setLiveWikiBranches([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    setLoadingLiveBranches(true);
+    const timeoutId = window.setTimeout(() => ctrl.abort(), 2200);
+    void fetchLiveWikipediaSubBranches(
+      targetTitle,
+      mapContext,
+      existingSiblingTitles,
+      ctrl.signal
+    )
+      .then((res) => {
+        if (!ctrl.signal.aborted) {
+          setLiveWikiBranches(res);
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+        if (!ctrl.signal.aborted) setLoadingLiveBranches(false);
+      });
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      ctrl.abort();
+    };
+  }, [isOpen, tab, targetTitle, mapContext, existingSiblingTitles]);
+
+  const proactiveList =
+    liveWikiBranches.length >= 2 ? liveWikiBranches : baseProactiveList;
 
   if (!isOpen) return null;
 
@@ -341,7 +496,10 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
-      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
+      style={{
+        paddingTop: 'max(54px, calc(var(--safe-top) + 12px))',
+        paddingBottom: `${kb.keyboardHeight}px`,
+      }}
       onClick={onClose}
     >
       <div
@@ -350,7 +508,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          maxHeight: `${Math.max(280, kb.viewportH - 16)}px`,
+          maxHeight: `${Math.max(280, kb.viewportH - 68)}px`,
           paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
       >
@@ -477,10 +635,16 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
             </form>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold opacity-75">
-                  {mapContext.emoji} <strong>{mapContext.label}</strong> bağlamına göre
-                  önerilen hazır alt dallar:
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold opacity-80">
+                  <span>{mapContext.emoji}</span>
+                  <span>
+                    <strong>{targetTitle || mapContext.label}</strong> konusuna özel önerilen
+                    alt dallar:
+                  </span>
+                  {loadingLiveBranches && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                  )}
                 </p>
                 {activeNode && proactiveList.length > 0 && (
                   <button

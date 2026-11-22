@@ -13,7 +13,6 @@ import {
   Wand2,
   ChevronLeft,
   ChevronRight,
-  Zap,
   Plus,
   Keyboard,
   Eraser,
@@ -23,6 +22,10 @@ import {
   Flame,
   Gift,
   Crown,
+  SlidersHorizontal,
+  Palette,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -34,7 +37,6 @@ import {
   type StickerAsset,
   type StickerSizePreset,
   type VisualSearchResult,
-  type VisualStyleMode,
 } from '../types/mindmap';
 import { resolveStarterStickerForConcept } from '../data/academicTemplates';
 import {
@@ -53,6 +55,8 @@ import {
   setStudioBarHeight,
   useKeyboardInset,
 } from '../core/native/useKeyboardInset';
+
+type DockTab = 'icons' | 'note' | 'style';
 
 interface KeyboardVisualBarProps {
   activeNode: MindNode | null;
@@ -90,13 +94,6 @@ interface KeyboardVisualBarProps {
   onCloseEdit: () => void;
 }
 
-const STYLE_TABS: Array<{ id: VisualStyleMode | 'all'; emoji: string; label: string }> = [
-  { id: 'all', emoji: '🌟', label: 'Tümü' },
-  { id: 'illustration', emoji: '✨', label: 'Çizim' },
-  { id: '3d', emoji: '🧊', label: '3D' },
-  { id: 'diagram', emoji: '📐', label: 'Şema' },
-];
-
 const SIZE_PRESETS: Array<{ id: StickerSizePreset; label: string; hint: string }> = [
   { id: 'sm', label: 'S', hint: 'Küçük İkon (50px)' },
   { id: 'md', label: 'M', hint: 'Orta İkon (86px)' },
@@ -117,11 +114,40 @@ const PRIORITY_LABELS: Record<NodePriorityTag, string> = {
   review: '❓ Tekrar',
 };
 
+interface SpeechRecLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function createSpeechRecognizer(): SpeechRecLike | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecLike;
+    webkitSpeechRecognition?: new () => SpeechRecLike;
+  };
+  const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+  if (!Ctor) return null;
+  try {
+    const rec = new Ctor();
+    rec.lang = 'tr-TR';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    return rec;
+  } catch {
+    return null;
+  }
+}
+
 export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   activeNode,
   isEditingText,
   isRootNode,
-  isMainBranch,
   defaultNodeStyle,
   mapContext,
   proactiveSuggestions,
@@ -152,18 +178,16 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const { isLifetimePro } = useEntitlements();
   const kb = useKeyboardInset();
 
-  const [styleMode, setStyleMode] = useState<VisualStyleMode | 'all'>('all');
+  const [dockTab, setDockTab] = useState<DockTab>('icons');
   const [tierFilter, setTierFilter] = useState<IconTierFilter>('all');
   const [customIconQuery, setCustomIconQuery] = useState('');
   const [isSearchingCustomIcon, setIsSearchingCustomIcon] = useState(false);
   const [allFederated, setAllFederated] = useState<VisualSearchResult[]>([]);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set());
   const [loadingRemote, setLoadingRemote] = useState(false);
-  const [offlineMs, setOfflineMs] = useState<number | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [showTechBadgeInput, setShowTechBadgeInput] = useState(false);
-  const [showStyleCustomize, setShowStyleCustomize] = useState(false);
+  const [isListeningVoice, setIsListeningVoice] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
@@ -172,6 +196,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
+  const voiceRecRef = useRef<SpeechRecLike | null>(null);
   const requestSeqRef = useRef(0);
   const swipeStartYRef = useRef<number | null>(null);
 
@@ -184,9 +209,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     if (!el) return;
     const syncH = () => {
       const h = Math.round(el.getBoundingClientRect().height);
-      if (h > 40) {
-        setStudioBarHeight(h);
-      }
+      if (h > 40) setStudioBarHeight(h);
     };
     syncH();
     const ro = new ResizeObserver(syncH);
@@ -195,7 +218,25 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       ro.disconnect();
       setStudioBarHeight(0);
     };
+  }, [activeNode?.id, dockTab]);
+
+  useEffect(() => {
+    setCustomIconQuery('');
+    setIsSearchingCustomIcon(false);
+    setShowTechBadgeInput(false);
+    setBrokenIds(new Set());
+    setDockTab('icons');
   }, [activeNode?.id]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        voiceRecRef.current?.stop();
+      } catch {
+        // Ignore
+      }
+    };
+  }, []);
 
   const searchQuery = useMemo(() => {
     const manual = customIconQuery.trim();
@@ -204,15 +245,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   }, [customIconQuery, activeNode?.title]);
   const activeBranchColor = activeNode?.branchColor ?? '#0EA5E9';
 
-  useEffect(() => {
-    setCustomIconQuery('');
-    setIsSearchingCustomIcon(false);
-    setShowTechBadgeInput(false);
-    setShowNoteEditor(false);
-    setBrokenIds(new Set());
-  }, [activeNode?.id]);
-
-  // 0ms Built-In Atlas -> <3ms V7 Pre-Compiled Inverted Index Worker -> 155ms Live 546K Enrichment
+  // Gamified Instant Search: <2ms Offline Shards + ALWAYS-ON Parallel Turkish->English Live Enrichment for new words!
   useEffect(() => {
     if (!activeNode) return;
 
@@ -244,18 +277,17 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         return;
       }
       setAllFederated(offlineWave.results);
-      if (typeof offlineWave.elapsedMs === 'number') {
-        setOfflineMs(Math.max(1, Math.round(offlineWave.elapsedMs)));
-      }
 
-      // Only trigger online 546K+ enrichment on the compact bar when offline had sparse or weak matches (`<16` hits or top `<0.92`)!
-      // Common words (`kedi`, `limon`, `araba`, `kitap`, `roket`, `kalp`, `mahkeme`) stay 100% instant (<3ms), zero-network & zero-shift!
+      // ALWAYS enrich via Live Google-Translated 540K+ Gamified Iconify whenever:
+      // 1) Offline Turkish lexicon did NOT have an exact concept hit (`!offlineWave.hasLexiconMatch`), OR
+      // 2) Offline returned fewer than 12 icons or weak top confidence (< 0.90)
       const needsOnlineEnrichment =
         searchQuery.trim().length >= 2 &&
         typeof navigator !== 'undefined' &&
         navigator.onLine &&
-        (offlineWave.results.length < 16 ||
-          (offlineWave.results[0]?.score ?? 0) < 0.92);
+        (!offlineWave.hasLexiconMatch ||
+          offlineWave.results.length < 12 ||
+          (offlineWave.results[0]?.score ?? 0) < 0.9);
 
       if (needsOnlineEnrichment) {
         onlineTimer = window.setTimeout(async () => {
@@ -278,7 +310,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               setLoadingRemote(false);
             }
           }
-        }, 120);
+        }, 95);
       } else {
         setLoadingRemote(false);
       }
@@ -291,14 +323,13 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     };
   }, [activeNode?.id, searchQuery, mapContext, activeBranchColor]);
 
-  const healthyByMode = useMemo(() => {
-    const healthy = allFederated.filter((r) => !brokenIds.has(r.id));
-    if (styleMode === 'all') return healthy;
-    return VisualSearchOrchestrator.filterResultsByMode(healthy, styleMode);
-  }, [allFederated, styleMode, brokenIds]);
+  const healthyList = useMemo(
+    () => allFederated.filter((r) => !brokenIds.has(r.id)),
+    [allFederated, brokenIds]
+  );
 
   const carouselEntries = useMemo(() => {
-    const tagged = healthyByMode.map((item, origIdx) => ({
+    const tagged = healthyList.map((item, origIdx) => ({
       item,
       origIdx,
       isFree: EntitlementManager.isStickerFree(item, origIdx, 'keyboard_bar'),
@@ -313,19 +344,14 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         .slice(0, 32);
     }
     return tagged.slice(0, 32);
-  }, [healthyByMode, tierFilter, isLifetimePro]);
+  }, [healthyList, tierFilter, isLifetimePro]);
 
   const freeTotalCount = useMemo(
     () =>
-      healthyByMode.filter((item, idx) =>
+      healthyList.filter((item, idx) =>
         EntitlementManager.isStickerFree(item, idx, 'keyboard_bar')
       ).length,
-    [healthyByMode, isLifetimePro]
-  );
-
-  const totalHealthyCount = useMemo(
-    () => allFederated.filter((r) => !brokenIds.has(r.id)).length,
-    [allFederated, brokenIds]
+    [healthyList, isLifetimePro]
   );
 
   const updateScrollChevrons = () => {
@@ -337,22 +363,56 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
 
   useEffect(() => {
     updateScrollChevrons();
-  }, [carouselEntries]);
+  }, [carouselEntries, dockTab]);
 
   if (!activeNode) return null;
 
   const isFreshEmptyBranch = !isRootNode && activeNode.title.trim().length === 0;
   const effectiveNodeStyle: NodeVisualStyle =
     activeNode.nodeStyle ?? defaultNodeStyle ?? 'card';
-  const effectiveStickerSize: StickerSizePreset =
-    activeNode.stickerSize ?? 'md';
+  const effectiveStickerSize: StickerSizePreset = activeNode.stickerSize ?? 'md';
 
-  const isTightAboveKeyboard = kb.isKeyboardOpen && kb.viewportH < 360;
   const isSlimKeyboardMode =
     kb.isKeyboardOpen &&
     (kb.isPhone || kb.isTablet) &&
-    !showNoteEditor &&
+    dockTab === 'icons' &&
     !isSearchingCustomIcon;
+
+  const toggleVoiceDictation = () => {
+    void hapticLight();
+    if (isListeningVoice) {
+      try {
+        voiceRecRef.current?.stop();
+      } catch {
+        // Ignore
+      }
+      setIsListeningVoice(false);
+      return;
+    }
+    const rec = createSpeechRecognizer();
+    if (!rec) return;
+    voiceRecRef.current = rec;
+    setIsListeningVoice(true);
+    rec.onresult = (ev) => {
+      const spoken = ev.results?.[0]?.[0]?.transcript?.trim();
+      if (spoken) {
+        if (dockTab === 'note') {
+          const prev = activeNode.note?.trim() || '';
+          onUpdateNodeNote(activeNode.id, prev ? `${prev} ${spoken}` : spoken);
+        } else {
+          onUpdateNodeTitle(activeNode.id, spoken);
+        }
+        void hapticSuccess();
+      }
+    };
+    rec.onerror = () => setIsListeningVoice(false);
+    rec.onend = () => setIsListeningVoice(false);
+    try {
+      rec.start();
+    } catch {
+      setIsListeningVoice(false);
+    }
+  };
 
   const handleSelectVisual = async (
     item: VisualSearchResult,
@@ -364,7 +424,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       onRequestProStickerUnlock(item);
       return;
     }
-
     setProcessingId(item.id);
     void hapticLight();
     try {
@@ -380,7 +439,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
 
   const handlePickStickerSize = (size: StickerSizePreset) => {
     void hapticLight();
-    // If user taps S/M/L/XL before picking an icon, automatically attach a matching free starter icon so sizing works visibly right away!
     if (!activeNode.sticker) {
       const freeCandidate = carouselEntries.find((c) => c.isFree);
       if (freeCandidate) {
@@ -411,49 +469,45 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     onChangePriorityTag(activeNode.id, next);
   };
 
-  const scrollCarouselBy = (delta: number) => {
-    carouselRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
-  };
-
   const useFullWidthBottomSheet = kb.isPhone;
+  const containerStyle: React.CSSProperties = useFullWidthBottomSheet
+    ? {
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: `${kb.keyboardHeight}px`,
+        width: '100vw',
+        maxWidth: '100vw',
+        maxHeight: `${
+          kb.isKeyboardOpen
+            ? Math.min(182, Math.max(106, kb.viewportH - 72))
+            : Math.min(350, Math.max(220, kb.viewportH - 86))
+        }px`,
+        transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
+      }
+    : {
+        position: 'fixed',
+        left: `${Math.max(14, Math.round((kb.viewportW - Math.min(780, Math.max(320, kb.viewportW - 28))) * 0.5))}px`,
+        bottom: kb.isKeyboardOpen
+          ? `${kb.keyboardHeight + 8}px`
+          : 'max(28px, calc(var(--safe-bottom) + 22px))',
+        width: `${Math.min(780, Math.max(320, kb.viewportW - 28))}px`,
+        maxWidth: 'calc(100vw - 28px)',
+        maxHeight: `${
+          kb.isKeyboardOpen
+            ? Math.min(186, Math.max(108, kb.viewportH - 72))
+            : Math.min(340, Math.max(220, kb.viewportH - 96))
+        }px`,
+        transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
+      };
 
-  let containerStyle: React.CSSProperties;
-
-  if (useFullWidthBottomSheet) {
-    containerStyle = {
-      position: 'fixed',
-      left: 0,
-      right: 0,
-      bottom: `${kb.keyboardHeight}px`,
-      width: '100vw',
-      maxWidth: '100vw',
-      maxHeight: `${
-        kb.isKeyboardOpen
-          ? Math.min(182, Math.max(104, kb.viewportH - 72))
-          : Math.min(350, Math.max(210, kb.viewportH - 84))
-      }px`,
-      transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
-    };
-  } else {
-    // 100% Native iPad / Android Tablet / Landscape Centered Bottom Studio Dock (NEVER overflows upward when keyboard opens!)
-    const cardWidth = Math.min(860, Math.max(320, kb.viewportW - 28));
-    const leftPx = Math.max(14, Math.round((kb.viewportW - cardWidth) * 0.5));
-    containerStyle = {
-      position: 'fixed',
-      left: `${leftPx}px`,
-      bottom: kb.isKeyboardOpen
-        ? `${kb.keyboardHeight + 8}px`
-        : 'max(24px, calc(var(--safe-bottom) + 20px))',
-      width: `${cardWidth}px`,
-      maxWidth: 'calc(100vw - 28px)',
-      maxHeight: `${
-        kb.isKeyboardOpen
-          ? Math.min(188, Math.max(106, kb.viewportH - 72))
-          : Math.min(360, Math.max(215, kb.viewportH - 96))
-      }px`,
-      transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
-    };
-  }
+  const voiceSupported =
+    typeof window !== 'undefined' &&
+    Boolean(
+      (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown })
+        .SpeechRecognition ||
+        (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
+    );
 
   return (
     <div
@@ -474,7 +528,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         ) {
           const dy = swipeStartYRef.current - e.changedTouches[0].clientY;
           swipeStartYRef.current = null;
-          if (dy > 48 && !showNoteEditor) {
+          if (dy > 52 && dockTab === 'icons') {
             onOpenGalleryDrawer(searchQuery);
           }
         }
@@ -483,12 +537,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     >
       <div
         className={`flex max-h-full w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border shadow-2xl ${
-          isSlimKeyboardMode
-            ? useFullWidthBottomSheet
-              ? 'rounded-t-2xl border-x-0 border-b-0 px-2.5 pt-1.5'
-              : 'rounded-2xl px-3 py-1.5'
-            : useFullWidthBottomSheet
-            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-1.5'
+          useFullWidthBottomSheet
+            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-2'
             : 'rounded-3xl px-4 py-2.5'
         }`}
         style={{
@@ -498,36 +548,17 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             ? '8px'
             : useFullWidthBottomSheet && !kb.isKeyboardOpen
             ? 'max(22px, calc(var(--safe-bottom) + 14px))'
-            : useFullWidthBottomSheet
-            ? '10px'
             : '12px',
         }}
       >
-        {useFullWidthBottomSheet && !isSlimKeyboardMode && (
-          <button
-            type="button"
-            onClick={() => onOpenGalleryDrawer(searchQuery)}
-            title="Tam Görsel Galerisi İçin Yukarı Kaydırın"
-            className="mx-auto mb-1 flex w-full items-center justify-center py-0.5"
-          >
-            <span className="h-1 w-10 rounded-full bg-slate-400/45" />
-          </button>
-        )}
-
-        {/* ROW 0: Synced Node/Tree Title Input + Note Toggle + Gallery Photo + Child + Delete + Done */}
-        <div
-          className={`flex items-center ${
-            isSlimKeyboardMode ? 'mb-1 gap-1' : 'mb-1.5 gap-1.5'
-          }`}
-        >
+        {/* ROW 0: Clean Spacious Title Input + Voice Mic + +Alt Dal + Done */}
+        <div className="mb-2 flex items-center gap-1.5">
           <div
-            className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border bg-white/75 px-2.5 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/75 ${
-              isSlimKeyboardMode ? 'h-9 py-1' : 'h-10 py-1'
-            }`}
+            className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-2xl border bg-white/80 px-3 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/80"
             style={{ borderColor: 'var(--hud-border)' }}
           >
             <span
-              className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white/80 dark:ring-slate-900"
+              className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white dark:ring-slate-900"
               style={{ backgroundColor: activeBranchColor }}
             />
             <input
@@ -547,16 +578,31 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                 }
               }}
               placeholder={
-                isRootNode
-                  ? 'Ana ağaç / harita adını yazın...'
-                  : isSlimKeyboardMode
-                  ? 'Dal başlığı yazın...'
-                  : 'Dal başlığını yazın, ardından aşağıdan ikon seçin...'
+                isRootNode ? 'Harita başlığını yazın...' : 'Dal başlığını yazın...'
               }
               className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-extrabold outline-none sm:text-sm"
               style={{ color: 'var(--node-text)' }}
               data-testid="studio-title-input"
             />
+            {voiceSupported && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={toggleVoiceDictation}
+                title="Sesle Yaz (Türkçe Dikte)"
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition active:scale-95 ${
+                  isListeningVoice
+                    ? 'animate-pulse bg-rose-500 text-white'
+                    : 'opacity-65 hover:bg-slate-500/12 hover:opacity-100'
+                }`}
+              >
+                {isListeningVoice ? (
+                  <MicOff className="h-4 w-4" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </button>
+            )}
             {activeNode.title.length > 0 && (
               <button
                 type="button"
@@ -566,42 +612,12 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   titleInputRef.current?.focus();
                 }}
                 aria-label="Başlığı temizle"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full opacity-55 hover:bg-slate-500/15 hover:opacity-100"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full opacity-55 hover:bg-slate-500/15 hover:opacity-100"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             )}
           </div>
-
-          {/* 1-Tap Long Description / Note Toggle (`📝 Açıklama`) */}
-          <button
-            type="button"
-            data-testid="studio-note-toggle-btn"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() => {
-              void hapticLight();
-              setShowNoteEditor((prev) => {
-                const next = !prev;
-                if (next) {
-                  setTimeout(() => noteInputRef.current?.focus(), 40);
-                }
-                return next;
-              });
-            }}
-            title="Bu dalın altına uzun açıklama / ders notu ekle"
-            className={`inline-flex shrink-0 items-center gap-1 rounded-2xl border font-extrabold active:scale-95 ${
-              isSlimKeyboardMode ? 'h-9 px-2 text-[11px]' : 'h-10 px-2.5 text-xs'
-            } ${
-              showNoteEditor || Boolean(activeNode.note?.trim())
-                ? 'border-sky-500 bg-sky-500 text-white shadow-2xs'
-                : 'border-sky-500/35 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300'
-            }`}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            {!isSlimKeyboardMode && (
-              <span className="hidden sm:inline">Açıklama</span>
-            )}
-          </button>
 
           <button
             type="button"
@@ -611,14 +627,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               onAddChildBranch(activeNode.id);
             }}
             title="Bu dala yeni alt dal ekle"
-            className={`inline-flex shrink-0 items-center gap-1 rounded-2xl border border-emerald-500/35 bg-emerald-500/12 font-extrabold text-emerald-700 hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-300 ${
-              isSlimKeyboardMode ? 'h-9 px-2 text-[11px]' : 'h-10 px-2.5 text-xs'
-            }`}
+            className="inline-flex h-11 shrink-0 items-center gap-1 rounded-2xl border border-emerald-500/40 bg-emerald-500/15 px-3 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/25 active:scale-95 dark:text-emerald-300"
           >
             <Plus className="h-4 w-4" />
-            {!isSlimKeyboardMode && (
-              <span className="hidden xs:inline sm:inline">Alt Dal</span>
-            )}
+            <span className="hidden sm:inline">Alt Dal</span>
           </button>
 
           {!isRootNode && (
@@ -632,41 +644,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               }}
               title="Bu dalı sil (Geri Alınabilir)"
               aria-label="Dalı sil"
-              className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-2xl border border-rose-500/35 bg-rose-500/12 font-extrabold text-rose-600 hover:bg-rose-500/20 active:scale-95 dark:text-rose-400 ${
-                isSlimKeyboardMode ? 'h-9 w-8.5' : 'h-10 px-2.5 text-xs'
-              }`}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-rose-500/35 bg-rose-500/12 text-rose-600 hover:bg-rose-500/20 active:scale-95 dark:text-rose-400"
             >
-              <Trash2 className="h-4 w-4" />
-              {!isSlimKeyboardMode && <span className="hidden sm:inline">Sil</span>}
+              <Trash2 className="h-4.5 w-4.5" />
             </button>
-          )}
-
-          {isSlimKeyboardMode && (
-            <>
-              <button
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() =>
-                  triggerGalleryPhotoPicker(activeBranchColor, (sticker) => {
-                    onApplySticker(activeNode.id, sticker);
-                    void hapticSuccess();
-                  })
-                }
-                title="Galeriden Fotoğraf Ekle"
-                className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/40 bg-indigo-500/15 text-indigo-700 active:scale-95 dark:text-indigo-300"
-              >
-                <ImagePlus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => onOpenGalleryDrawer(searchQuery)}
-                title="43.000+ Çevrimdışı & 540.000+ Görsel Galerisi"
-                className="inline-flex h-9 w-8.5 shrink-0 items-center justify-center rounded-2xl border border-sky-500/40 bg-sky-500/15 text-sky-700 active:scale-95 dark:text-indigo-300 dark:text-sky-300"
-              >
-                <Search className="h-3.5 w-3.5" />
-              </button>
-            </>
           )}
 
           {kb.isTouchDevice && (
@@ -682,21 +663,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   setTimeout(() => titleInputRef.current?.focus(), 30);
                 }
               }}
-              title={
-                kb.isKeyboardOpen
-                  ? 'Klavyeyi Gizle (Görsellere ve Araçlara Geç)'
-                  : 'Metni Düzenle (Klavye Aç)'
-              }
-              className={`flex shrink-0 items-center justify-center rounded-2xl border active:scale-95 ${
-                isSlimKeyboardMode ? 'h-9 w-8.5' : 'h-10 w-10'
-              } ${
-                kb.isKeyboardOpen
-                  ? 'border-sky-500/40 bg-sky-500/15 text-sky-600 dark:text-sky-300'
-                  : 'hover:bg-slate-500/10'
-              }`}
-              style={{ borderColor: kb.isKeyboardOpen ? undefined : 'var(--hud-border)' }}
+              title={kb.isKeyboardOpen ? 'Klavyeyi Gizle' : 'Klavyeyi Aç'}
+              className="flex h-11 w-10 shrink-0 items-center justify-center rounded-2xl border hover:bg-slate-500/10 active:scale-95"
+              style={{ borderColor: 'var(--hud-border)' }}
             >
-              <Keyboard className="h-4 w-4" />
+              <Keyboard className="h-4.5 w-4.5" />
             </button>
           )}
 
@@ -706,578 +677,362 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               void dismissNativeKeyboard();
               onCloseEdit();
             }}
-            title="Tamamlandı"
             data-testid="studio-done-btn"
-            className={`flex shrink-0 items-center justify-center gap-1 rounded-2xl bg-emerald-500 font-extrabold text-white shadow-xs active:scale-95 ${
-              isSlimKeyboardMode ? 'h-9 px-2.5 text-[11px]' : 'h-10 px-3 text-xs'
-            }`}
+            className="flex h-11 shrink-0 items-center justify-center gap-1 rounded-2xl bg-emerald-500 px-3.5 text-xs font-black text-white shadow-xs active:scale-95"
           >
-            <Check className="h-4 w-4" />
+            <Check className="h-4.5 w-4.5" />
             <span className="hidden sm:inline">Tamam</span>
           </button>
         </div>
 
-        {/* EXPANDABLE MULTI-LINE BRANCH DESCRIPTION EDITOR (`📝 Uzun Açıklama`) */}
-        {showNoteEditor && (
-          <div className="mb-1.5 rounded-2xl border bg-white/80 p-2 shadow-inner dark:bg-slate-900/80" style={{ borderColor: 'var(--hud-border)' }}>
-            <div className="mb-1 flex items-center justify-between text-[10.5px] font-extrabold opacity-75">
-              <span>📝 Dal Altı Uzun Açıklama / Ders Notu (Diğer dallara karışmaz, otomatik hizalanır)</span>
-              {activeNode.note && (
+        {/* 3 BIG, CRYSTAL-CLEAR BRANCH DOCK TABS (Hidden while typing on touch devices so keyboard stays uncluttered) */}
+        {!isSlimKeyboardMode && (
+          <div className="mb-2 flex items-center gap-1.5 rounded-2xl bg-slate-500/10 p-1">
+            <button
+              type="button"
+              data-testid="dock-tab-icons"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => setDockTab('icons')}
+              className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold transition active:scale-95 ${
+                dockTab === 'icons'
+                  ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                  : 'opacity-75 hover:opacity-100'
+              }`}
+            >
+              <Palette className="h-4 w-4 text-sky-500" />
+              <span>İkonlar</span>
+            </button>
+            <button
+              type="button"
+              data-testid="studio-note-toggle-btn"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setDockTab('note');
+                setTimeout(() => noteInputRef.current?.focus(), 40);
+              }}
+              className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold transition active:scale-95 ${
+                dockTab === 'note'
+                  ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                  : 'opacity-75 hover:opacity-100'
+              }`}
+            >
+              <FileText className="h-4 w-4 text-violet-500" />
+              <span>Not & Önem</span>
+            </button>
+            <button
+              type="button"
+              data-testid="dock-tab-style"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => setDockTab('style')}
+              className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold transition active:scale-95 ${
+                dockTab === 'style'
+                  ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                  : 'opacity-75 hover:opacity-100'
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4 text-amber-500" />
+              <span>Boyut & Stil</span>
+            </button>
+          </div>
+        )}
+
+        {/* TAB 1: GAMIFIED ICONS CAROUSEL + SEARCH + PHOTO + 3D STUDIO */}
+        {(dockTab === 'icons' || isSlimKeyboardMode) && (
+          <div className="space-y-2">
+            {!isSlimKeyboardMode && (
+              <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                <div
+                  className="flex min-h-[38px] w-[140px] shrink-0 items-center gap-1.5 rounded-xl border bg-white/85 px-2.5 shadow-2xs focus-within:w-[176px] focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 sm:w-[164px] dark:bg-slate-900/85"
+                  style={{ borderColor: customIconQuery ? '#0EA5E9' : 'var(--hud-border)' }}
+                >
+                  <Search className="h-4 w-4 shrink-0 text-sky-500" />
+                  <input
+                    ref={iconSearchInputRef}
+                    type="text"
+                    data-testid="bar-dedicated-icon-search"
+                    value={customIconQuery}
+                    onFocus={() => setIsSearchingCustomIcon(true)}
+                    onBlur={() => setIsSearchingCustomIcon(false)}
+                    onChange={(e) => setCustomIconQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Escape') {
+                        setCustomIconQuery('');
+                        iconSearchInputRef.current?.blur();
+                      } else if (e.key === 'Enter') {
+                        iconSearchInputRef.current?.blur();
+                      }
+                    }}
+                    placeholder="İkon ara..."
+                    className="allow-text-input min-w-0 flex-1 bg-transparent text-xs font-extrabold outline-none"
+                    style={{ color: 'var(--node-text)' }}
+                  />
+                  {customIconQuery && (
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onClick={() => setCustomIconQuery('')}
+                      className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-500/15"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Clean Tier Filter */}
+                <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-emerald-500/25 bg-emerald-500/8 p-0.5">
+                  <button
+                    type="button"
+                    data-testid="bar-tier-all-btn"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => setTierFilter('all')}
+                    className={`min-h-[34px] rounded-lg px-2.5 text-xs font-extrabold whitespace-nowrap ${
+                      tierFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white'
+                        : 'opacity-75'
+                    }`}
+                  >
+                    Tümü
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="bar-tier-free-btn"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => setTierFilter((p) => (p === 'free' ? 'all' : 'free'))}
+                    className={`inline-flex min-h-[34px] items-center gap-1 rounded-lg px-2.5 text-xs font-extrabold whitespace-nowrap ${
+                      tierFilter === 'free'
+                        ? 'bg-emerald-500 text-white'
+                        : 'text-emerald-700 dark:text-emerald-300'
+                    }`}
+                  >
+                    <Gift className="h-3.5 w-3.5" />
+                    <span>Ücretsiz ({freeTotalCount})</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="bar-tier-pro-btn"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => setTierFilter((p) => (p === 'pro' ? 'all' : 'pro'))}
+                    className={`inline-flex min-h-[34px] items-center gap-1 rounded-lg px-2.5 text-xs font-extrabold whitespace-nowrap ${
+                      tierFilter === 'pro'
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'text-amber-700 dark:text-amber-300'
+                    }`}
+                  >
+                    <Crown className="h-3.5 w-3.5" />
+                    <span>Pro</span>
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => onUpdateNodeNote(activeNode.id, '')}
-                  className="text-rose-500 hover:underline"
+                  data-testid="bar-gallery-photo-btn"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() =>
+                    triggerGalleryPhotoPicker(activeBranchColor, (sticker) => {
+                      onApplySticker(activeNode.id, sticker);
+                      void hapticSuccess();
+                    })
+                  }
+                  className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-2.5 text-xs font-extrabold whitespace-nowrap text-indigo-700 active:scale-95 dark:text-indigo-300"
                 >
-                  Temizle
+                  <ImagePlus className="h-4 w-4" />
+                  <span>Foto</span>
+                </button>
+
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onOpenAIStudio(searchQuery)}
+                  className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 text-xs font-extrabold whitespace-nowrap text-white shadow-xs active:scale-95"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>3D Özel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onOpenGalleryDrawer(searchQuery)}
+                  className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-2.5 text-xs font-extrabold whitespace-nowrap text-sky-700 active:scale-95 dark:text-sky-300"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Galeri</span>
+                </button>
+              </div>
+            )}
+
+            {/* Live Gamified Sticker Carousel */}
+            <div className="relative flex items-center">
+              {canScrollLeft && !kb.isTouchDevice && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => carouselRef.current?.scrollBy({ left: -280, behavior: 'smooth' })}
+                  className="absolute left-0.5 z-10 flex h-8 w-8 items-center justify-center rounded-full border bg-white/95 shadow-md dark:bg-slate-900/95"
+                  style={{ borderColor: 'var(--hud-border)' }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              )}
+
+              <div
+                ref={carouselRef}
+                onScroll={updateScrollChevrons}
+                onWheel={(e) => {
+                  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+                className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto py-0.5"
+                style={{ touchAction: 'pan-x' }}
+              >
+                {isFreshEmptyBranch &&
+                  proactiveSuggestions.length > 0 &&
+                  searchQuery.trim().length === 0 &&
+                  proactiveSuggestions.slice(0, 4).map((sug) => (
+                    <button
+                      key={sug.id}
+                      type="button"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        void hapticSuccess();
+                        onApplyProactiveSuggestion(activeNode.id, sug);
+                      }}
+                      className="inline-flex h-14 shrink-0 items-center gap-2 rounded-2xl border border-violet-500/35 bg-violet-500/10 px-3 text-xs font-extrabold whitespace-nowrap active:scale-95"
+                    >
+                      <img src={sug.sticker.url} alt="" className="h-7 w-7 object-contain" />
+                      <span>{sug.title}</span>
+                    </button>
+                  ))}
+
+                {carouselEntries.map(({ item, origIdx, isFree }) => {
+                  const isBusy = processingId === item.id;
+                  const isSelected = activeNode.sticker?.id === item.id;
+                  const isProLocked = !isFree;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      data-testid={isProLocked ? 'pro-sticker-tile' : 'free-sticker-tile'}
+                      onPointerDown={(e) => e.preventDefault()}
+                      onClick={() => void handleSelectVisual(item, origIdx, isFree)}
+                      title={`${item.title} (${item.providerName})`}
+                      className={`group relative flex shrink-0 flex-col items-center justify-center overflow-hidden border transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                        isSlimKeyboardMode
+                          ? 'h-13 w-13 rounded-xl p-1'
+                          : 'h-[66px] w-[66px] rounded-2xl p-1.5 sm:h-[72px] sm:w-[72px]'
+                      } ${
+                        isSelected
+                          ? 'border-sky-500 bg-sky-500/15 ring-2 ring-sky-500/50'
+                          : isProLocked
+                          ? 'border-amber-400/65 bg-gradient-to-br from-amber-500/14 via-violet-500/8 to-amber-400/20'
+                          : 'bg-white/95 dark:bg-slate-800/90'
+                      }`}
+                      style={{
+                        borderColor: isSelected || isProLocked ? undefined : 'var(--hud-border)',
+                      }}
+                    >
+                      <img
+                        src={item.previewUrl}
+                        alt={item.title}
+                        loading={origIdx < 16 ? 'eager' : 'lazy'}
+                        decoding="async"
+                        draggable={false}
+                        onError={() => setBrokenIds((prev) => new Set(prev).add(item.id))}
+                        className={`${
+                          isSlimKeyboardMode ? 'h-9 w-9' : 'h-12 w-12 sm:h-13 sm:w-13'
+                        } object-contain transition-transform group-hover:scale-110`}
+                      />
+                      {isProLocked && (
+                        <span
+                          data-testid="pro-sticker-badge"
+                          className="pointer-events-none absolute top-1 right-1 rounded-md bg-gradient-to-r from-amber-500 to-orange-400 px-1 text-[8px] font-black text-slate-950 shadow-xs"
+                        >
+                          👑 PRO
+                        </span>
+                      )}
+                      {isBusy && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80">
+                          <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+
+                {loadingRemote && (
+                  <div className="flex h-[66px] w-14 shrink-0 items-center justify-center rounded-2xl border border-dashed text-sky-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              {canScrollRight && !kb.isTouchDevice && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => carouselRef.current?.scrollBy({ left: 280, behavior: 'smooth' })}
+                  className="absolute right-0.5 z-10 flex h-8 w-8 items-center justify-center rounded-full border bg-white/95 shadow-md dark:bg-slate-900/95"
+                  style={{ borderColor: 'var(--hud-border)' }}
+                >
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* TAB 2: LONG NOTE, PRIORITY, CHECKLIST, CROSS-LINK & SMART SUB-BRANCHES */}
+        {!isSlimKeyboardMode && dockTab === 'note' && (
+          <div className="space-y-2.5">
             <textarea
               ref={noteInputRef}
               data-testid="studio-note-textarea"
               rows={2}
               value={activeNode.note ?? ''}
               onChange={(e) => onUpdateNodeNote(activeNode.id, e.target.value)}
-              placeholder="Bu dal için detaylı açıklama, tanım, örnek veya maddeler yazın..."
-              className="allow-text-input max-h-24 w-full resize-y rounded-xl border bg-transparent px-2.5 py-1.5 text-base leading-relaxed font-medium outline-none focus:ring-2 focus:ring-sky-500 sm:text-xs"
+              placeholder="Bu dal için detaylı ders notu, tanım veya örnek yazın..."
+              className="allow-text-input max-h-24 w-full resize-y rounded-2xl border bg-white/80 px-3 py-2 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-xs dark:bg-slate-900/80"
               style={{ borderColor: 'var(--hud-border)', color: 'var(--node-text)' }}
             />
-          </div>
-        )}
 
-        {/* Proactive Sub-Branch Quick Chips on newly created empty nodes */}
-        {!isSlimKeyboardMode &&
-          !showNoteEditor &&
-          !isTightAboveKeyboard &&
-          isFreshEmptyBranch &&
-          proactiveSuggestions.length > 0 && (
-            <div className="no-scrollbar mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-violet-500/15 px-2 py-1 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300">
-                {mapContext.emoji} Hazır Dal:
-              </span>
-              {proactiveSuggestions.map((sug) => (
-                <button
-                  key={sug.id}
-                  type="button"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    void hapticSuccess();
-                    onApplyProactiveSuggestion(activeNode.id, sug);
-                  }}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border bg-white/85 px-2.5 py-1 text-xs font-extrabold whitespace-nowrap shadow-2xs hover:border-violet-500 hover:bg-violet-500/10 active:scale-95 dark:bg-slate-800/85"
+            {showTechBadgeInput && (
+              <div className="flex items-center gap-2">
+                <Tag className="h-4 w-4 text-sky-500" />
+                <input
+                  type="text"
+                  value={activeNode.techBadge ?? ''}
+                  onChange={(e) => onUpdateTechBadge(activeNode.id, e.target.value)}
+                  placeholder="Kısa teknik rozet (Örn: Formül, Tarih, Madde)..."
+                  className="allow-text-input min-h-[38px] min-w-0 flex-1 rounded-xl border bg-transparent px-3 text-xs font-bold outline-none focus:ring-2 focus:ring-sky-500"
                   style={{ borderColor: 'var(--hud-border)' }}
-                >
-                  <img
-                    src={sug.sticker.url}
-                    alt=""
-                    className="h-5 w-5 object-contain"
-                  />
-                  <span>{sug.title}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-        {/* Optional Inline Tech Badge Input */}
-        {!isSlimKeyboardMode && showTechBadgeInput && !isFreshEmptyBranch && (
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-sky-500/15 px-2 py-1 text-[10.5px] font-extrabold text-sky-700 dark:text-sky-300">
-              <Tag className="h-3 w-3" /> Rozet:
-            </span>
-            <input
-              type="text"
-              value={activeNode.techBadge ?? ''}
-              onChange={(e) => onUpdateTechBadge(activeNode.id, e.target.value)}
-              placeholder="Örn: Port 443, S1/S2, HMK m.341..."
-              className="allow-text-input min-w-0 flex-1 rounded-xl border bg-transparent px-2.5 py-1.5 font-mono text-base font-bold outline-none focus:ring-2 focus:ring-sky-500 sm:text-xs"
-              style={{ borderColor: 'var(--hud-border)' }}
-            />
-          </div>
-        )}
-
-        {/* ROW 1: Dedicated Instant Icon Search + Free/Pro Filter + Style Tabs + Gallery Photo Import + 3D Studio + Gallery */}
-        {!isSlimKeyboardMode && (
-          <div className="no-scrollbar mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-            {/* Dedicated Instant Icon Search Input (Searches 540K+ icons independently WITHOUT changing branch title!) */}
-            <div
-              className="flex min-h-[34px] w-[148px] shrink-0 items-center gap-1 rounded-xl border bg-white/85 px-2 shadow-2xs focus-within:w-[178px] focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 sm:w-[172px] sm:focus-within:w-[205px] dark:bg-slate-900/85"
-              style={{ borderColor: customIconQuery ? '#0EA5E9' : 'var(--hud-border)' }}
-              title="Dal başlığını değiştirmeden istediğiniz ikonu anında arayın (örn. roket, kedi, kılıç)"
-            >
-              <Search className="h-3.5 w-3.5 shrink-0 text-sky-500" />
-              <input
-                ref={iconSearchInputRef}
-                type="text"
-                data-testid="bar-dedicated-icon-search"
-                value={customIconQuery}
-                onFocus={() => setIsSearchingCustomIcon(true)}
-                onBlur={() => setIsSearchingCustomIcon(false)}
-                onChange={(e) => setCustomIconQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setCustomIconQuery('');
-                    iconSearchInputRef.current?.blur();
-                  } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    iconSearchInputRef.current?.blur();
-                  }
-                }}
-                placeholder="İkon ara..."
-                className="allow-text-input min-w-0 flex-1 bg-transparent text-xs font-extrabold outline-none"
-                style={{ color: 'var(--node-text)' }}
-              />
-              {customIconQuery.length > 0 && (
-                <button
-                  type="button"
-                  data-testid="bar-dedicated-icon-clear"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setCustomIconQuery('');
-                    iconSearchInputRef.current?.focus();
-                  }}
-                  aria-label="İkon aramasını temizle"
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-500/15 opacity-80 hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-
-            {/* 1-Tap Free vs Pro Filter (`[Tümü | 🎁 Ücretsiz | 👑 Pro 3D]`) */}
-            <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-emerald-500/25 bg-emerald-500/8 p-0.5">
-              <button
-                type="button"
-                data-testid="bar-tier-all-btn"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => setTierFilter('all')}
-                className={`min-h-[32px] rounded-lg px-2 text-[11px] font-extrabold whitespace-nowrap transition ${
-                  tierFilter === 'all'
-                    ? 'bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white'
-                    : 'opacity-75 hover:opacity-100'
-                }`}
-              >
-                Tümü
-              </button>
-              <button
-                type="button"
-                data-testid="bar-tier-free-btn"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => setTierFilter((prev) => (prev === 'free' ? 'all' : 'free'))}
-                className={`inline-flex min-h-[32px] items-center gap-1 rounded-lg px-2.5 text-[11px] font-extrabold whitespace-nowrap transition ${
-                  tierFilter === 'free'
-                    ? 'bg-emerald-500 text-white shadow-xs'
-                    : 'text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300'
-                }`}
-              >
-                <Gift className="h-3 w-3" />
-                <span>Ücretsiz ({freeTotalCount})</span>
-              </button>
-              <button
-                type="button"
-                data-testid="bar-tier-pro-btn"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => setTierFilter((prev) => (prev === 'pro' ? 'all' : 'pro'))}
-                className={`inline-flex min-h-[32px] items-center gap-1 rounded-lg px-2 text-[11px] font-extrabold whitespace-nowrap transition ${
-                  tierFilter === 'pro'
-                    ? 'bg-amber-500 text-slate-950 shadow-xs'
-                    : 'text-amber-700 hover:bg-amber-500/15 dark:text-amber-300'
-                }`}
-              >
-                <Crown className="h-3 w-3" />
-                <span>Pro 3D</span>
-              </button>
-            </div>
-
-            {/* Style Tabs */}
-            <div className="flex shrink-0 items-center gap-0.5 rounded-xl bg-slate-500/10 p-0.5">
-              {STYLE_TABS.map((tab) => {
-                const active = styleMode === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => setStyleMode(tab.id)}
-                    className={`flex min-h-[32px] items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-extrabold whitespace-nowrap transition-colors ${
-                      active
-                        ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
-                        : 'opacity-75 hover:opacity-100'
-                    }`}
-                  >
-                    <span>{tab.emoji}</span>
-                    <span className={active ? 'inline' : 'hidden md:inline'}>
-                      {tab.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* 1-Tap Device Photo Gallery Picker (`🖼️ Foto Ekle`) */}
-            <button
-              type="button"
-              data-testid="bar-gallery-photo-btn"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() =>
-                triggerGalleryPhotoPicker(activeBranchColor, (sticker) => {
-                  onApplySticker(activeNode.id, sticker);
-                  void hapticSuccess();
-                })
-              }
-              title="Telefon / Tablet Galerisinden Kendi Fotoğrafını veya Görselini Ekle (%100 Ücretsiz)"
-              className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-2.5 text-[11.5px] font-extrabold whitespace-nowrap text-indigo-700 hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
-            >
-              <ImagePlus className="h-3.5 w-3.5 shrink-0" />
-              <span>Foto Ekle</span>
-            </button>
-
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => onOpenGalleryDrawer(searchQuery)}
-              title="43.000+ Çevrimdışı & 540.000+ Online Görsel Galerisi"
-              className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-2.5 text-[11.5px] font-extrabold whitespace-nowrap text-sky-700 hover:bg-sky-500/25 active:scale-95 dark:text-sky-300"
-            >
-              <Search className="h-3.5 w-3.5 shrink-0" />
-              <span>+{Math.max(150, totalHealthyCount)} İkon</span>
-            </button>
-
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => onOpenAIStudio(searchQuery)}
-              title="3D & Özel Tasarım Çıkartma Stüdyosu (%100 Ücretsiz)"
-              className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 text-[11.5px] font-extrabold whitespace-nowrap text-white shadow-xs active:scale-95"
-            >
-              <Sparkles className="h-3.5 w-3.5 shrink-0" />
-              <span>3D & Özel İkon</span>
-            </button>
-
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={onOpenNoteCropper}
-              title="Ders Notundan / Slayttan Şema Kes"
-              className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-2.5 text-[11.5px] font-extrabold whitespace-nowrap text-emerald-700 hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-300"
-            >
-              <Camera className="h-3.5 w-3.5 shrink-0" />
-              <span>Nottan Kes</span>
-            </button>
-
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={onOpenQuickSketch}
-              title="Kalem veya Parmakla Çiz"
-              className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/12 px-2.5 text-[11.5px] font-extrabold whitespace-nowrap text-amber-700 hover:bg-amber-500/20 active:scale-95 dark:text-amber-300"
-            >
-              <Pencil className="h-3.5 w-3.5 shrink-0" />
-              <span>Karala</span>
-            </button>
-          </div>
-        )}
-
-        {/* ROW 2: Live Horizontal Sticker Carousel */}
-        <div className="relative flex items-center">
-          {canScrollLeft && !kb.isTouchDevice && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => scrollCarouselBy(-280)}
-              title="Sola Kaydır"
-              className="absolute left-0.5 z-10 flex h-8 w-8 items-center justify-center rounded-full border bg-white/95 text-slate-800 shadow-md hover:scale-105 dark:bg-slate-900/95 dark:text-white"
-              style={{ borderColor: 'var(--hud-border)' }}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-
-          <div
-            ref={carouselRef}
-            onScroll={updateScrollChevrons}
-            onWheel={(e) => {
-              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                e.currentTarget.scrollLeft += e.deltaY;
-              }
-            }}
-            className={`no-scrollbar flex w-full items-center overflow-x-auto ${
-              isSlimKeyboardMode ? 'gap-1.5 py-0' : 'gap-2 py-0.5'
-            }`}
-            style={{ touchAction: 'pan-x' }}
-          >
-            {isSlimKeyboardMode &&
-              isFreshEmptyBranch &&
-              proactiveSuggestions.length > 0 &&
-              searchQuery.trim().length === 0 &&
-              proactiveSuggestions.slice(0, 3).map((sug) => (
-                <button
-                  key={sug.id}
-                  type="button"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    void hapticSuccess();
-                    onApplyProactiveSuggestion(activeNode.id, sug);
-                  }}
-                  className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-xl border border-violet-500/35 bg-violet-500/10 px-2.5 text-[11px] font-extrabold whitespace-nowrap active:scale-95"
-                >
-                  <img
-                    src={sug.sticker.url}
-                    alt=""
-                    className="h-6 w-6 object-contain"
-                  />
-                  <span>{sug.title}</span>
-                </button>
-              ))}
-
-            {carouselEntries.length === 0 && searchQuery.trim().length > 0 ? (
-              <div className="flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-dashed px-3 py-1.5 text-xs">
-                <span className="truncate opacity-75">
-                  “<strong>{searchQuery}</strong>” için bu filtrede ikon yok.
-                </span>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {tierFilter !== 'all' && (
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => setTierFilter('all')}
-                      className="rounded-xl border px-2.5 py-1.5 font-extrabold"
-                    >
-                      Tümünü Göster
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() =>
-                      triggerGalleryPhotoPicker(activeBranchColor, (sticker) => {
-                        onApplySticker(activeNode.id, sticker);
-                        void hapticSuccess();
-                      })
-                    }
-                    className="inline-flex items-center gap-1 rounded-xl border border-indigo-500/40 bg-indigo-500/12 px-2.5 py-1.5 font-extrabold text-indigo-700 dark:text-indigo-300"
-                  >
-                    <ImagePlus className="h-3.5 w-3.5" />
-                    <span>Foto Seç</span>
-                  </button>
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => onOpenAIStudio(searchQuery)}
-                    className="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-1.5 font-extrabold text-white"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>3D Üret</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              carouselEntries.map(({ item, origIdx, isFree }) => {
-                const isBusy = processingId === item.id;
-                const isSelected = activeNode.sticker?.id === item.id;
-                const isProLocked = !isFree;
-                const isProCraft = !isFree || item.tier === 'pro' || item.mode === '3d';
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    data-testid={isProLocked ? 'pro-sticker-tile' : 'free-sticker-tile'}
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => void handleSelectVisual(item, origIdx, isFree)}
-                    title={`${item.title} (${item.providerName})${
-                      isProLocked ? ' • PRO 3D & Atlas' : ' • Ücretsiz'
-                    }`}
-                    className={`group relative flex shrink-0 flex-col items-center justify-center overflow-hidden border transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                      isSlimKeyboardMode
-                        ? 'h-12 w-12 rounded-xl p-1'
-                        : isTightAboveKeyboard
-                        ? 'h-14 w-14 rounded-2xl p-1.5'
-                        : 'h-[58px] w-[58px] rounded-2xl p-1.5 sm:h-[68px] sm:w-[68px]'
-                    } ${
-                      isSelected
-                        ? 'border-sky-500 bg-sky-500/15 ring-2 ring-sky-500/50'
-                        : isProLocked
-                        ? 'border-amber-400/65 bg-gradient-to-br from-amber-500/14 via-violet-500/8 to-amber-400/20 shadow-xs hover:border-amber-400'
-                        : isProCraft
-                        ? 'border-violet-400/45 bg-gradient-to-br from-violet-500/10 to-sky-500/10'
-                        : 'bg-white/90 hover:bg-white dark:bg-slate-800/85 dark:hover:bg-slate-800'
-                    }`}
-                    style={{
-                      borderColor:
-                        isSelected || isProLocked || isProCraft
-                          ? undefined
-                          : 'var(--hud-border)',
-                    }}
-                  >
-                    <img
-                      src={item.previewUrl}
-                      alt={item.title}
-                      loading={origIdx < 16 ? 'eager' : 'lazy'}
-                      decoding="async"
-                      draggable={false}
-                      onError={() => {
-                        setBrokenIds((prev) => new Set(prev).add(item.id));
-                      }}
-                      className={`${
-                        isSlimKeyboardMode
-                          ? 'h-9 w-9'
-                          : isTightAboveKeyboard
-                          ? 'h-10 w-10'
-                          : 'h-11 w-11 sm:h-12 sm:w-12'
-                      } object-contain transition-transform group-hover:scale-110 ${
-                        isProLocked ? 'drop-shadow-[0_3px_6px_rgba(245,158,11,0.28)]' : ''
-                      }`}
-                    />
-                    {isProLocked && (
-                      <span
-                        data-testid="pro-sticker-badge"
-                        className="pointer-events-none absolute top-1 right-1 inline-flex items-center gap-0.5 rounded-md bg-gradient-to-r from-amber-500 to-orange-400 px-1 py-0.2 text-[8px] leading-tight font-black tracking-tight text-slate-950 shadow-xs"
-                      >
-                        👑 PRO
-                      </span>
-                    )}
-                    {isBusy && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80">
-                        <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
-                      </div>
-                    )}
-                  </button>
-                );
-              })
-            )}
-
-            {loadingRemote && (
-              <div className="flex h-[66px] w-14 shrink-0 items-center justify-center rounded-2xl border border-dashed text-sky-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                />
               </div>
             )}
-          </div>
 
-          {canScrollRight && !kb.isTouchDevice && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => scrollCarouselBy(280)}
-              title="Sağa Kaydır"
-              className="absolute right-0.5 z-10 flex h-8 w-8 items-center justify-center rounded-full border bg-white/95 text-slate-800 shadow-md hover:scale-105 dark:bg-slate-900/95 dark:text-white"
-              style={{ borderColor: 'var(--hud-border)' }}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* ROW 3: Working S/M/L/XL Size + Style + Colors + Checklist + Priority + Link + Delete */}
-        {!isSlimKeyboardMode && !isTightAboveKeyboard && (
-          <div
-            className="no-scrollbar mt-1.5 flex items-center justify-between gap-2.5 overflow-x-auto border-t pt-2 pb-0.5 text-[11.5px]"
-            style={{ borderColor: 'var(--hud-border)', touchAction: 'pan-x' }}
-          >
-            <div className="flex shrink-0 items-center gap-1.5">
-              {/* Working Sticker Size Preset (S / M / L / XL) - Generous Tablet & Phone Touch Targets */}
-              <div
-                className="inline-flex items-center gap-0.5 rounded-xl bg-slate-500/10 p-0.5"
-                title="İkon / Görsel Boyutu (S / M / L / XL)"
+            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                data-testid="studio-priority-btn"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={handleCyclePriority}
+                className={`inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
+                  activeNode.priorityTag === 'important'
+                    ? 'bg-gradient-to-r from-rose-600 to-orange-500 text-white'
+                    : activeNode.priorityTag === 'exam'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950'
+                    : activeNode.priorityTag === 'review'
+                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white'
+                    : 'border border-rose-500/35 bg-rose-500/12 text-rose-700 dark:text-rose-300'
+                }`}
               >
-                <span className="px-1.5 text-[10.5px] font-extrabold opacity-70">
-                  Boyut:
+                {!activeNode.priorityTag && <Flame className="h-4 w-4 text-rose-500" />}
+                <span>
+                  {activeNode.priorityTag ? PRIORITY_LABELS[activeNode.priorityTag] : 'Önemli'}
                 </span>
-                {SIZE_PRESETS.map((sz) => (
-                  <button
-                    key={sz.id}
-                    type="button"
-                    data-testid={`size-btn-${sz.id}`}
-                    title={sz.hint}
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => handlePickStickerSize(sz.id)}
-                    className={`min-h-[36px] min-w-[34px] rounded-lg px-2 text-xs font-extrabold transition active:scale-95 ${
-                      effectiveStickerSize === sz.id
-                        ? 'bg-sky-500 text-white shadow-2xs'
-                        : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
-                    }`}
-                  >
-                    {sz.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Card vs Organic Style Toggle */}
-              {!isRootNode && (
-                <div className="inline-flex items-center gap-0.5 rounded-xl bg-slate-500/10 p-0.5">
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => onChangeNodeStyle(activeNode.id, 'card')}
-                    className={`min-h-[36px] rounded-lg px-2.5 text-[11px] font-extrabold active:scale-95 ${
-                      effectiveNodeStyle === 'card'
-                        ? 'bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white'
-                        : 'opacity-75 hover:opacity-100'
-                    }`}
-                  >
-                    Kart
-                  </button>
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => onChangeNodeStyle(activeNode.id, 'organic')}
-                    className={`min-h-[36px] rounded-lg px-2.5 text-[11px] font-extrabold active:scale-95 ${
-                      effectiveNodeStyle === 'organic'
-                        ? 'bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white'
-                        : 'opacity-75 hover:opacity-100'
-                    }`}
-                  >
-                    Organik
-                  </button>
-                </div>
-              )}
-
-              {/* Branch Color Swatches */}
-              {(isMainBranch || isRootNode || showStyleCustomize) && (
-                <div className="flex items-center gap-1.5 rounded-xl bg-slate-500/10 px-2 py-1">
-                  {BRANCH_PALETTE.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => onChangeBranchColor(activeNode.id, col)}
-                      title="Dal Rengi"
-                      className={`h-5 w-5 rounded-full transition-transform ${
-                        activeNode.branchColor === col
-                          ? 'scale-115 ring-2 ring-slate-900 dark:ring-white'
-                          : 'opacity-80 hover:opacity-100'
-                      }`}
-                      style={{ backgroundColor: col }}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {offlineMs !== null && (
-                <span className="hidden items-center gap-0.5 rounded-lg bg-emerald-500/12 px-2 py-1 text-[10px] font-extrabold text-emerald-700 xl:inline-flex dark:text-emerald-300">
-                  <Zap className="h-3 w-3" />
-                  {offlineMs}ms
-                </span>
-              )}
-            </div>
-
-            {/* Right Utility Pills (Task Checkbox + Priority + Link + Smart Sub-branches + Badge + Remove Icon) */}
-            <div className="flex shrink-0 items-center gap-1">
-              {!isMainBranch && !isRootNode && (
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => setShowStyleCustomize((v) => !v)}
-                  title="Dal Rengi Seç"
-                  className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
-                >
-                  <span
-                    className="h-4 w-4 rounded-full border border-white shadow-xs"
-                    style={{ backgroundColor: activeBranchColor }}
-                  />
-                </button>
-              )}
+              </button>
 
               {!isRootNode && (
                 <button
@@ -1288,41 +1043,16 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                     void hapticLight();
                     onToggleNodeCheck(activeNode.id);
                   }}
-                  title="Görev / Tamamlandı Onay Kutusu Ekle"
-                  className={`inline-flex h-8 items-center gap-1 rounded-xl px-2 font-bold ${
+                  className={`inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
                     typeof activeNode.checked === 'boolean'
                       ? 'bg-emerald-500 text-white'
-                      : 'hover:bg-slate-500/10'
+                      : 'bg-slate-500/12 hover:bg-slate-500/18'
                   }`}
                 >
-                  <CheckSquare className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Görev</span>
+                  <CheckSquare className="h-4 w-4" />
+                  <span>Görev Kutusu</span>
                 </button>
               )}
-
-              <button
-                type="button"
-                data-testid="studio-priority-btn"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={handleCyclePriority}
-                title="Önemli / Sınavda Çıkar / Tekrar Et Vurgusu Ekle"
-                className={`inline-flex min-h-[36px] items-center gap-1 rounded-xl px-2.5 font-extrabold transition active:scale-95 ${
-                  activeNode.priorityTag === 'important'
-                    ? 'bg-gradient-to-r from-rose-600 to-orange-500 text-white shadow-sm'
-                    : activeNode.priorityTag === 'exam'
-                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-sm'
-                    : activeNode.priorityTag === 'review'
-                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm'
-                    : 'border border-rose-500/35 bg-rose-500/12 text-rose-700 hover:bg-rose-500/20 dark:text-rose-300'
-                }`}
-              >
-                {!activeNode.priorityTag && <Flame className="h-3.5 w-3.5 text-rose-500" />}
-                <span>
-                  {activeNode.priorityTag
-                    ? PRIORITY_LABELS[activeNode.priorityTag]
-                    : 'Önemli'}
-                </span>
-              </button>
 
               <button
                 type="button"
@@ -1333,52 +1063,144 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   onCloseEdit();
                   onStartCrossLink(activeNode.id);
                 }}
-                title="Başka Dala Çapraz Bağlantı / İlişki Oku Çek"
-                className="inline-flex h-8 items-center gap-1 rounded-xl bg-indigo-500/12 px-2.5 font-extrabold text-indigo-700 hover:bg-indigo-500/20 dark:text-indigo-300"
+                className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-indigo-500/15 px-3.5 text-xs font-extrabold whitespace-nowrap text-indigo-700 active:scale-95 dark:text-indigo-300"
               >
-                <Link2 className="h-3.5 w-3.5" />
-                <span>Bağlantı</span>
-              </button>
-
-              <button
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => setShowTechBadgeInput((v) => !v)}
-                title="Teknik Rozet / Madde Ekle"
-                className={`inline-flex h-8 items-center gap-1 rounded-xl px-2 font-bold ${
-                  showTechBadgeInput || activeNode.techBadge
-                    ? 'bg-sky-500 text-white'
-                    : 'hover:bg-slate-500/10'
-                }`}
-              >
-                <Tag className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Rozet</span>
+                <Link2 className="h-4 w-4" />
+                <span>Bağlantı Çek</span>
               </button>
 
               <button
                 type="button"
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={onOpenSmartSubBranches}
-                title="Akıllı Alt Dallar Öner"
-                className="inline-flex h-8 items-center gap-1 rounded-xl px-2 font-bold text-amber-600 hover:bg-amber-500/12 dark:text-amber-300"
+                className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-amber-500/15 px-3.5 text-xs font-extrabold whitespace-nowrap text-amber-700 active:scale-95 dark:text-amber-300"
               >
-                <Wand2 className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Öner</span>
+                <Wand2 className="h-4 w-4" />
+                <span>Alt Dal Öner</span>
               </button>
 
-              {activeNode.sticker && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={onOpenNoteCropper}
+                className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-emerald-500/12 px-3.5 text-xs font-extrabold whitespace-nowrap text-emerald-700 active:scale-95 dark:text-emerald-300"
+              >
+                <Camera className="h-4 w-4" />
+                <span>Nottan Kes</span>
+              </button>
+
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={onOpenQuickSketch}
+                className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-sky-500/12 px-3 text-xs font-extrabold whitespace-nowrap text-sky-700 active:scale-95 dark:text-sky-300"
+              >
+                <Pencil className="h-4 w-4" />
+                <span>Karala</span>
+              </button>
+
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => setShowTechBadgeInput((v) => !v)}
+                className={`inline-flex min-h-[42px] shrink-0 items-center gap-1 rounded-xl px-3 text-xs font-extrabold whitespace-nowrap ${
+                  showTechBadgeInput || activeNode.techBadge
+                    ? 'bg-sky-500 text-white'
+                    : 'bg-slate-500/10'
+                }`}
+              >
+                <Tag className="h-4 w-4" />
+                <span>Rozet</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: BIG S/M/L/XL SIZE + CARD/ORGANIC + COLOR SWATCHES + REMOVE ICON */}
+        {!isSlimKeyboardMode && dockTab === 'style' && (
+          <div className="flex flex-wrap items-center justify-between gap-2.5 py-0.5">
+            {/* BIG S/M/L/XL Size Buttons */}
+            <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">
+              <span className="px-2 text-xs font-extrabold opacity-70">Boyut:</span>
+              {SIZE_PRESETS.map((sz) => (
+                <button
+                  key={sz.id}
+                  type="button"
+                  data-testid={`size-btn-${sz.id}`}
+                  title={sz.hint}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => handlePickStickerSize(sz.id)}
+                  className={`min-h-[42px] min-w-[42px] rounded-xl text-sm font-black transition active:scale-95 ${
+                    effectiveStickerSize === sz.id
+                      ? 'bg-sky-500 text-white shadow-xs'
+                      : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
+                  }`}
+                >
+                  {sz.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Card vs Organic Style */}
+            {!isRootNode && (
+              <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">
                 <button
                   type="button"
                   onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => onRemoveSticker(activeNode.id)}
-                  title="İkonu Kaldır"
-                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 font-bold text-slate-600 hover:bg-slate-500/10 dark:text-slate-300"
+                  onClick={() => onChangeNodeStyle(activeNode.id, 'card')}
+                  className={`min-h-[42px] rounded-xl px-3.5 text-xs font-extrabold active:scale-95 ${
+                    effectiveNodeStyle === 'card'
+                      ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                      : 'opacity-75'
+                  }`}
                 >
-                  <Eraser className="h-3.5 w-3.5" />
-                  <span className="hidden lg:inline">İkon Sil</span>
+                  Kart
                 </button>
-              )}
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onChangeNodeStyle(activeNode.id, 'organic')}
+                  className={`min-h-[42px] rounded-xl px-3.5 text-xs font-extrabold active:scale-95 ${
+                    effectiveNodeStyle === 'organic'
+                      ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                      : 'opacity-75'
+                  }`}
+                >
+                  Organik
+                </button>
+              </div>
+            )}
+
+            {/* Big Branch Color Swatches */}
+            <div className="flex items-center gap-2 rounded-2xl bg-slate-500/10 px-3 py-1.5">
+              {BRANCH_PALETTE.map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onChangeBranchColor(activeNode.id, col)}
+                  title="Dal Rengi"
+                  className={`h-7 w-7 rounded-full transition-transform active:scale-90 ${
+                    activeNode.branchColor === col
+                      ? 'scale-115 ring-2 ring-slate-900 dark:ring-white'
+                      : 'opacity-85 hover:opacity-100'
+                  }`}
+                  style={{ backgroundColor: col }}
+                />
+              ))}
             </div>
+
+            {activeNode.sticker && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => onRemoveSticker(activeNode.id)}
+                className="inline-flex min-h-[42px] items-center gap-1.5 rounded-xl bg-slate-500/12 px-3 text-xs font-extrabold hover:bg-slate-500/20 active:scale-95"
+              >
+                <Eraser className="h-4 w-4" />
+                <span>İkonu Kaldır</span>
+              </button>
+            )}
           </div>
         )}
       </div>

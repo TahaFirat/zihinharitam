@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileCheck2,
   Gift,
+  HelpCircle,
   History,
   Layers,
   Mail,
@@ -51,6 +52,7 @@ interface SettingsModalProps {
   onRestoreMapSnapshot: (doc: MindMapDocument) => void;
   onImportBackupMaps: (docs: MindMapDocument[]) => Promise<void>;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
+  onOpenGuide?: () => void;
   initialLegalDoc?: 'privacy' | 'terms' | 'support' | null;
 }
 
@@ -65,6 +67,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onRestoreMapSnapshot,
   onImportBackupMaps,
   onTriggerPaywall,
+  onOpenGuide,
   initialLegalDoc = null,
 }) => {
   const { isLifetimePro, localizedPrice, isBusy } = useEntitlements();
@@ -528,6 +531,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span>.zihin Yedeği İçe Aktar</span>
                 </button>
               </div>
+
+              {onOpenGuide && (
+                <button
+                  type="button"
+                  data-testid="settings-open-guide-btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenGuide();
+                  }}
+                  className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs font-extrabold text-sky-700 hover:bg-sky-500/18 active:scale-95 dark:text-sky-300"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  <span>Uygulama Tanıtım Rehberini Tekrar İncele</span>
+                </button>
+              )}
 
               {snapshots.length > 0 && (
                 <div className="border-t border-slate-500/10 pt-2.5">

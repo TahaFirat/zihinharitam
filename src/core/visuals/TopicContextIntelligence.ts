@@ -23,6 +23,7 @@ export interface MapContextAnalysis {
   accent: string;
   ancestorTitles: string[];
   parentTitle: string;
+  isGeneralContext?: boolean;
 }
 
 export interface ExpandedVisualQuery {
@@ -290,8 +291,8 @@ export class TopicContextIntelligence {
       if (n.subtitle) scoreText(n.subtitle, weight * 0.5);
     }
 
-    let bestDisc: DisciplineProfile = hinted ?? 'system_design_cs';
-    let bestScore = -1;
+    let bestDisc: DisciplineProfile = hinted ?? 'humanities_social';
+    let bestScore = 0;
     for (const [disc, sc] of Object.entries(scores) as Array<[DisciplineProfile, number]>) {
       if (sc > bestScore) {
         bestScore = sc;
@@ -311,14 +312,27 @@ export class TopicContextIntelligence {
       .map((id) => nodes[id]?.title ?? '')
       .filter(Boolean);
 
+    const rootTitle = (nodes[rootNodeId]?.title || '').trim();
+    const isGenericBlankTitle =
+      !rootTitle ||
+      /^(yeni gorsel harita|yeni harita|yeni konu|ana konu|baslik|haritam)$/i.test(
+        normalizeTrAscii(rootTitle)
+      );
+    const isGeneralContext = bestScore <= 0 && !hinted;
+
     const meta = DISCIPLINE_LABELS[bestDisc];
     return {
       discipline: bestDisc,
-      label: meta.label,
-      emoji: meta.emoji,
-      accent: meta.accent,
+      label: isGeneralContext
+        ? isGenericBlankTitle
+          ? 'Genel Zihin Haritası'
+          : rootTitle
+        : meta.label,
+      emoji: isGeneralContext ? '🧠' : meta.emoji,
+      accent: isGeneralContext ? '#0EA5E9' : meta.accent,
       ancestorTitles,
-      parentTitle: parentNode?.title ?? '',
+      parentTitle: parentNode?.title ?? rootTitle,
+      isGeneralContext,
     };
   }
 
@@ -490,6 +504,9 @@ export class TopicContextIntelligence {
     existingSiblingTitles: string[] = []
   ): ProactiveBranchSuggestion[] {
     const pNorm = normalizeTrAscii(parentTitle);
+    const allContextNorm = normalizeTrAscii(
+      `${parentTitle} ${context.parentTitle} ${context.ancestorTitles.join(' ')}`
+    );
     const existingNorms = new Set(existingSiblingTitles.map(normalizeTrAscii));
 
     const makeSticker = (packId: string, label: string): StickerAsset => {
@@ -505,6 +522,12 @@ export class TopicContextIntelligence {
       };
     };
 
+    const isGenericBlank =
+      !pNorm ||
+      /^(yeni gorsel harita|yeni harita|yeni konu|ana konu|baslik|genel zihin haritasi)$/.test(
+        pNorm
+      );
+
     type PresetItem = [title: string, packId: string, techBadge?: string];
     let items: PresetItem[] = [];
 
@@ -516,6 +539,127 @@ export class TopicContextIntelligence {
         ['Klinik Oskültasyon & Ekokardiyografi', 'med_stethoscope_clinic', 'Apeks Odak'],
         ['Aort & Sistemik Dolaşım', 'med_heart_mitral', 'Yüksek Basınç'],
         ['Otonom Sinir Regülasyonu', 'med_neuron_synapse', 'N. Vagus & Sempatik'],
+      ];
+    } else if (
+      pNorm.includes('gunes sistemi') ||
+      pNorm.includes('gezegen') ||
+      pNorm.includes('uzay') ||
+      pNorm.includes('astronomi')
+    ) {
+      items = [
+        ['İç Gezegenler (Merkür, Venüs, Dünya, Mars)', 'sci_atom_quantum', 'Karasal Gezegenler'],
+        ['Gaz Devleri (Jüpiter & Satürn)', 'sci_polar_unit_circle', 'Halkalı Devler'],
+        ['Buz Devleri (Uranüs & Neptün)', 'sci_optical_prism', 'Dış Yörünge'],
+        ['Güneş & Nükleer Füzyon', 'sci_chemistry_flask', 'Merkez Yıldız'],
+        ['Asteroit Kuşağı & Kuyruklu Yıldızlar', 'sci_atom_quantum', 'Küçük Cisimler'],
+        ['Uzay Keşifleri & Teleskoplar', 'eng_iot_sensor_rf', 'James Webb & NASA'],
+      ];
+    } else if (
+      pNorm.includes('ataturk') ||
+      pNorm.includes('cumhuriyet') ||
+      pNorm.includes('kurtulus') ||
+      pNorm.includes('inkilap')
+    ) {
+      items = [
+        ['Cumhuriyetçilik & Ulusal Egemenlik', 'law_separation_powers', 'TBMM • 29 Ekim 1923'],
+        ['Milliyetçilik & Tam Bağımsızlık', 'hist_ottoman_timar', 'Misak-ı Milli'],
+        ['Halkçılık & Toplumsal Eşitlik', 'law_istinaf_scales', 'Hukuk Önünde Eşitlik'],
+        ['Laiklik & Akıl-Bilim', 'hum_books_literature', 'Eğitim & Hukuk Birliği'],
+        ['Devletçilik & Ekonomik Kalkınma', 'econ_supply_demand', 'Sanayi Planları'],
+        ['İnkılapçılık & Çağdaşlaşma', 'arch_blueprint_compass', 'Sürekli İlerleme'],
+      ];
+    } else if (
+      pNorm.includes('sindirim') ||
+      pNorm.includes('hucre') ||
+      pNorm.includes('mitoz') ||
+      pNorm.includes('mayoz') ||
+      pNorm.includes('dna') ||
+      pNorm.includes('biyoloji')
+    ) {
+      items = [
+        ['Hücre Zarı & Organeller', 'med_cell_mitochondria', 'ATP & Metabolizma'],
+        ['DNA Replikasyonu & Genetik Kod', 'med_dna_cell', 'Nükleotit Dizisi'],
+        ['Hücre Bölünmesi (Mitoz & Mayoz)', 'med_microscope_lab', 'Profaz → Telofaz'],
+        ['Enzimler & Biyokimyasal Tepkimeler', 'sci_chemistry_flask', 'Katalizör Etki'],
+        ['Doku, Organ & Sistem Hiyerarşisi', 'med_stethoscope_clinic', 'Homeostaz'],
+        ['Sınavda Çıkan Kritik Farklar', 'hum_books_literature', 'Karşılaştırma Tablosu'],
+      ];
+    } else if (
+      pNorm.includes('spor') ||
+      pNorm.includes('futbol') ||
+      pNorm.includes('basketbol') ||
+      pNorm.includes('antrenman') ||
+      pNorm.includes('fitness') ||
+      pNorm.includes('beslenme')
+    ) {
+      items = [
+        ['Isınma & Esneklik Rutini', 'med_lungs_alveoli', 'Sakatlık Önleme'],
+        ['Taktik Diziliş & Oyun Planı', 'arch_blueprint_compass', 'Hücum & Savunma'],
+        ['Kondisyon & Dayanıklılık', 'med_sa_node_ecg', 'Nabız Bölgeleri'],
+        ['Beslenme & Hidrasyon Planı', 'med_cell_mitochondria', 'Protein & Karbonhidrat'],
+        ['Dinlenme & Uyku Toparlanması', 'med_neuron_synapse', 'Kas Yenilenmesi'],
+        ['Haftalık Performans Hedefleri', 'econ_supply_demand', 'İlerleme Takibi'],
+      ];
+    } else if (
+      pNorm.includes('ingilizce') ||
+      pNorm.includes('yabanci dil') ||
+      pNorm.includes('dil bilgisi') ||
+      pNorm.includes('edebiyat') ||
+      pNorm.includes('roman') ||
+      pNorm.includes('siir')
+    ) {
+      items = [
+        ['Temel Kavramlar & Türler', 'hum_books_literature', 'Genel Çerçeve'],
+        ['Dil Bilgisi & Yapı Kuralları', 'law_contract_seal', 'Sözdizimi'],
+        ['Önemli Eserler & Yazarlar', 'hist_ottoman_timar', 'Dönem Temsilcileri'],
+        ['Kelime & İfade Hazinesi', 'hum_books_literature', 'Aktif Kullanım'],
+        ['Örnek Cümleler & Analiz', 'law_evidence_discovery', 'Uygulama'],
+        ['Sınav İpuçları & Sık Hatalar', 'sci_polar_unit_circle', 'Püf Noktalar'],
+      ];
+    } else if (
+      pNorm.includes('cografya') ||
+      pNorm.includes('iklim') ||
+      pNorm.includes('turkiye') ||
+      pNorm.includes('dunya')
+    ) {
+      items = [
+        ['Coğrafi Konum & Yeryüzü Şekilleri', 'arch_structural_bridge', 'Dağlar & Ovalar'],
+        ['İklim Tipleri & Bitki Örtüsü', 'sci_optical_prism', 'Sıcaklık & Yağış'],
+        ['Su Kaynakları, Akarsular & Denizler', 'med_lungs_alveoli', 'Hidrografya'],
+        ['Nüfus, Yerleşme & Göç', 'law_separation_powers', 'Demografi'],
+        ['Ekonomik Faaliyetler & Tarım', 'econ_supply_demand', 'Üretim & Ticaret'],
+        ['Doğal Afetler & Çevre Koruma', 'sd_waf_firewall', 'Sürdürülebilirlik'],
+      ];
+    } else if (
+      pNorm.includes('psikoloji') ||
+      pNorm.includes('felsefe') ||
+      pNorm.includes('sosyoloji') ||
+      pNorm.includes('ogrenme') ||
+      pNorm.includes('hafiza')
+    ) {
+      items = [
+        ['Temel Kuramlar & Yaklaşımlar', 'med_neuron_synapse', 'Kavramsal Çerçeve'],
+        ['Önde Gelen Düşünürler', 'hum_books_literature', 'Tarihsel Gelişim'],
+        ['Bilişsel Süreçler & Algı', 'med_brain_cortex', 'Dikkat & Bellek'],
+        ['Günlük Hayattan Örnekler', 'econ_supply_demand', 'Pratik Yansıma'],
+        ['Karşılaştırmalı Eleştiriler', 'law_istinaf_scales', 'Artı & Eksiler'],
+        ['Özet Kavram Sözlüğü', 'law_contract_seal', 'Anahtar Terimler'],
+      ];
+    } else if (
+      pNorm.includes('pazarlama') ||
+      pNorm.includes('girisim') ||
+      pNorm.includes('is plani') ||
+      pNorm.includes('proje') ||
+      pNorm.includes('hedef') ||
+      pNorm.includes('plan')
+    ) {
+      items = [
+        ['Hedef Kitle & Problem Tanımı', 'med_stethoscope_clinic', 'İhtiyaç Analizi'],
+        ['Değer Önerisi & Çözüm', 'sci_optical_prism', 'Fark Yaratan Özellik'],
+        ['Gelir Modeli & Bütçe', 'econ_supply_demand', 'Maliyet & Karlılık'],
+        ['Pazarlama & Büyüme Kanalları', 'sd_cdn_edge', 'Erişim Stratejisi'],
+        ['Zaman Çizelgesi & Kilometre Taşları', 'arch_blueprint_compass', 'Aksiyon Planı'],
+        ['Riskler & Ölçüm Metrikleri (KPI)', 'sd_data_warehouse', 'Başarı Göstergeleri'],
       ];
     } else if (pNorm.includes('op-amp') || pNorm.includes('yukseltec') || pNorm.includes('elektronik')) {
       items = [
@@ -551,7 +695,39 @@ export class TopicContextIntelligence {
         ['Eyalet & Sancak İdaresi', 'law_separation_powers', 'Taşra Teşkilatı'],
         ['Tarihsel Kaynak & Kronoloji', 'hum_books_literature', 'Arşiv Belgeleri'],
       ];
-    } else if (context.discipline === 'medicine_biology') {
+    } else if (
+      pNorm.includes('python') ||
+      pNorm.includes('javascript') ||
+      pNorm.includes('yazilim') ||
+      pNorm.includes('programlama') ||
+      pNorm.includes('algoritma') ||
+      pNorm.includes('yapay zeka')
+    ) {
+      items = [
+        ['Temel Söz Dizimi & Veri Tipleri', 'eng_logic_gates', 'Değişkenler & Yapılar'],
+        ['Kontrol Akışı & Fonksiyonlar', 'sd_load_balancer', 'Döngüler & Modüller'],
+        ['Veri Yapıları & Algoritmalar', 'sd_db_sharding', 'Karmaşıklık O(n)'],
+        ['Nesne Yönelimli Programlama (OOP)', 'sd_kubernetes', 'Sınıf & Kalıtım'],
+        ['Hata Yönetimi & Test', 'sd_waf_firewall', 'Unit Test & Debug'],
+        ['Gerçek Dünya Projesi & API', 'sd_api_gateway', 'Uygulamalı Örnek'],
+      ];
+    } else if (
+      !context.isGeneralContext &&
+      (context.discipline === 'system_design_cs' ||
+        allContextNorm.includes('sistem tasarim') ||
+        allContextNorm.includes('mikroservis') ||
+        allContextNorm.includes('bulut'))
+    ) {
+      items = [
+        ['Yük Dengeleyici (Load Balancer)', 'sd_load_balancer', 'L7 Round-Robin'],
+        ['API Gateway & Rate Limiter', 'sd_api_gateway', 'Port 443 • HTTPS'],
+        ['Redis Bellek İçi Önbellek', 'sd_redis_cache', 'Sub-ms Cache Hit'],
+        ['Veritabanı Sharding Kümesi', 'sd_db_sharding', 'Consistent Hashing'],
+        ['Kafka Olay Kuyruğu (Event Stream)', 'sd_kafka_queue', 'Async Pub/Sub'],
+        ['CDN Kenar Dağıtım Ağı', 'sd_cdn_edge', 'Edge PoP'],
+        ['WAF Güvenlik & OAuth2 JWT', 'sd_waf_firewall', 'Zero-Trust'],
+      ];
+    } else if (!context.isGeneralContext && context.discipline === 'medicine_biology') {
       items = [
         ['Hücresel Yapı & Mitokondri', 'med_cell_mitochondria', 'ATP Sentezi'],
         ['Nöron & Sinaptik İletim', 'med_neuron_synapse', 'Aksiyon Potansiyeli'],
@@ -560,7 +736,7 @@ export class TopicContextIntelligence {
         ['Mikroskobik Histoloji', 'med_microscope_lab', 'Doku Analizi'],
         ['Klinik Muayene Bulguları', 'med_stethoscope_clinic', 'Semiyoloji'],
       ];
-    } else if (context.discipline === 'electronics_robotics') {
+    } else if (!context.isGeneralContext && context.discipline === 'electronics_robotics') {
       items = [
         ['İşlemsel Yükselteç (Op-Amp)', 'eng_opamp_inverting', 'Analog Sinyal'],
         ['Sayısal Mantık Kapıları', 'eng_logic_gates', 'FPGA / CMOS'],
@@ -569,7 +745,7 @@ export class TopicContextIntelligence {
         ['Servo Eyleyici & PID', 'eng_servo_actuator', 'Kapalı Çevrim'],
         ['Batarya Yönetim Sistemi (BMS)', 'eng_bms_battery', 'Li-Ion Koruma'],
       ];
-    } else if (context.discipline === 'law_governance') {
+    } else if (!context.isGeneralContext && context.discipline === 'law_governance') {
       items = [
         ['İstinaf & Üst Derece Denetimi', 'law_istinaf_scales', 'Maddi + Hukuki'],
         ['Mahkeme Hükmü & Karar', 'law_judge_gavel', 'Gerekçeli Karar'],
@@ -577,7 +753,7 @@ export class TopicContextIntelligence {
         ['Sözleşme & Borç İlişkisi', 'law_contract_seal', 'TBK Hükümleri'],
         ['Anayasal Kuvvetler Ayrılığı', 'law_separation_powers', 'Normlar Hiyerarşisi'],
       ];
-    } else if (context.discipline === 'architecture_civil') {
+    } else if (!context.isGeneralContext && context.discipline === 'architecture_civil') {
       items = [
         ['Gotik Uçan Payanda', 'arch_flying_buttress', 'Yanal Destek'],
         ['Kemer, Tonoz & Kubbe', 'arch_geodesic_dome', 'Kagir Strüktür'],
@@ -585,31 +761,40 @@ export class TopicContextIntelligence {
         ['Yapısal Köprü & Açıklık', 'arch_structural_bridge', 'Çekme / Basınç'],
         ['Plan, Kesit & Perspektif', 'arch_blueprint_compass', 'Mimari Anlatım'],
       ];
-    } else if (context.discipline === 'exact_sciences') {
+    } else if (!context.isGeneralContext && context.discipline === 'exact_sciences') {
       items = [
         ['Atom & Kuantum Orbitalleri', 'sci_atom_quantum', 'Schrödinger'],
         ['Kimyasal Reaksiyon & Denge', 'sci_chemistry_flask', 'ΔG = ΔH - TΔS'],
         ['Optik Prizma & Dalga Boyu', 'sci_optical_prism', 'Snell Yasası'],
         ['Kutupsal Gösterim & Vektörler', 'sci_polar_unit_circle', 'z = r·e^(iθ)'],
       ];
-    } else if (context.discipline === 'business_economics') {
+    } else if (!context.isGeneralContext && context.discipline === 'business_economics') {
       items = [
         ['Arz-Talep Piyasa Dengesi', 'econ_supply_demand', 'Esneklik Analizi'],
         ['Ödeme Geçidi & Finansal Akış', 'sd_payment_ledger', 'Nakit Akışı'],
         ['Veri Analitiği & Büyüme', 'sd_data_warehouse', 'KPI & ROI'],
         ['Regülasyon & Sözleşme Hukuku', 'law_contract_seal', 'Ticari Uyum'],
       ];
-    } else {
-      // Default Flagship: System Design & Distributed Cloud Architecture
+    } else if (isGenericBlank) {
+      // Clean, universal mind-map framework for newly created blank maps ("Yeni Görsel Harita") — NEVER unrelated Redis/Kafka!
       items = [
-        ['Yük Dengeleyici (Load Balancer)', 'sd_load_balancer', 'L7 Round-Robin'],
-        ['API Gateway & Rate Limiter', 'sd_api_gateway', 'Port 443 • HTTPS'],
-        ['Redis Bellek İçi Önbellek', 'sd_redis_cache', 'Sub-ms Cache Hit'],
-        ['Veritabanı Sharding Kümesi', 'sd_db_sharding', 'Consistent Hashing'],
-        ['Kafka Olay Kuyruğu (Event Stream)', 'sd_kafka_queue', 'Async Pub/Sub'],
-        ['CDN Kenar Dağıtım Ağı', 'sd_cdn_edge', 'Edge PoP'],
-        ['Mikroservis & Kubernetes Kümesi', 'sd_kubernetes', 'Auto-Scaling Pods'],
-        ['WAF Güvenlik & OAuth2 JWT', 'sd_waf_firewall', 'Zero-Trust'],
+        ['Temel Kavramlar & Tanımlar', 'hum_books_literature', 'Giriş & Çerçeve'],
+        ['Ana Başlıklar & Bölümler', 'arch_blueprint_compass', 'Yapısal Dağılım'],
+        ['Nedenleri & Temel İlkeler', 'sci_optical_prism', 'Mantıksal Bağ'],
+        ['Somut Örnekler & Vakalar', 'med_microscope_lab', 'Uygulama'],
+        ['Avantajlar & Dikkat Edilecekler', 'law_istinaf_scales', 'Karşılaştırma'],
+        ['Özet & Aksiyon Adımları', 'law_contract_seal', 'Kapanış Notu'],
+      ];
+    } else {
+      // Dynamic Custom Topic Synthesizer for ANY arbitrary subject (e.g., "Kahve Demleme", "Kediler", "Mars Kolonisi")
+      const cleanTopic = parentTitle.trim().slice(0, 32);
+      items = [
+        [`${cleanTopic}: Temel Tanım & Amaç`, 'hum_books_literature', 'Genel Bakış'],
+        [`${cleanTopic}: Ana Türler & Sınıflar`, 'arch_blueprint_compass', 'Kategoriler'],
+        [`${cleanTopic}: Aşamalar & Süreç`, 'sci_polar_unit_circle', 'Adım Adım'],
+        [`${cleanTopic}: Önemli Örnekler`, 'med_microscope_lab', 'Örnek İnceleme'],
+        [`${cleanTopic}: Artıları & Zorlukları`, 'law_istinaf_scales', 'Değerlendirme'],
+        [`${cleanTopic}: Kritik Özet & Püf Noktalar`, 'econ_supply_demand', 'Hızlı Tekrar'],
       ];
     }
 

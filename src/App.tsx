@@ -15,8 +15,10 @@ import { useKeyboardInset } from './core/native/useKeyboardInset';
 import type {
   AcademicDepartment,
   CanvasInkStroke,
+  CanvasStickyNote,
   CollaboratorPresence,
   CrossLink,
+  EraserMode,
   ExamRecallMode,
   InkToolType,
   MindMapDocument,
@@ -24,6 +26,7 @@ import type {
   MindNode,
   NodePriorityTag,
   NodeVisualStyle,
+  PaperStyleType,
   PaywallTriggerReason,
   ProactiveBranchSuggestion,
   StickerAsset,
@@ -151,9 +154,14 @@ export const App: React.FC = () => {
   const [focusMode, setFocusMode] = useState(false);
   const [drawingMode, setDrawingMode] = useState(false);
   const [inkTool, setInkTool] = useState<InkToolType>('pen');
+  const [eraserMode, setEraserMode] = useState<EraserMode>('stroke');
+  const [autoShapeEnabled, setAutoShapeEnabled] = useState(true);
   const [inkColor, setInkColor] = useState('#0F172A');
   const [inkWidth, setInkWidth] = useState(4.5);
   const [stylusOnly, setStylusOnly] = useState(false);
+  const [hardwareEraserActive, setHardwareEraserActive] = useState(false);
+  const [selectedLassoIds, setSelectedLassoIds] = useState<string[]>([]);
+  const prevDrawToolRef = useRef<InkToolType>('pen');
   const [examMode, setExamMode] = useState<ExamRecallMode>('off');
   const [revealedExamIds, setRevealedExamIds] = useState<Set<string>>(new Set());
   const [zoomPercent, setZoomPercent] = useState(100);
@@ -1811,8 +1819,43 @@ export const App: React.FC = () => {
     };
   }, [doc.nodes, doc.rootNodeId, revealedExamIds]);
 
+  // Native Apple Pencil Double-Tap/Squeeze & Samsung S-Pen Side Barrel Eraser Button Listeners!
+  useEffect(() => {
+    const onApplePencilToggle = () => {
+      if (activeScreen !== 'canvas') return;
+      void hapticLight();
+      setSelectedNodeId(null);
+      setEditingNodeId(null);
+      setDrawingMode(true);
+      setInkTool((cur) => {
+        if (cur === 'eraser') {
+          return prevDrawToolRef.current || 'pen';
+        }
+        prevDrawToolRef.current = cur;
+        return 'eraser';
+      });
+    };
+
+    const onAndroidSPenHold = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ active?: boolean }>).detail;
+      const isActive = Boolean(detail?.active);
+      setHardwareEraserActive(isActive);
+      if (isActive && activeScreen === 'canvas') {
+        void hapticLight();
+      }
+    };
+
+    window.addEventListener('zh:stylus-eraser-toggle', onApplePencilToggle);
+    window.addEventListener('zh:stylus-eraser-hold', onAndroidSPenHold);
+    return () => {
+      window.removeEventListener('zh:stylus-eraser-toggle', onApplePencilToggle);
+      window.removeEventListener('zh:stylus-eraser-hold', onAndroidSPenHold);
+    };
+  }, [activeScreen]);
+
   const handleToggleDrawingMode = useCallback(() => {
     void hapticLight();
+    setSelectedLassoIds([]);
     setDrawingMode((prev) => {
       const next = !prev;
       if (next) {
@@ -1826,6 +1869,16 @@ export const App: React.FC = () => {
       return next;
     });
   }, [inkColor]);
+
+  const handleChangeInkTool = useCallback((nextTool: InkToolType) => {
+    if (nextTool !== 'eraser') {
+      prevDrawToolRef.current = nextTool;
+    }
+    if (nextTool !== 'lasso') {
+      setSelectedLassoIds([]);
+    }
+    setInkTool(nextTool);
+  }, []);
 
   const handleAddInkStroke = useCallback(
     (stroke: CanvasInkStroke) => {
@@ -1851,6 +1904,105 @@ export const App: React.FC = () => {
     [pushHistory]
   );
 
+  const handleReplaceInkStrokes = useCallback(
+    (nextStrokes: CanvasInkStroke[]) => {
+      setDoc((prev) => ({
+        ...prev,
+        inkStrokes: nextStrokes,
+        updatedAt: Date.now(),
+      }));
+    },
+    []
+  );
+
+  const handleDeleteLassoSelected = useCallback(() => {
+    if (selectedLassoIds.length === 0) return;
+    pushHistory(docRef.current);
+    const delSet = new Set(selectedLassoIds);
+    setDoc((prev) => ({
+      ...prev,
+      inkStrokes: (prev.inkStrokes ?? []).filter((s) => !delSet.has(s.id)),
+      updatedAt: Date.now(),
+    }));
+    setSelectedLassoIds([]);
+    void hapticLight();
+  }, [selectedLassoIds, pushHistory]);
+
+  const handleRecolorLassoSelected = useCallback(
+    (newColor: string) => {
+      if (selectedLassoIds.length === 0) return;
+      pushHistory(docRef.current);
+      const selSet = new Set(selectedLassoIds);
+      setDoc((prev) => ({
+        ...prev,
+        inkStrokes: (prev.inkStrokes ?? []).map((s) =>
+          selSet.has(s.id) ? { ...s, color: newColor } : s
+        ),
+        updatedAt: Date.now(),
+      }));
+      void hapticLight();
+    },
+    [selectedLassoIds, pushHistory]
+  );
+
+  const handleCyclePaperStyle = useCallback(() => {
+    const order: PaperStyleType[] = ['dots', 'grid', 'lined', 'blank', 'warm'];
+    void hapticLight();
+    setDoc((prev) => {
+      const cur = prev.paperStyle ?? 'dots';
+      const next = order[(order.indexOf(cur) + 1) % order.length];
+      return { ...prev, paperStyle: next, updatedAt: Date.now() };
+    });
+  }, []);
+
+  const handleAddStickyNote = useCallback(() => {
+    pushHistory(docRef.current);
+    const existing = docRef.current.stickyNotes ?? [];
+    const pastelColors = ['#FEF08A', '#BBF7D0', '#BAE6FD', '#FBCFE8', '#DDD6FE'];
+    const root = docRef.current.nodes[docRef.current.rootNodeId];
+    const offset = (existing.length % 5) * 28;
+    const newNote: CanvasStickyNote = {
+      id: `sticky_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      x: Math.round((root?.x ?? 0) + 210 + offset),
+      y: Math.round((root?.y ?? 0) - 140 + offset),
+      text: '',
+      color: pastelColors[existing.length % pastelColors.length],
+      width: 204,
+    };
+    setDoc((prev) => ({
+      ...prev,
+      stickyNotes: [...(prev.stickyNotes ?? []), newNote],
+      updatedAt: Date.now(),
+    }));
+    void hapticSuccess();
+  }, [pushHistory]);
+
+  const handleUpdateStickyNote = useCallback(
+    (noteId: string, patch: Partial<CanvasStickyNote>) => {
+      setDoc((prev) => ({
+        ...prev,
+        stickyNotes: (prev.stickyNotes ?? []).map((n) =>
+          n.id === noteId ? { ...n, ...patch } : n
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    []
+  );
+
+  const handleDeleteStickyNote = useCallback(
+    (noteId: string) => {
+      pushHistory(docRef.current);
+      setDoc((prev) => ({
+        ...prev,
+        stickyNotes: (prev.stickyNotes ?? []).filter((n) => n.id !== noteId),
+        updatedAt: Date.now(),
+      }));
+      void hapticLight();
+    },
+    [pushHistory]
+  );
+
   const handleUndoInkStroke = useCallback(() => {
     const existing = docRef.current.inkStrokes ?? [];
     if (existing.length === 0) return;
@@ -1866,6 +2018,7 @@ export const App: React.FC = () => {
     const existing = docRef.current.inkStrokes ?? [];
     if (existing.length === 0) return;
     pushHistory(docRef.current);
+    setSelectedLassoIds([]);
     setDoc((prev) => ({
       ...prev,
       inkStrokes: [],
@@ -1906,6 +2059,7 @@ export const App: React.FC = () => {
           onRestoreFromTrash={handleRestoreFromTrash}
           onDeletePermanently={handleDeletePermanently}
           onImportZihinFile={handleImportZihinRaw}
+          onOpenGuide={() => setShowOnboarding(true)}
           onOpenSettings={() => {
             setSettingsInitialLegal(null);
             setSettingsOpen(true);
@@ -1920,9 +2074,12 @@ export const App: React.FC = () => {
             department={doc.department}
             contextEmoji={mapContext.emoji}
             defaultNodeStyle={defaultNodeStyle}
+            paperStyle={doc.paperStyle ?? 'dots'}
             onToggleDefaultNodeStyle={handleToggleDefaultNodeStyle}
+            onCyclePaperStyle={handleCyclePaperStyle}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onOpenOutline={() => setOutlineOpen(true)}
+            onOpenGuide={() => setShowOnboarding(true)}
             onRenameMap={(newTitle) => {
               pushHistory(doc);
               setDoc((prev) => {
@@ -1977,6 +2134,10 @@ export const App: React.FC = () => {
             }
             drawingMode={drawingMode}
             onToggleDrawingMode={handleToggleDrawingMode}
+            onExitDrawingMode={() => {
+              setDrawingMode(false);
+              setSelectedLassoIds([]);
+            }}
             focusModeActive={focusMode}
             onToggleFocusMode={() => {
               void hapticLight();
@@ -2013,13 +2174,23 @@ export const App: React.FC = () => {
             nodes={doc.nodes}
             crossLinks={doc.crossLinks}
             inkStrokes={doc.inkStrokes}
+            stickyNotes={doc.stickyNotes}
+            paperStyle={doc.paperStyle ?? 'dots'}
             drawingMode={drawingMode}
             inkTool={inkTool}
+            eraserMode={eraserMode}
+            autoShapeEnabled={autoShapeEnabled}
             inkColor={inkColor}
             inkWidth={inkWidth}
             stylusOnly={stylusOnly}
+            hardwareEraserActive={hardwareEraserActive}
+            selectedLassoIds={selectedLassoIds}
             onAddInkStroke={handleAddInkStroke}
             onDeleteInkStroke={handleDeleteInkStroke}
+            onReplaceInkStrokes={handleReplaceInkStrokes}
+            onSelectLassoIds={setSelectedLassoIds}
+            onUpdateStickyNote={handleUpdateStickyNote}
+            onDeleteStickyNote={handleDeleteStickyNote}
             rootNodeId={doc.rootNodeId}
             department={doc.department}
             darkMode={Boolean(doc.darkMode)}
@@ -2257,17 +2428,33 @@ export const App: React.FC = () => {
           <CanvasDrawingToolbar
             isOpen={drawingMode}
             activeTool={inkTool}
+            eraserMode={eraserMode}
+            autoShapeEnabled={autoShapeEnabled}
             inkColor={inkColor}
             strokeWidth={inkWidth}
             stylusOnly={stylusOnly}
+            paperStyle={doc.paperStyle ?? 'dots'}
+            hardwareEraserActive={hardwareEraserActive}
             strokeCount={(doc.inkStrokes ?? []).length}
-            onChangeTool={setInkTool}
+            selectedLassoCount={selectedLassoIds.length}
+            onChangeTool={handleChangeInkTool}
+            onToggleEraserMode={() =>
+              setEraserMode((m) => (m === 'stroke' ? 'area' : 'stroke'))
+            }
+            onToggleAutoShape={() => setAutoShapeEnabled((v) => !v)}
             onChangeColor={setInkColor}
             onChangeWidth={setInkWidth}
             onToggleStylusOnly={() => setStylusOnly((v) => !v)}
+            onCyclePaperStyle={handleCyclePaperStyle}
+            onAddStickyNote={handleAddStickyNote}
+            onDeleteLassoSelected={handleDeleteLassoSelected}
+            onRecolorLassoSelected={handleRecolorLassoSelected}
             onUndoInk={handleUndoInkStroke}
             onClearAllInk={handleClearAllInk}
-            onClose={() => setDrawingMode(false)}
+            onClose={() => {
+              setDrawingMode(false);
+              setSelectedLassoIds([]);
+            }}
           />
 
           {/* Mobile & Tablet Thumb-Reachable Bottom Quick-Action Pill (When idle) */}
@@ -2546,6 +2733,7 @@ export const App: React.FC = () => {
           setSettingsOpen(false);
           openPaywall(reason, null);
         }}
+        onOpenGuide={() => setShowOnboarding(true)}
         initialLegalDoc={settingsInitialLegal}
       />
 

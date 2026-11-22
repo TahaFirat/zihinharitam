@@ -1,31 +1,43 @@
 import { expandSemanticQueryV3, normalizeTrToken } from './taxonomyData.js';
 
 const PACK_QUALITY_MULTIPLIER = {
-  'fluent-emoji-flat': 1.36,
-  'fluent-color': 1.34,
-  'streamline-color': 1.32,
-  'streamline-emojis': 1.29,
-  twemoji: 1.27,
-  'icon-park': 1.24,
+  // GAMIFIED / GLOSSY 3D / PLUMP COLOR PACKS RANK #1! (Photo 2 aesthetic)
+  'fluent-emoji-flat': 1.56,
+  'streamline-plump-color': 1.54,
+  'fluent-color': 1.52,
+  'streamline-color': 1.49,
+  emojione: 1.46,
+  noto: 1.45,
+  'streamline-emojis': 1.43,
+  fxemoji: 1.40,
+  marketeq: 1.38,
+  twemoji: 1.36,
+  'flat-color-icons': 1.34,
+  'icon-park': 1.33,
+  meteocons: 1.35,
+  'circle-flags': 1.24,
   openmoji: 1.22,
-  'flat-color-icons': 1.22,
-  meteocons: 1.24,
-  'circle-flags': 1.20,
-  healthicons: 1.28,
-  'medical-icon': 1.24,
   'vscode-icons': 1.20,
   logos: 1.18,
   devicon: 1.18,
   'skill-icons': 1.18,
-  'game-icons': 1.16,
-  lucide: 1.16,
-  mdi: 1.15,
-  'fa6-solid': 1.13,
-  'simple-icons': 1.12,
-  ph: 1.12,
-  carbon: 1.10,
-  tabler: 1.08,
+  healthicons: 1.22,
+  'medical-icon': 1.20,
+  'game-icons': 1.20,
+  // Plain 1-color wireframes sit cleanly below gamified color icons!
+  lucide: 0.86,
+  mdi: 0.85,
+  'fa6-solid': 0.83,
+  tabler: 0.82,
 };
+
+function canonicalConceptKey(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\b(outline|solid|fill|filled|flat|color|colour|alt|regular|bold|thin|light|sharp|rounded|1|2|3|4|5)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
 const NOISY_COMPOUND_WORDS = new Set([
   'mouth', 'kissing', 'grinning', 'crying', 'weary', 'zany', 'winking',
@@ -418,10 +430,12 @@ export class OfflineBM25Engine {
 
       if (score <= 30) continue;
 
-      // Pack quality & vibrant multi-color illustration preference
+      // Pack quality & strong vibrant gamified multi-color illustration preference!
       score *= PACK_QUALITY_MULTIPLIER[item.pack] || 1.0;
       if (item.isMultiColor) {
-        score *= 1.18;
+        score *= 1.34;
+      } else {
+        score *= 0.86;
       }
 
       if (
@@ -451,23 +465,38 @@ export class OfflineBM25Engine {
       .filter((c) => c.finalScore >= minScore)
       .sort((a, b) => b.finalScore - a.finalScore);
 
-    // Diversity interleave across packs (strictly preserving relevance order!)
-    // Also reserve up to 8 relevant simple-monochrome `free` hits inside the returned batch so Free users
-    // ALWAYS get crisp relevant monochrome options alongside the vibrant 3D/colorful Pro top hits!
+    // Diversity + Strict Concept Deduplication (max 2 visually distinct styles per identical icon concept!)
+    // Eliminates duplicate clones (e.g. 6 identical Red Hearts) so every slot is fresh, gamified, and relevant!
     const packCounts = new Map();
+    const conceptCounts = new Map();
     const balanced = [];
     const overflow = [];
     const reservedFree = [];
 
     for (const entry of qualified) {
       const p = entry.item.pack;
-      const count = packCounts.get(p) || 0;
-      const capInTop = entry.item.isMultiColor ? 12 : 8;
-      if (entry.item.tier === 'free' && reservedFree.length < 10) {
+      const cKey = canonicalConceptKey(entry.item.name) || entry.item.id;
+      const cCount = conceptCounts.get(cKey) || 0;
+
+      if (entry.item.tier === 'free' && reservedFree.length < 10 && cCount < 3) {
         reservedFree.push(entry);
       }
+
+      // Keep Top slots strictly diverse (max 2 visually distinct packs per exact concept!);
+      // push 3rd/4th style variants to overflow so niche queries ("bakteri") still stay rich without cluttering Top #1..#12!
+      if (cCount >= 2) {
+        if (cCount < 4) {
+          conceptCounts.set(cKey, cCount + 1);
+          overflow.push(entry);
+        }
+        continue;
+      }
+
+      const count = packCounts.get(p) || 0;
+      const capInTop = entry.item.isMultiColor ? 10 : 6;
       if (count < capInTop && balanced.length < limit) {
         packCounts.set(p, count + 1);
+        conceptCounts.set(cKey, cCount + 1);
         balanced.push(entry);
       } else {
         overflow.push(entry);

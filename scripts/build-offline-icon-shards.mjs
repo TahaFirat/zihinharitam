@@ -14,33 +14,37 @@ const FAST_INDEX_PATH = path.join(OUT_DIR, 'fast-index-v7.json');
 const HASH_PATH = path.join(OUT_DIR, '.build-hash');
 
 const SHARD_COUNT = 40;
-const ICONS_PER_SHARD = 1110;
+const ICONS_PER_SHARD = 1320;
 
 const PACK_CONFIGS = [
-  { prefix: 'fluent-emoji-flat', defaultMultiColor: true, qualityBoost: 1.34 },
-  { prefix: 'fluent-color', defaultMultiColor: true, qualityBoost: 1.30 },
-  { prefix: 'streamline-color', defaultMultiColor: true, qualityBoost: 1.30 },
-  { prefix: 'streamline-emojis', defaultMultiColor: true, qualityBoost: 1.28 },
-  { prefix: 'twemoji', defaultMultiColor: true, qualityBoost: 1.26 },
-  { prefix: 'openmoji', defaultMultiColor: true, qualityBoost: 1.24 },
-  { prefix: 'icon-park', defaultMultiColor: true, qualityBoost: 1.22 },
-  { prefix: 'flat-color-icons', defaultMultiColor: true, qualityBoost: 1.22 },
-  { prefix: 'meteocons', defaultMultiColor: true, qualityBoost: 1.24 },
-  { prefix: 'circle-flags', defaultMultiColor: true, qualityBoost: 1.22 },
-  { prefix: 'vscode-icons', defaultMultiColor: true, qualityBoost: 1.18 },
-  { prefix: 'logos', defaultMultiColor: true, qualityBoost: 1.16 },
-  { prefix: 'devicon', defaultMultiColor: true, qualityBoost: 1.16 },
-  { prefix: 'skill-icons', defaultMultiColor: true, qualityBoost: 1.16 },
-  { prefix: 'healthicons', defaultMultiColor: false, qualityBoost: 1.26 },
-  { prefix: 'medical-icon', defaultMultiColor: false, qualityBoost: 1.24 },
-  { prefix: 'game-icons', defaultMultiColor: false, qualityBoost: 1.20 },
-  { prefix: 'mdi', defaultMultiColor: false, qualityBoost: 1.16 },
-  { prefix: 'lucide', defaultMultiColor: false, qualityBoost: 1.15 },
-  { prefix: 'fa6-solid', defaultMultiColor: false, qualityBoost: 1.14 },
-  { prefix: 'simple-icons', defaultMultiColor: false, qualityBoost: 1.12 },
-  { prefix: 'ph', defaultMultiColor: false, qualityBoost: 1.12 },
-  { prefix: 'carbon', defaultMultiColor: false, qualityBoost: 1.12 },
-  { prefix: 'tabler', defaultMultiColor: false, qualityBoost: 1.08 },
+  // ULTRA-VIBRANT GAMIFIED / 3D / PLUMP / GLOSSY PRO COLLECTIONS (Photo 2 aesthetic!)
+  { prefix: 'fluent-emoji-flat', defaultMultiColor: true, qualityBoost: 1.52 },
+  { prefix: 'streamline-plump-color', defaultMultiColor: true, qualityBoost: 1.50 },
+  { prefix: 'fluent-color', defaultMultiColor: true, qualityBoost: 1.48 },
+  { prefix: 'streamline-color', defaultMultiColor: true, qualityBoost: 1.46 },
+  { prefix: 'emojione', defaultMultiColor: true, qualityBoost: 1.44 },
+  { prefix: 'noto', defaultMultiColor: true, qualityBoost: 1.42 },
+  { prefix: 'streamline-emojis', defaultMultiColor: true, qualityBoost: 1.40 },
+  { prefix: 'fxemoji', defaultMultiColor: true, qualityBoost: 1.38 },
+  { prefix: 'marketeq', defaultMultiColor: true, qualityBoost: 1.36 },
+  { prefix: 'twemoji', defaultMultiColor: true, qualityBoost: 1.34 },
+  { prefix: 'icon-park', defaultMultiColor: true, qualityBoost: 1.32 },
+  { prefix: 'flat-color-icons', defaultMultiColor: true, qualityBoost: 1.30 },
+  { prefix: 'meteocons', defaultMultiColor: true, qualityBoost: 1.32 },
+  { prefix: 'circle-flags', defaultMultiColor: true, qualityBoost: 1.24 },
+  { prefix: 'vscode-icons', defaultMultiColor: true, qualityBoost: 1.20 },
+  { prefix: 'logos', defaultMultiColor: true, qualityBoost: 1.18 },
+  { prefix: 'devicon', defaultMultiColor: true, qualityBoost: 1.18 },
+  { prefix: 'skill-icons', defaultMultiColor: true, qualityBoost: 1.18 },
+  { prefix: 'healthicons', defaultMultiColor: false, qualityBoost: 1.24 },
+  { prefix: 'medical-icon', defaultMultiColor: false, qualityBoost: 1.22 },
+  { prefix: 'game-icons', defaultMultiColor: false, qualityBoost: 1.24 },
+  // SIMPLER STARTER FREE PACKS (Flat 2D OpenMoji + Crisp Outlines — clearly simpler than glossy 3D Pro!)
+  { prefix: 'openmoji', defaultMultiColor: true, qualityBoost: 1.18 },
+  { prefix: 'lucide', defaultMultiColor: false, qualityBoost: 1.05 },
+  { prefix: 'tabler', defaultMultiColor: false, qualityBoost: 1.02 },
+  { prefix: 'mdi', defaultMultiColor: false, qualityBoost: 1.04 },
+  { prefix: 'fa6-solid', defaultMultiColor: false, qualityBoost: 1.02 },
 ];
 
 const UI_NOISE_REGEX =
@@ -312,16 +316,18 @@ function buildShards() {
         Math.floor(manifestItems.length / ICONS_PER_SHARD)
       );
 
-      // V8 Freemium Quality Tier Assignment:
-      // - FREE (`tier: 'free'`): Plain, minimalist 1-color monochrome outline icons (`lucide`, `tabler`, `mdi`, `fa6-solid`)
-      //   so Free users always get simple, relevant icons without vibrant 3D/color art!
-      // - PRO (`tier: 'pro'`): ALL vibrant 3D, glossy, multi-color, hand-drawn, emoji, brand & bespoke academic atlas packs!
+      // V9 Gamified Quality Tier Assignment:
+      // - FREE (`tier: 'free'`): Simple flat 2D starter stickers (`openmoji`) + crisp outlines (`lucide`, `tabler`, `mdi`, `fa6-solid`)
+      //   so even Free users get clean, friendly visuals without the glossy 3D Pro art!
+      // - PRO (`tier: 'pro'`): ALL ultra-vibrant glossy 3D, plump Duolingo-style, gradient & specialist packs
+      //   (`fluent-emoji-flat`, `streamline-plump-color`, `fluent-color`, `streamline-color`, `emojione`, `noto`, `fxemoji`, `marketeq`, `streamline-emojis`, `twemoji`, `icon-park`, `flat-color-icons`, `meteocons`, `game-icons`)!
       const isSimpleMonochromeFreePack =
-        !isMultiColor &&
-        (cfg.prefix === 'lucide' ||
-          cfg.prefix === 'tabler' ||
-          cfg.prefix === 'mdi' ||
-          cfg.prefix === 'fa6-solid');
+        cfg.prefix === 'openmoji' ||
+        (!isMultiColor &&
+          (cfg.prefix === 'lucide' ||
+            cfg.prefix === 'tabler' ||
+            cfg.prefix === 'mdi' ||
+            cfg.prefix === 'fa6-solid'));
 
       let tier = 'pro';
       if (isSimpleMonochromeFreePack) {

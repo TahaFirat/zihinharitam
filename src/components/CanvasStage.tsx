@@ -24,13 +24,16 @@ import {
 import type {
   AcademicDepartment,
   CanvasInkStroke,
+  CanvasStickyNote,
   CollaboratorPresence,
   CrossLink,
+  EraserMode,
   ExamRecallMode,
   InkToolType,
   MindNode,
   NodePriorityTag,
   NodeVisualStyle,
+  PaperStyleType,
   StickerSizePreset,
   ViewportTransform,
 } from '../types/mindmap';
@@ -43,7 +46,12 @@ import { HitTestSpatialIndex } from '../core/canvas/HitTestSpatialIndex';
 import { InfiniteViewport } from '../core/canvas/InfiniteViewport';
 import {
   buildInkSvgPath,
+  detectSnappedShape,
+  eraseAreaFromStroke,
+  findStrokesInsideLasso,
+  getInkStrokesBoundingBox,
   hitTestInkStroke,
+  translateInkStroke,
 } from '../core/canvas/InkStrokeEngine';
 import {
   generateTaperedBranchSvgPath,
@@ -64,13 +72,23 @@ interface CanvasStageProps {
   nodes: Record<string, MindNode>;
   crossLinks?: CrossLink[];
   inkStrokes?: CanvasInkStroke[];
+  stickyNotes?: CanvasStickyNote[];
+  paperStyle?: PaperStyleType;
   drawingMode?: boolean;
   inkTool?: InkToolType;
+  eraserMode?: EraserMode;
+  autoShapeEnabled?: boolean;
   inkColor?: string;
   inkWidth?: number;
   stylusOnly?: boolean;
+  hardwareEraserActive?: boolean;
+  selectedLassoIds?: string[];
   onAddInkStroke?: (stroke: CanvasInkStroke) => void;
   onDeleteInkStroke?: (strokeId: string) => void;
+  onReplaceInkStrokes?: (strokes: CanvasInkStroke[]) => void;
+  onSelectLassoIds?: (ids: string[]) => void;
+  onUpdateStickyNote?: (id: string, patch: Partial<CanvasStickyNote>) => void;
+  onDeleteStickyNote?: (id: string) => void;
   rootNodeId: string;
   department?: AcademicDepartment;
   darkMode: boolean;
@@ -293,13 +311,23 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   nodes,
   crossLinks,
   inkStrokes,
+  stickyNotes,
+  paperStyle = 'dots',
   drawingMode = false,
   inkTool = 'pen',
+  eraserMode = 'stroke',
+  autoShapeEnabled = true,
   inkColor = '#0F172A',
   inkWidth = 4.5,
   stylusOnly = false,
+  hardwareEraserActive = false,
+  selectedLassoIds = [],
   onAddInkStroke,
   onDeleteInkStroke,
+  onReplaceInkStrokes,
+  onSelectLassoIds,
+  onUpdateStickyNote,
+  onDeleteStickyNote,
   rootNodeId,
   department = 'genel',
   darkMode,
@@ -345,13 +373,41 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const domWorldRef = useRef<HTMLDivElement>(null);
   const liveInkPathRef = useRef<SVGPathElement>(null);
+  const liveLaserPathRef = useRef<SVGPathElement>(null);
+  const liveLassoPathRef = useRef<SVGPathElement>(null);
+  const stylusHoverRef = useRef<HTMLDivElement>(null);
+  const laserClearTimerRef = useRef<number | null>(null);
+  const shapeHoldTimerRef = useRef<number | null>(null);
   const activeInkRef = useRef<{
     pointerId: number;
-    tool: Exclude<InkToolType, 'eraser'>;
+    tool: Exclude<InkToolType, 'eraser' | 'lasso' | 'laser'>;
     color: string;
     width: number;
     opacity: number;
     points: Array<[number, number, number]>;
+    snapped?: boolean;
+  } | null>(null);
+  const activeLaserRef = useRef<{
+    pointerId: number;
+    points: Array<[number, number, number]>;
+  } | null>(null);
+  const activeLassoRef = useRef<{
+    pointerId: number;
+    points: Array<[number, number, number]>;
+  } | null>(null);
+  const lassoMoveRef = useRef<{
+    pointerId: number;
+    startWorldX: number;
+    startWorldY: number;
+    baseStrokes: CanvasInkStroke[];
+  } | null>(null);
+  const stickyDragRef = useRef<{
+    pointerId: number;
+    noteId: string;
+    startClientX: number;
+    startClientY: number;
+    origX: number;
+    origY: number;
   } | null>(null);
   const activeEraserPointerRef = useRef<number | null>(null);
   const inkRafPendingRef = useRef<boolean>(false);
@@ -1183,46 +1239,142 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
 
     if (activeTouchesRef.current.size === 1) {
-      // Freehand Tablet / Apple Pencil / Finger Canvas Drawing Intercept (`drawingMode === true`)
+      // Hardware Stylus Eraser Detection:
+      // Works for Samsung S-Pen Side Barrel Button (buttons & 32 or buttons & 2 or button 5/2),
+      // Android TOOL_TYPE_ERASER (`pointerType === 'eraser'`), AND native MainActivity / Apple Pencil events!
+      const isStylusHardwareEraser =
+        hardwareEraserActive ||
+        (e.pointerType as string) === 'eraser' ||
+        (e.pointerType === 'pen' &&
+          ((e.buttons & 32) !== 0 || (e.buttons & 2) !== 0 || e.button === 5 || e.button === 2));
+
+      // Freehand Tablet / S-Pen / Apple Pencil / Finger Canvas Drawing Intercept (`drawingMode === true`)
       const shouldDrawWithPointer =
-        drawingMode &&
+        (drawingMode || isStylusHardwareEraser) &&
         !spacePressed &&
-        (!stylusOnly || e.pointerType === 'pen' || e.pointerType === 'mouse');
+        (!stylusOnly || e.pointerType === 'pen' || (e.pointerType as string) === 'eraser' || e.pointerType === 'mouse');
 
       if (shouldDrawWithPointer) {
         const wPt = viewportRef.current.screenToWorld(sx, sy);
-        if (inkTool === 'eraser') {
+        const effTool: InkToolType = isStylusHardwareEraser ? 'eraser' : inkTool;
+
+        if (effTool === 'eraser') {
           activeEraserPointerRef.current = e.pointerId;
-          const rWorld = 18 / Math.max(0.25, viewportRef.current.getTransform().scale);
-          if (inkStrokes && onDeleteInkStroke) {
-            for (const st of inkStrokes) {
-              if (hitTestInkStroke(st, wPt.x, wPt.y, rWorld)) {
-                onDeleteInkStroke(st.id);
-                break;
+          const rWorld = 20 / Math.max(0.25, viewportRef.current.getTransform().scale);
+          if (inkStrokes && inkStrokes.length > 0) {
+            if (eraserMode === 'area' && onReplaceInkStrokes) {
+              let changed = false;
+              const next: CanvasInkStroke[] = [];
+              for (const st of inkStrokes) {
+                const res = eraseAreaFromStroke(st, wPt.x, wPt.y, rWorld);
+                if (res === null) {
+                  next.push(st);
+                } else {
+                  changed = true;
+                  next.push(...res);
+                }
+              }
+              if (changed) onReplaceInkStrokes(next);
+            } else if (onDeleteInkStroke) {
+              for (const st of inkStrokes) {
+                if (hitTestInkStroke(st, wPt.x, wPt.y, rWorld)) {
+                  onDeleteInkStroke(st.id);
+                  break;
+                }
               }
             }
           }
           return;
         }
-        const effWidth =
-          inkTool === 'highlighter' ? Math.max(14, inkWidth * 3.8) : inkWidth;
-        const effOpacity = inkTool === 'highlighter' ? 0.34 : 0.96;
+
+        if (effTool === 'laser') {
+          if (laserClearTimerRef.current !== null) {
+            window.clearTimeout(laserClearTimerRef.current);
+            laserClearTimerRef.current = null;
+          }
+          activeLaserRef.current = {
+            pointerId: e.pointerId,
+            points: [[wPt.x, wPt.y, 0.5]],
+          };
+          if (liveLaserPathRef.current) {
+            liveLaserPathRef.current.style.opacity = '1';
+            liveLaserPathRef.current.setAttribute(
+              'd',
+              buildInkSvgPath('pen', activeLaserRef.current.points, 5)
+            );
+          }
+          return;
+        }
+
+        if (effTool === 'lasso') {
+          // If dragging inside an existing lasso selection box, move all selected strokes together!
+          if (selectedLassoIds.length > 0 && inkStrokes && onReplaceInkStrokes) {
+            const selSet = new Set(selectedLassoIds);
+            const selStrokes = inkStrokes.filter((s) => selSet.has(s.id));
+            const box = getInkStrokesBoundingBox(selStrokes);
+            if (
+              box &&
+              wPt.x >= box.minX - 24 &&
+              wPt.x <= box.maxX + 24 &&
+              wPt.y >= box.minY - 24 &&
+              wPt.y <= box.maxY + 24
+            ) {
+              lassoMoveRef.current = {
+                pointerId: e.pointerId,
+                startWorldX: wPt.x,
+                startWorldY: wPt.y,
+                baseStrokes: inkStrokes,
+              };
+              return;
+            }
+          }
+          onSelectLassoIds?.([]);
+          activeLassoRef.current = {
+            pointerId: e.pointerId,
+            points: [[wPt.x, wPt.y, 0.5]],
+          };
+          if (liveLassoPathRef.current) {
+            liveLassoPathRef.current.setAttribute(
+              'd',
+              buildInkSvgPath('pen', activeLassoRef.current.points, 2)
+            );
+          }
+          return;
+        }
+
         const pressure = e.pressure > 0 ? e.pressure : 0.5;
+        const pressureScale =
+          effTool === 'pen' || effTool === 'pencil'
+            ? 0.72 + Math.min(1, pressure) * 0.56
+            : 1;
+        const effWidth =
+          effTool === 'highlighter'
+            ? Math.max(15, inkWidth * 3.8)
+            : Number((inkWidth * pressureScale).toFixed(2));
+        const effOpacity =
+          effTool === 'highlighter' ? 0.34 : effTool === 'pencil' ? 0.72 : 0.96;
+
         activeInkRef.current = {
           pointerId: e.pointerId,
-          tool: inkTool,
+          tool: effTool,
           color: inkColor,
           width: effWidth,
           opacity: effOpacity,
           points: [[wPt.x, wPt.y, pressure]],
+          snapped: false,
         };
         if (liveInkPathRef.current) {
           liveInkPathRef.current.setAttribute('stroke', inkColor);
           liveInkPathRef.current.setAttribute('stroke-width', String(effWidth));
           liveInkPathRef.current.setAttribute('stroke-opacity', String(effOpacity));
+          if (effTool === 'pencil') {
+            liveInkPathRef.current.setAttribute('stroke-dasharray', '2 0.8');
+          } else {
+            liveInkPathRef.current.removeAttribute('stroke-dasharray');
+          }
           liveInkPathRef.current.setAttribute(
             'd',
-            buildInkSvgPath(inkTool, activeInkRef.current.points, effWidth)
+            buildInkSvgPath(effTool, activeInkRef.current.points, effWidth)
           );
         }
         return;
@@ -1276,13 +1428,95 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       });
     }
 
-    // 0. 120Hz Zero-React-Render Freehand Canvas Drawing & Swipe-to-Erase!
+    // S-Pen & Apple Pencil Hover Cursor Ring Preview (Samsung Notes Air Command / iPadOS Hover!)
+    if (stylusHoverRef.current) {
+      if (e.pointerType === 'pen' && e.buttons === 0 && drawingMode) {
+        const hoverIsEraser =
+          hardwareEraserActive ||
+          inkTool === 'eraser' ||
+          (e.buttons & 32) !== 0 ||
+          (e.buttons & 2) !== 0;
+        stylusHoverRef.current.style.opacity = '1';
+        stylusHoverRef.current.style.transform = `translate3d(${sx}px, ${sy}px, 0) translate(-50%, -50%)`;
+        stylusHoverRef.current.style.borderColor = hoverIsEraser ? '#F43F5E' : inkColor;
+        stylusHoverRef.current.style.width = hoverIsEraser ? '26px' : `${Math.max(10, inkWidth * 2.2)}px`;
+        stylusHoverRef.current.style.height = hoverIsEraser ? '26px' : `${Math.max(10, inkWidth * 2.2)}px`;
+      } else {
+        stylusHoverRef.current.style.opacity = '0';
+      }
+    }
+
+    // Sticky Note Drag Move (World Space)
+    if (stickyDragRef.current && stickyDragRef.current.pointerId === e.pointerId && onUpdateStickyNote) {
+      const sd = stickyDragRef.current;
+      const sc = Math.max(0.2, viewportRef.current.getTransform().scale);
+      const dx = (e.clientX - sd.startClientX) / sc;
+      const dy = (e.clientY - sd.startClientY) / sc;
+      onUpdateStickyNote(sd.noteId, {
+        x: Math.round(sd.origX + dx),
+        y: Math.round(sd.origY + dy),
+      });
+      return;
+    }
+
+    // Lasso Selection Move (Drag all enclosed ink strokes smoothly!)
+    if (lassoMoveRef.current && lassoMoveRef.current.pointerId === e.pointerId && onReplaceInkStrokes) {
+      const lm = lassoMoveRef.current;
+      const dx = worldPt.x - lm.startWorldX;
+      const dy = worldPt.y - lm.startWorldY;
+      const selSet = new Set(selectedLassoIds);
+      onReplaceInkStrokes(
+        lm.baseStrokes.map((st) => (selSet.has(st.id) ? translateInkStroke(st, dx, dy) : st))
+      );
+      return;
+    }
+
+    // Lasso Freehand Loop Preview
+    if (activeLassoRef.current && activeLassoRef.current.pointerId === e.pointerId) {
+      const pts = activeLassoRef.current.points;
+      const prev = pts[pts.length - 1];
+      if (!prev || Math.hypot(worldPt.x - prev[0], worldPt.y - prev[1]) >= 4) {
+        pts.push([worldPt.x, worldPt.y, 0.5]);
+        if (liveLassoPathRef.current) {
+          liveLassoPathRef.current.setAttribute('d', `${buildInkSvgPath('pen', pts, 2)} Z`);
+        }
+      }
+      return;
+    }
+
+    // Presentation Laser Pointer Trail
+    if (activeLaserRef.current && activeLaserRef.current.pointerId === e.pointerId) {
+      const pts = activeLaserRef.current.points;
+      pts.push([worldPt.x, worldPt.y, 0.5]);
+      if (pts.length > 36) pts.shift();
+      if (liveLaserPathRef.current) {
+        liveLaserPathRef.current.setAttribute('d', buildInkSvgPath('pen', pts, 5));
+      }
+      return;
+    }
+
+    // 0. 120Hz Zero-React-Render Freehand Canvas Drawing & Smart Swipe-to-Erase!
     if (activeEraserPointerRef.current === e.pointerId) {
-      const rWorld = 18 / Math.max(0.25, viewportRef.current.getTransform().scale);
-      if (inkStrokes && onDeleteInkStroke) {
-        for (const st of inkStrokes) {
-          if (hitTestInkStroke(st, worldPt.x, worldPt.y, rWorld)) {
-            onDeleteInkStroke(st.id);
+      const rWorld = 20 / Math.max(0.25, viewportRef.current.getTransform().scale);
+      if (inkStrokes && inkStrokes.length > 0) {
+        if (eraserMode === 'area' && onReplaceInkStrokes) {
+          let changed = false;
+          const next: CanvasInkStroke[] = [];
+          for (const st of inkStrokes) {
+            const res = eraseAreaFromStroke(st, worldPt.x, worldPt.y, rWorld);
+            if (res === null) {
+              next.push(st);
+            } else {
+              changed = true;
+              next.push(...res);
+            }
+          }
+          if (changed) onReplaceInkStrokes(next);
+        } else if (onDeleteInkStroke) {
+          for (const st of inkStrokes) {
+            if (hitTestInkStroke(st, worldPt.x, worldPt.y, rWorld)) {
+              onDeleteInkStroke(st.id);
+            }
           }
         }
       }
@@ -1292,14 +1526,19 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     if (activeInkRef.current && activeInkRef.current.pointerId === e.pointerId) {
       const stroke = activeInkRef.current;
       const samples = coalesced.length > 0 ? coalesced : [e.nativeEvent];
+      let movedEnough = false;
       for (const sample of samples) {
         const pt = viewportRef.current.screenToWorld(
           sample.clientX - rect.left,
           sample.clientY - rect.top
         );
         const prev = stroke.points[stroke.points.length - 1];
-        const minDist = stroke.tool === 'pen' || stroke.tool === 'highlighter' ? 1.8 : 0.5;
+        const minDist =
+          stroke.tool === 'pen' || stroke.tool === 'pencil' || stroke.tool === 'highlighter'
+            ? 1.8
+            : 0.5;
         if (!prev || Math.hypot(pt.x - prev[0], pt.y - prev[1]) >= minDist) {
+          movedEnough = true;
           const pVal = sample.pressure > 0 ? sample.pressure : 0.5;
           if (
             stroke.tool === 'line' ||
@@ -1317,6 +1556,31 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
           }
         }
       }
+
+      // Samsung Notes & Apple Notes Hold-to-Snap Auto-Shape Assist (420ms stationary hold snaps line/circle/box!)
+      if (autoShapeEnabled && stroke.tool === 'pen' && !stroke.snapped && movedEnough) {
+        if (shapeHoldTimerRef.current !== null) {
+          window.clearTimeout(shapeHoldTimerRef.current);
+        }
+        shapeHoldTimerRef.current = window.setTimeout(() => {
+          shapeHoldTimerRef.current = null;
+          if (!activeInkRef.current || activeInkRef.current.snapped) return;
+          const snapped = detectSnappedShape(activeInkRef.current.points);
+          if (snapped) {
+            activeInkRef.current.tool = snapped.tool;
+            activeInkRef.current.points = snapped.points;
+            activeInkRef.current.snapped = true;
+            void hapticMedium();
+            if (liveInkPathRef.current) {
+              liveInkPathRef.current.setAttribute(
+                'd',
+                buildInkSvgPath(snapped.tool, snapped.points, activeInkRef.current.width)
+              );
+            }
+          }
+        }, 420);
+      }
+
       if (!inkRafPendingRef.current) {
         inkRafPendingRef.current = true;
         requestAnimationFrame(() => {
@@ -1558,12 +1822,52 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       setInteractingAttr(false);
     }
 
+    if (stickyDragRef.current && stickyDragRef.current.pointerId === e.pointerId) {
+      stickyDragRef.current = null;
+      return;
+    }
+
+    if (lassoMoveRef.current && lassoMoveRef.current.pointerId === e.pointerId) {
+      lassoMoveRef.current = null;
+      return;
+    }
+
+    if (activeLassoRef.current && activeLassoRef.current.pointerId === e.pointerId) {
+      const lassoPts = activeLassoRef.current.points;
+      activeLassoRef.current = null;
+      if (liveLassoPathRef.current) {
+        liveLassoPathRef.current.setAttribute('d', '');
+      }
+      if (inkStrokes && onSelectLassoIds) {
+        const found = findStrokesInsideLasso(inkStrokes, lassoPts);
+        onSelectLassoIds(found);
+        if (found.length > 0) void hapticLight();
+      }
+      return;
+    }
+
+    if (activeLaserRef.current && activeLaserRef.current.pointerId === e.pointerId) {
+      activeLaserRef.current = null;
+      if (liveLaserPathRef.current) {
+        liveLaserPathRef.current.style.opacity = '0';
+        laserClearTimerRef.current = window.setTimeout(() => {
+          liveLaserPathRef.current?.setAttribute('d', '');
+          laserClearTimerRef.current = null;
+        }, 1200);
+      }
+      return;
+    }
+
     if (activeEraserPointerRef.current === e.pointerId) {
       activeEraserPointerRef.current = null;
       return;
     }
 
     if (activeInkRef.current && activeInkRef.current.pointerId === e.pointerId) {
+      if (shapeHoldTimerRef.current !== null) {
+        window.clearTimeout(shapeHoldTimerRef.current);
+        shapeHoldTimerRef.current = null;
+      }
       const finished = activeInkRef.current;
       activeInkRef.current = null;
       if (liveInkPathRef.current) {
@@ -1862,13 +2166,17 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       onPointerUp={handleStagePointerUp}
       onPointerCancel={handleStagePointerUp}
       style={{
-        backgroundColor: darkMode ? '#0F141D' : '#FAF9F5',
+        backgroundColor: darkMode
+          ? '#0F141D'
+          : paperStyle === 'warm'
+          ? '#F6EFE1'
+          : '#FAF9F5',
       }}
       className={`canvas-stage canvas-touch-lock relative h-full w-full overflow-hidden ${
         spacePressed
           ? 'cursor-grab active:cursor-grabbing'
           : drawingMode
-          ? inkTool === 'eraser'
+          ? inkTool === 'eraser' || hardwareEraserActive
             ? 'cursor-cell'
             : 'cursor-crosshair'
           : linkingFromNodeId
@@ -1876,7 +2184,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
           : ''
       }`}
     >
-      {/* Layer 0: Isolated 120Hz Pure-GPU Dot Grid (translate3d only — ZERO full-screen texture re-rasterization!) */}
+      {/* Layer 0: Isolated 120Hz Pure-GPU Paper Template Layer (Dots / Grid / Lined / Blank / Warm — ZERO jank!) */}
       <div
         ref={dotGridRef}
         aria-hidden="true"
@@ -1884,11 +2192,28 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
         style={{
           width: 'calc(100% + 64px)',
           height: 'calc(100% + 64px)',
-          backgroundSize: '28px 28px',
-          backgroundImage: darkMode
-            ? 'radial-gradient(circle, rgba(148, 163, 184, 0.16) 1.25px, transparent 1.7px)'
-            : 'radial-gradient(circle, rgba(148, 163, 184, 0.34) 1.25px, transparent 1.7px)',
+          backgroundSize: paperStyle === 'lined' ? '28px 32px' : '28px 28px',
+          backgroundImage:
+            paperStyle === 'blank'
+              ? 'none'
+              : paperStyle === 'grid'
+              ? darkMode
+                ? 'linear-gradient(to right, rgba(148,163,184,0.11) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.11) 1px, transparent 1px)'
+                : 'linear-gradient(to right, rgba(148,163,184,0.22) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.22) 1px, transparent 1px)'
+              : paperStyle === 'lined'
+              ? darkMode
+                ? 'linear-gradient(to bottom, rgba(148,163,184,0.14) 1px, transparent 1px)'
+                : 'linear-gradient(to bottom, rgba(56,189,248,0.22) 1px, transparent 1px)'
+              : darkMode
+              ? 'radial-gradient(circle, rgba(148, 163, 184, 0.16) 1.25px, transparent 1.7px)'
+              : 'radial-gradient(circle, rgba(148, 163, 184, 0.34) 1.25px, transparent 1.7px)',
         }}
+      />
+      {/* S-Pen & Apple Pencil Live Hover Preview Ring */}
+      <div
+        ref={stylusHoverRef}
+        aria-hidden="true"
+        className="pointer-events-none fixed top-0 left-0 z-50 rounded-full border-2 border-dashed opacity-0 transition-opacity duration-75"
       />
       {/* Floating Banner When User Is Drawing a CrossLink (`🔗 İlişki Çek`) */}
       {linkingFromNodeId && nodes[linkingFromNodeId] && (
@@ -2062,19 +2387,57 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
               );
             })}
 
-          {/* 120Hz World-Space Freehand Ink & Highlighter Layer (Pans & Zooms in Perfect Lockstep!) */}
-          {(inkStrokes ?? []).map((stroke) => (
-            <path
-              key={stroke.id}
-              d={buildInkSvgPath(stroke.tool, stroke.points, stroke.width)}
-              fill="none"
-              stroke={stroke.color}
-              strokeWidth={stroke.width}
-              strokeOpacity={stroke.opacity}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          ))}
+          {/* 120Hz World-Space Freehand Ink, Pencil, Highlighter, Shapes, Laser & Lasso Layer */}
+          {(inkStrokes ?? []).map((stroke) => {
+            const isLassoSelected = selectedLassoIds.includes(stroke.id);
+            const pathD = buildInkSvgPath(stroke.tool, stroke.points, stroke.width);
+            return (
+              <g key={stroke.id}>
+                {isLassoSelected && (
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="#6366F1"
+                    strokeWidth={stroke.width + 6}
+                    strokeOpacity={0.32}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={stroke.color}
+                  strokeWidth={stroke.width}
+                  strokeOpacity={stroke.opacity}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={stroke.tool === 'pencil' ? '2 0.8' : undefined}
+                />
+              </g>
+            );
+          })}
+          {/* Selected Lasso Bounding Box Hint */}
+          {selectedLassoIds.length > 0 && (() => {
+            const selSet = new Set(selectedLassoIds);
+            const box = getInkStrokesBoundingBox(
+              (inkStrokes ?? []).filter((s) => selSet.has(s.id))
+            );
+            if (!box) return null;
+            return (
+              <rect
+                x={box.minX - 12}
+                y={box.minY - 12}
+                width={Math.max(24, box.maxX - box.minX + 24)}
+                height={Math.max(24, box.maxY - box.minY + 24)}
+                rx={12}
+                fill="rgba(99,102,241,0.06)"
+                stroke="#6366F1"
+                strokeWidth={2}
+                strokeDasharray="6 5"
+              />
+            );
+          })()}
           <path
             ref={liveInkPathRef}
             d=""
@@ -2082,7 +2445,107 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+          <path
+            ref={liveLassoPathRef}
+            d=""
+            fill="rgba(99,102,241,0.09)"
+            stroke="#6366F1"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            ref={liveLaserPathRef}
+            d=""
+            fill="none"
+            stroke="#EF4444"
+            strokeWidth={6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              filter: 'drop-shadow(0 0 8px rgba(239,68,68,0.9))',
+              transition: 'opacity 1.1s ease-out',
+            }}
+          />
         </svg>
+
+        {/* Movable Pastel Sticky Notes on Infinite Canvas (Apple Freeform & Samsung Notes!) */}
+        {(stickyNotes ?? []).map((note) => {
+          const STICKY_COLORS = ['#FEF08A', '#BBF7D0', '#BAE6FD', '#FBCFE8', '#DDD6FE'];
+          return (
+            <div
+              key={note.id}
+              data-testid={`canvas-sticky-${note.id}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                transform: `translate3d(${note.x}px, ${note.y}px, 0)`,
+                width: `${note.width ?? 204}px`,
+                backgroundColor: note.color || '#FEF08A',
+                zIndex: 28,
+              }}
+              className="pointer-events-auto absolute top-0 left-0 flex flex-col overflow-hidden rounded-2xl border border-slate-900/15 text-slate-900 shadow-lg"
+            >
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  stickyDragRef.current = {
+                    pointerId: e.pointerId,
+                    noteId: note.id,
+                    startClientX: e.clientX,
+                    startClientY: e.clientY,
+                    origX: note.x,
+                    origY: note.y,
+                  };
+                  try {
+                    containerRef.current?.setPointerCapture?.(e.pointerId);
+                  } catch {
+                    // Ignore
+                  }
+                }}
+                className="flex cursor-grab items-center justify-between gap-1 bg-slate-900/8 px-2.5 py-1.5 active:cursor-grabbing"
+              >
+                <div className="flex items-center gap-1">
+                  <Move className="h-3 w-3 opacity-60" />
+                  <span className="text-[10px] font-black tracking-wide uppercase opacity-70">
+                    Not
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {STICKY_COLORS.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => onUpdateStickyNote?.(note.id, { color: col })}
+                      aria-label="Not Rengi"
+                      className={`h-3.5 w-3.5 rounded-full border border-slate-900/25 ${
+                        note.color === col ? 'scale-115 ring-1 ring-slate-900' : ''
+                      }`}
+                      style={{ backgroundColor: col }}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => onDeleteStickyNote?.(note.id)}
+                    aria-label="Notu Sil"
+                    className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-md hover:bg-rose-500/20 hover:text-rose-700"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <textarea
+                rows={3}
+                value={note.text}
+                onChange={(e) => onUpdateStickyNote?.(note.id, { text: e.target.value })}
+                placeholder="Notunuzu buraya yazın..."
+                className="allow-text-input min-h-[84px] w-full resize-y bg-transparent p-2.5 text-xs leading-relaxed font-semibold text-slate-900 placeholder:text-slate-600/70 outline-none"
+              />
+            </div>
+          );
+        })}
 
         {/* Interactive Mid-Curve CrossLink Relationship Pills */}
         {examMode === 'off' &&

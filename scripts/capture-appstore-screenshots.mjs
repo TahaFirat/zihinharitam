@@ -101,6 +101,7 @@ const SCENES = [
       );
       await page.click('[data-testid="studio-task-toggle-btn"]');
       await page.click('[data-testid="studio-priority-btn"]');
+      await page.click('[data-testid="dock-tab-style"]');
       await page.click('[data-testid="size-btn-lg"]');
       await page.click('[data-testid="studio-done-btn"]');
       await page.waitForTimeout(400);
@@ -152,6 +153,8 @@ const SCENES = [
     },
     prepare: async (page, device) => {
       await page.waitForSelector('canvas', { timeout: 10000 });
+      await page.click('[data-testid="hud-tab-study"]');
+      await page.waitForSelector('[data-testid="hud-timer-toggle-btn"]', { timeout: 6000 });
       await page.click('[data-testid="hud-timer-toggle-btn"]');
       await page.waitForTimeout(450);
       if (device?.isMobile) {
@@ -213,9 +216,9 @@ const SCENES = [
     prepare: async (page) => {
       await page.waitForSelector('canvas', { timeout: 10000 });
       await page.waitForTimeout(400);
-      // Open the new Hierarchical Outliner modal to showcase full structured study workflow!
-      const outlineBtn = page.locator('button:has-text("Anahat"):visible').first();
-      await outlineBtn.click();
+      await page.click('[data-testid="hud-tab-study"]');
+      await page.waitForSelector('[data-testid="hud-outline-btn"]', { timeout: 6000 });
+      await page.click('[data-testid="hud-outline-btn"]');
       await page.waitForSelector('[data-testid="outline-modal"]', { timeout: 6000 });
       await page.waitForTimeout(450);
     },

@@ -35,6 +35,7 @@ export interface FederatedGalleryResponse {
   metaphorChips: MetaphorChip[];
   resolvedEnglish: string;
   elapsedMs?: number;
+  hasLexiconMatch?: boolean;
 }
 
 const DISCIPLINE_DEFAULT_OFFLINE_SEEDS: Record<DisciplineProfile, string> = {
@@ -212,6 +213,7 @@ export class VisualSearchOrchestrator {
       resolvedEnglish:
         expanded.expandedEnTokens[0] || wave1.resolvedEnglish || clean,
       elapsedMs,
+      hasLexiconMatch: Boolean(expanded.hasLexiconMatch),
     };
   }
 
@@ -297,6 +299,7 @@ export class VisualSearchOrchestrator {
     const seenUrls = new Set<string>();
     const seenIds = new Set<string>();
     const seenIconifyIds = new Set<string>();
+    const conceptCounts = new Map<string, number>();
 
     const pushUnique = (item: VisualSearchResult) => {
       if (!item.previewUrl || seenUrls.has(item.previewUrl) || seenIds.has(item.id)) {
@@ -305,33 +308,52 @@ export class VisualSearchOrchestrator {
       if (item.iconifyId && seenIconifyIds.has(item.iconifyId)) {
         return;
       }
+      const cKey = (item.title || '')
+        .toLowerCase()
+        .replace(/\b(outline|solid|fill|filled|flat|color|colour|alt|regular|bold|1|2|3|4|5)\b/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (cKey && (conceptCounts.get(cKey) ?? 0) >= 2 && combined.length >= 6) {
+        return;
+      }
       seenUrls.add(item.previewUrl);
       seenIds.add(item.id);
       if (item.iconifyId) seenIconifyIds.add(item.iconifyId);
+      if (cKey) conceptCounts.set(cKey, (conceptCounts.get(cKey) ?? 0) + 1);
       combined.push(item);
     };
 
-    // When offline already found strong primary matches (`offlineTopScore >= 0.92` & >= 12 hits),
-    // keep our instant colorful offline vectors anchored in Top #1..#16 and place online enrichment after them (`<= 0.89`)!
-    // When offline lacked an exact primary hit (`offlineTopScore < 0.92`, e.g. uncommon word translated live),
-    // let exact colorful live Iconify hits (`0.965..0.994`) rise straight to #1..#6!
+    // Only anchor offline hits above live translated 540K+ gamified icons when our offline Turkish dictionary
+    // actually recognized the word (`expanded.hasLexiconMatch`) with strong primary confidence!
     const offlineHasStrongPrimary =
-      offlineWave.results.length >= 12 &&
+      Boolean(expanded.hasLexiconMatch) &&
+      offlineWave.results.length >= 10 &&
       (offlineWave.results[0]?.score ?? 0) >= 0.92;
 
-    for (const offItem of offlineWave.results) {
-      pushUnique(offItem);
-    }
-
-    for (const s of settled) {
-      if (s.status === 'fulfilled') {
-        for (const remoteItem of s.value) {
-          if (isRemoteItemRelevant(remoteItem)) {
-            pushUnique(
-              offlineHasStrongPrimary
-                ? { ...remoteItem, score: Math.min(remoteItem.score, 0.89) }
-                : remoteItem
-            );
+    if (!offlineHasStrongPrimary) {
+      // Uncommon/new Turkish word -> put live Google-Translated gamified 540K+ icons FIRST!
+      for (const s of settled) {
+        if (s.status === 'fulfilled') {
+          for (const remoteItem of s.value) {
+            if (isRemoteItemRelevant(remoteItem)) {
+              pushUnique(remoteItem);
+            }
+          }
+        }
+      }
+      for (const offItem of offlineWave.results) {
+        pushUnique(offItem);
+      }
+    } else {
+      for (const offItem of offlineWave.results) {
+        pushUnique(offItem);
+      }
+      for (const s of settled) {
+        if (s.status === 'fulfilled') {
+          for (const remoteItem of s.value) {
+            if (isRemoteItemRelevant(remoteItem)) {
+              pushUnique({ ...remoteItem, score: Math.min(remoteItem.score, 0.89) });
+            }
           }
         }
       }

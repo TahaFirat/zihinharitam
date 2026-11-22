@@ -6,6 +6,7 @@ import {
   Crown,
   Download,
   FolderInput,
+  HelpCircle,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -55,6 +56,7 @@ interface HomeWorkspaceProps {
   onRestoreFromTrash: (mapId: string) => void;
   onDeletePermanently: (mapId: string) => void;
   onImportZihinFile: (rawJson: string) => void;
+  onOpenGuide: () => void;
   onOpenSettings: () => void;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
 }
@@ -89,6 +91,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onRestoreFromTrash,
   onDeletePermanently,
   onImportZihinFile,
+  onOpenGuide,
   onOpenSettings,
   onTriggerPaywall,
 }) => {
@@ -273,6 +276,18 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 <span>Kilidi Aç • {localizedPrice}</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={onOpenGuide}
+              data-testid="home-guide-btn"
+              title="Uygulama Tanıtımı & Nasıl Kullanılır?"
+              className="inline-flex h-11 items-center gap-1.5 rounded-2xl border px-3 text-xs font-extrabold hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
+              style={{ borderColor: 'var(--hud-border)' }}
+            >
+              <HelpCircle className="h-4.5 w-4.5 text-sky-500" />
+              <span className="hidden sm:inline">Rehber</span>
+            </button>
 
             <button
               type="button"

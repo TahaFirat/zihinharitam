@@ -4,6 +4,7 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Display;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
@@ -14,6 +15,8 @@ import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private boolean lastStylusEraserActive = false;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlayBillingPlugin.class);
@@ -22,10 +25,7 @@ public class MainActivity extends BridgeActivity {
         // Unlock native 90Hz / 120Hz / 144Hz high refresh rate on supported Android tablets & phones!
         enableHighRefreshRateDisplay();
 
-        // Android 15/16 (API 35/36) Edge-to-Edge & Tablet Taskbar Safe-Area Protection:
-        // Pads the root content container by exact systemBars + displayCutout insets so
-        // tablet app docks/taskbars, 3-button nav bars, gesture bars, and status bars NEVER
-        // overlap bottom controls (Boyut S/M/L/XL, Renkler, Modals, HUDs).
+        // Android 15/16 (API 35/36) Edge-to-Edge & Tablet Taskbar Safe-Area Protection
         final View rootView = findViewById(android.R.id.content);
         if (rootView != null) {
             rootView.setBackgroundColor(Color.parseColor("#FAF9F5"));
@@ -56,6 +56,54 @@ public class MainActivity extends BridgeActivity {
                 settings.setDomStorageEnabled(true);
             }
         }
+    }
+
+    /**
+     * Native Samsung S-Pen & Android Stylus Hardware Eraser Button Detection:
+     * Detects MotionEvent.TOOL_TYPE_ERASER (tail eraser) AND MotionEvent.BUTTON_STYLUS_PRIMARY
+     * (S-Pen side barrel button) across both touch and hover events, notifying the WebView immediately!
+     */
+    private void inspectStylusHardwareButton(MotionEvent ev) {
+        if (ev == null || ev.getPointerCount() == 0) return;
+        int toolType = ev.getToolType(0);
+        if (toolType != MotionEvent.TOOL_TYPE_STYLUS && toolType != MotionEvent.TOOL_TYPE_ERASER) {
+            return;
+        }
+        int btnState = ev.getButtonState();
+        boolean isBarrelDown =
+            (btnState & MotionEvent.BUTTON_STYLUS_PRIMARY) != 0
+                || (btnState & MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+                || (btnState & MotionEvent.BUTTON_SECONDARY) != 0;
+        boolean isEraserNow = (toolType == MotionEvent.TOOL_TYPE_ERASER) || isBarrelDown;
+
+        if (isEraserNow != lastStylusEraserActive) {
+            lastStylusEraserActive = isEraserNow;
+            if (this.bridge != null && this.bridge.getWebView() != null) {
+                final boolean activeFlag = isEraserNow;
+                this.bridge.getWebView().post(() -> {
+                    if (this.bridge != null && this.bridge.getWebView() != null) {
+                        this.bridge.getWebView().evaluateJavascript(
+                            "window.dispatchEvent(new CustomEvent('zh:stylus-eraser-hold', { detail: { active: "
+                                + activeFlag
+                                + ", source: 'android_spen' } }));",
+                            null
+                        );
+                    }
+                });
+            }
+        }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        inspectStylusHardwareButton(ev);
+        return super.dispatchTouchEvent(ev);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        inspectStylusHardwareButton(ev);
+        return super.dispatchGenericMotionEvent(ev);
     }
 
     private void enableHighRefreshRateDisplay() {

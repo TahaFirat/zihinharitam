@@ -1,6 +1,6 @@
 Dear Apple App Review Team,
 
-Thank you for reviewing ZihinHaritam (MindSticker) Version 1.0.3 (Build 19)!
+Thank you for reviewing ZihinHaritam (MindSticker) Version 1.0.3 (Build 20)!
 
 IMPORTANT SUBSCRIPTION REVIEW NOTE:
 Please review and approve our two auto-renewable subscriptions in Subscription Group "ZihinHaritam Pro" together with Version 1.0.3:
@@ -8,24 +8,18 @@ Please review and approve our two auto-renewable subscriptions in Subscription G
 - Yearly Pro: com.tahafirat.zihinharitam.pro_yearly (TRY 2,999.99/yr, USD $59.99/yr)
 (Our Non-Consumable Lifetime Pro product com.tahafirat.zihinharitam.lifetime_pro was already approved in 1.0.2.)
 
-1. What's New & Verified in Version 1.0.3 (Build 19):
-- 120Hz Silky Canvas Engine: Isolated GPU dot-grid translation and deferred non-critical React updates so panning/pinching on iPhone & iPad runs smoothly with zero stutter.
-- Direct Canvas Freehand Drawing Mode ("Çiz" button in top HUD): Full Pen, Highlighter, Arrow, Box, Circle, Eraser, color/width pickers, and Stylus-Only Palm Rejection ("Sadece Kalem") exported cleanly into PNG/SVG/PDF.
-- Intent-Aware Icon Search: Upgraded with Unicode CLDR Turkish concept lexicon (3,482 concepts), removed unrelated external photo scrapers, and cleanly separated monochrome Free icons (13,604) from vibrant 3D/Color Pro icons (29,883).
-- Native Offer Code Redemption (Guideline 3.1.1 Compliant): On iOS, tapping "Hediye Kodu" opens Apple's native StoreKit 2 `AppStore.presentOfferCodeRedeemSheet(in:)` sheet exclusively (zero custom promo text fields or external unlock mechanisms on iOS).
-- Safe-Area & Keyboard Polish: Fixed top/bottom safe-area spacing on notched iPhones and prevented tablet keyboard dock overflow.
+1. What's New & Verified in Version 1.0.3 (Build 20):
+- Native Apple Pencil Pro & 2nd Gen Integration (`UIPencilInteraction` in `MainViewController.swift`): Double-tap or squeeze switches cleanly between Pen and Eraser!
+- Full Tablet Note-Taking Suite ("Çiz" tab): Pressure-sensitive Pen, Pencil, Highlighter, Presentation Laser Pointer, Hold-to-Snap Auto-Shape Assist, Lasso Select/Move/Recolor, Stroke & Area Eraser, Movable Pastel Sticky Notes, 5 Paper Templates (Dotted/Grid/Lined/Blank/Warm), and Stylus-Only Palm Rejection—all exported cleanly to PNG/SVG/PDF.
+- Simplified 3-Tab Interface: Decluttered canvas top bar into spacious "Harita / Çiz / Çalış" mode tabs + 3-tab bottom branch dock with larger touch targets, voice dictation, and an always-accessible Interactive Guide ("Rehber" in Home header, Canvas menu, and Settings).
+- Gamified Colorful Icon Search & Dynamic Context Sub-Branches: 43,722 bundled offline icons (prioritizing vibrant gamified styles with deduplication) + Turkish stemmer + dynamic topic-aware sub-branch suggestions.
+- Native Offer Code Redemption (Guideline 3.1.1 Compliant): On iOS, tapping "Hediye Kodu" opens Apple's native StoreKit 2 `AppStore.presentOfferCodeRedeemSheet(in:)` exclusively (zero custom promo text fields on iOS).
 
 2. Confirmations & Compliance:
-- Account login / deletion: NONE (no login required; all data stored locally on-device in IndexedDB).
+- Account login / deletion: NONE (no login required; local-first IndexedDB storage).
 - User-generated content: NONE (no public feed, social sharing, or chat).
-- Paid content (Guideline 3.1.1 & 3.1.2): Native StoreKit 2 (StoreKitPlugin.swift) exclusively — Monthly Pro, Yearly Pro, Lifetime Pro, prominent "Satın Alımları Geri Yükle" (`AppStore.sync()`), native Offer Code sheet, EULA & Privacy Policy links (`https://tahafirat.github.io/zihinharitam/`).
+- Paid content (Guideline 3.1.1 & 3.1.2): Native StoreKit 2 (StoreKitPlugin.swift) exclusively + prominent "Satın Alımları Geri Yükle" (`AppStore.sync()`), EULA & Privacy Policy links (`https://tahafirat.github.io/zihinharitam/`).
 - Privacy: ZERO tracking SDKs, ZERO ads (`NSPrivacyTracking = false`).
-
-3. Quick Feature Testing Guide (Zero Login Needed):
-- Home Workspace: 2 free active maps (13,600+ monochrome free icons); tapping a 3rd map or any PRO 3D icon opens the StoreKit 2 Paywall.
-- Canvas Freehand Drawing: Open any map and tap the Pen ("Çiz") button in the top bar to draw directly around branches, toggle Palm Rejection, or erase strokes.
-- Icon Search: Tap any node and search e.g. "Komutan", "Petek", "Kalp", "Roket" for instant <3ms relevant monochrome Free + 3D Pro icons.
-- Exam Mode (Graduation Cap) & 300 DPI Export (Share button) work completely offline.
 
 Best regards,
 Taha Firat

@@ -26,7 +26,9 @@ import {
 } from '../core/canvas/CrossLinkRenderer';
 import {
   drawInkStrokesToCanvas2D,
+  drawStickyNotesToCanvas2D,
   generateInkStrokesSvgElements,
+  generateStickyNotesSvgElements,
 } from '../core/canvas/InkStrokeEngine';
 import {
   OrganicBranchRenderer,
@@ -162,8 +164,9 @@ async function renderHighResMapCanvas(
         Boolean(doc.darkMode)
       );
 
-      // 2b. Freehand Tablet/Stylus Ink Strokes
+      // 2b. Freehand Tablet/Stylus Ink Strokes & Sticky Notes
       drawInkStrokesToCanvas2D(ctx, doc.inkStrokes);
+      drawStickyNotesToCanvas2D(ctx, doc.stickyNotes);
 
       // 3. Nodes (Stickers + Pill Cards + Tech Badges)
       visibleNodes.forEach((node, idx) => {
@@ -337,12 +340,17 @@ function buildVectorSvgBlob(doc: MindMapDocument): Blob {
     }
   }
 
-  const inkSvgMarkup = generateInkStrokesSvgElements(
-    (doc.inkStrokes ?? []).map((s) => ({
-      ...s,
-      points: s.points.map(([px, py, pr]) => [px + ox, py + oy, pr] as [number, number, number]),
-    }))
-  );
+  const inkSvgMarkup =
+    generateInkStrokesSvgElements(
+      (doc.inkStrokes ?? []).map((s) => ({
+        ...s,
+        points: s.points.map(([px, py, pr]) => [px + ox, py + oy, pr] as [number, number, number]),
+      }))
+    ) +
+    '\n' +
+    generateStickyNotesSvgElements(
+      (doc.stickyNotes ?? []).map((n) => ({ ...n, x: n.x + ox, y: n.y + oy }))
+    );
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">

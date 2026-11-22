@@ -1,4 +1,3 @@
-- 120 FPS YAĞ GİBİ TUVAL: Kaydırma ve yakınlaştırmada sıfır kasma ve sıfır donma sağlayan donanım hızlandırmalı yeni grafik motoru.
-- SERBEST ÇİZİM MODU: Doğrudan harita üzerine Kalem, Fosforlu Kalem, Ok, Kutu, Daire, Silgi ve iPad Avuç İçi Reddi (Sadece Kalem) ile not alma.
-- YENİ AKILLI İKON ARAMA: 3.480+ Türkçe kavram sözlüğü ile yazdığınızı tam anlar, alakasız görselleri tamamen eler ve en doğru ikonları anında sıralar.
-- YENİ TASARIM & SATIN ALMA İYİLEŞTİRMESİ: Sadeleştirilmiş yeni ana sayfa, yenilenmiş profesyonel logo, tablet klavye taşma koruması, yerel TL fiyatlandırma ve Hediye Kodu desteği.
+- S-PEN & APPLE PENCIL PRO NOT PAKETİ: Kalem, Kurşun Kalem, Fosforlu, Lazer İşaretçi, Oto-Şekil Düzeltme, Kement (Lasso) ile taşıma/boyama, Çizgi & Alan Silgisi, Yapışkan Notlar, 5 Defter Kağıdı Deseni ve Apple Pencil çift dokunuş / S-Pen yan silgi tuşu desteği!
+- OYUNLAŞTIRILMIŞ RENKLİ İKONLAR & GÜÇLÜ TÜRKÇE: 5 yeni canlı 3D/oyunlaştırılmış ikon paketi, Türkçe ek/kök bulucu ve tekrarsız akıllı sıralama ile yazdığınız her kelimenin renkli ikonu anında gelir.
+- SADE 3 SEKMELİ YENİ ARAYÜZ: Karmaşa tamamen kaldırıldı; büyük dokunmatik butonlu "Harita / Çiz / Çalış" sekmeleri, konuya özel akıllı alt dal önerileri, sesle dikte ve her zaman açılabilen Uygulama Rehberi eklendi.

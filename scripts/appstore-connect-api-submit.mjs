@@ -1333,6 +1333,19 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
             attributes: { canceled: true },
           },
         });
+        for (let w = 0; w < 15; w += 1) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const vChk = await client.request('GET', `/v1/appStoreVersions/${versionId}`);
+            const st = vChk?.data?.attributes?.appStoreState;
+            if (st && st !== 'WAITING_FOR_REVIEW') {
+              console.log(`  -> Sürüm durumu güncellendi: ${st}`);
+              break;
+            }
+          } catch {
+            // Keep polling briefly
+          }
+        }
       }
     }
 

@@ -1,4 +1,3 @@
-- 120 FPS SILKY CANVAS: Redesigned zero-jank GPU pan/zoom pipeline eliminating freezes and stutter on iPhone and iPad.
-- FREEHAND CANVAS DRAWING: Draw directly on mind maps with Pen, Highlighter, Arrow, Box, Circle, Eraser, and Stylus-Only Palm Rejection (included in PNG/SVG/PDF exports).
-- INTENT-AWARE ICON ENGINE: Upgraded with 3,480+ official multilingual concepts and removed unrelated external photos for fast, accurate icon ranking.
-- SIMPLIFIED HOME & STOREKIT POLISH: New brand emblem, streamlined home screen, tablet keyboard safe-area layout, and native App Store Offer Code redemption.
+- PRO TABLET NOTES & APPLE PENCIL SUITE: Pen, Pencil, Highlighter, Presentation Laser, Hold-to-Snap Auto-Shape, Lasso Select/Move/Recolor, Stroke/Area Eraser, Movable Sticky Notes, 5 Paper Templates, and native Apple Pencil double-tap/squeeze eraser switching!
+- GAMIFIED COLORFUL ICON ENGINE: Added 5 vibrant colorful packs, Turkish stemmer & concept deduplication so every searched topic yields crisp gamified icons.
+- SIMPLIFIED 3-TAB UI & GUIDE: Decluttered top HUD into spacious Map / Draw / Study tabs with larger buttons, voice dictation, dynamic topic-aware sub-branch suggestions, and an always-accessible interactive Guide.

@@ -95,12 +95,15 @@ export function normalizeTrToken(raw) {
 
 const TURKISH_SUFFIXES = [
   'larindan', 'lerinden', 'larinin', 'lerinin', 'larina', 'lerine',
-  'lardan', 'lerden', 'larin', 'lerin', 'larda', 'lerde',
+  'larimiz', 'lerimiz', 'larim', 'lerim', 'larin', 'lerin',
+  'lardan', 'lerden', 'larda', 'lerde',
   'liklar', 'likler', 'luklar', 'lukler', 'cilik', 'culuk',
   'sinda', 'sinde', 'sindan', 'sinden', 'sina', 'sine', 'sini', 'sunu',
+  'imiz', 'umuz', 'iniz', 'unuz', 'masi', 'mesi', 'iyor', 'uyor', 'eyor',
   'ndan', 'nden', 'nin', 'nun', 'dan', 'den', 'tan', 'ten',
-  'lari', 'leri', 'lara', 'lere', 'lik', 'luk', 'suz', 'siz',
-  'sal', 'sel', 'cil', 'cul', 'ci', 'cu', 'li', 'lu',
+  'lari', 'leri', 'lara', 'lere', 'lar', 'ler', 'mak', 'mek', 'yor',
+  'lik', 'luk', 'suz', 'siz', 'sal', 'sel', 'cil', 'cul',
+  'ci', 'cu', 'li', 'lu', 'ma', 'me',
   'da', 'de', 'ta', 'te', 'in', 'un', 'na', 'ne', 'ya', 'ye',
   'si', 'su', 'yi', 'yu', 'im', 'um', 'iz', 'uz',
   'i', 'u', 'a', 'e',
@@ -124,6 +127,24 @@ const CONSONANT_RESTORE = {
   esig: 'esik',
   mantig: 'mantik',
   hukug: 'hukuk',
+  kopeg: 'kopek',
+  ciceg: 'cicek',
+  bicag: 'bicak',
+  ucag: 'ucak',
+  ekmeg: 'ekmek',
+  gozlug: 'gozluk',
+  balig: 'balik',
+  yuzug: 'yuzuk',
+  bayrag: 'bayrak',
+  sandig: 'sandik',
+  bardag: 'bardak',
+  tabag: 'tabak',
+  mutfag: 'mutfak',
+  sokag: 'sokak',
+  parmag: 'parmak',
+  tırnag: 'tirnak',
+  tirnag: 'tirnak',
+  koltug: 'koltuk',
   blogy: 'blok',
   kalb: 'kalp',
   reng: 'renk',
@@ -154,6 +175,8 @@ const CONSONANT_RESTORE = {
   cevab: 'cevap',
   mikrob: 'mikrop',
   dolab: 'dolap',
+  corab: 'corap',
+  kebab: 'kebap',
   sebep: 'sebep',
   sebeb: 'sebep',
   metod: 'metot',
@@ -1192,10 +1215,28 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  for (let i = 0; i < words.length; i++) {
-    if (phraseClusters.length > 0 && stemmedWords[i].length <= 3) continue;
-    tryLookup(words[i], wordClusters);
-    tryLookup(stemmedWords[i], wordClusters);
+  // Only expand stemmed single-word fallback when full phrase did NOT already hit an exact lexicon match!
+  const hasExactSinglePhraseHit =
+    words.length === 1 && phraseClusters.some((c) => c.isExactLexicon);
+
+  if (!hasExactSinglePhraseHit) {
+    for (let i = 0; i < words.length; i++) {
+      if (phraseClusters.length > 0 && stemmedWords[i].length <= 3) continue;
+      tryLookup(words[i], wordClusters);
+      tryLookup(stemmedWords[i], wordClusters);
+      // Single-pass Turkish plural/verb strip backup (`kediler -> kedi`, `kosmak -> kosma/kos`, `yuzmek -> yuzme`)
+      const w = words[i];
+      if (w.length >= 5) {
+        for (const s of ['lar', 'ler', 'mak', 'mek', 'lik', 'luk', 'dan', 'den', 'da', 'de', 'im', 'um', 'in', 'un']) {
+          if (w.length - s.length >= 3 && w.endsWith(s)) {
+            const cut = restoreTurkishSoftening(w.slice(0, -s.length));
+            tryLookup(cut, wordClusters);
+            if (cut.endsWith('g')) tryLookup(`${cut.slice(0, -1)}k`, wordClusters);
+            if (cut.endsWith('b')) tryLookup(`${cut.slice(0, -1)}p`, wordClusters);
+          }
+        }
+      }
+    }
   }
 
   // If an exact 1-to-1 lexicon entry (`isExactLexicon`) matched for a single-word everyday query,

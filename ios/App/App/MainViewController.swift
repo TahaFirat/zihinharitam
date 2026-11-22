@@ -11,12 +11,47 @@ class MainViewController: CAPBridgeViewController {
         webView?.backgroundColor = warmPaper
         webView?.scrollView.backgroundColor = warmPaper
         webView?.scrollView.bounces = false
+
+        // Native Apple Pencil 2nd Gen Double-Tap & Apple Pencil Pro Squeeze -> Pen/Eraser Toggle
+        if #available(iOS 12.1, *), let wv = webView {
+            let pencilInteraction = UIPencilInteraction()
+            pencilInteraction.delegate = self
+            wv.addInteraction(pencilInteraction)
+        }
     }
 
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         if #available(iOS 15.0, *) {
             bridge?.registerPluginInstance(StoreKitPlugin())
+        }
+    }
+
+    fileprivate func dispatchApplePencilToggle(gesture: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.webView?.evaluateJavaScript(
+                "window.dispatchEvent(new CustomEvent('zh:stylus-eraser-toggle', { detail: { source: 'apple_pencil', gesture: '\(gesture)' } }));",
+                completionHandler: nil
+            )
+        }
+    }
+}
+
+@available(iOS 12.1, *)
+extension MainViewController: UIPencilInteractionDelegate {
+    public func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+        dispatchApplePencilToggle(gesture: "double_tap")
+    }
+
+    @available(iOS 17.5, *)
+    public func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
+        dispatchApplePencilToggle(gesture: "double_tap")
+    }
+
+    @available(iOS 17.5, *)
+    public func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
+        if squeeze.phase == .ended {
+            dispatchApplePencilToggle(gesture: "squeeze")
         }
     }
 }

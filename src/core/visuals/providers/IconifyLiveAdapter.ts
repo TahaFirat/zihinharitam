@@ -304,7 +304,7 @@ export async function searchIconifyLive(
   const allowNoisy = primaryWords.some((w) => NOISY_LIVE_WORDS.has(w));
 
   const COLORFUL_PREFIX_FILTER =
-    'fluent-emoji-flat,fluent-color,noto,twemoji,streamline-color,streamline-emojis,openmoji,icon-park,flat-color-icons,meteocons,logos,devicon,skill-icons,healthicons';
+    'fluent-emoji,fluent-emoji-flat,streamline-plump-color,fluent-color,streamline-color,emojione,noto,fxemoji,streamline-emojis,marketeq,withicons-soft3d,withicons-sticker,flat-color-icons,icon-park,twemoji,meteocons,logos,devicon,skill-icons,healthicons';
 
   const fetchBatch = async (
     q: string,
@@ -339,8 +339,9 @@ export async function searchIconifyLive(
   );
   if (allIconIds.length === 0) return [];
 
-  // Score with Iconify Exact-Name + Short-Name Specificity so exact 546,996-catalog matches rise straight to #1..#8!
+  // Score with Iconify Exact-Name + Short-Name Specificity + Concept Deduplication (max 2 per exact concept!)
   const prefixCounts = new Map<string, number>();
+  const conceptCounts = new Map<string, number>();
   const scored: VisualSearchResult[] = [];
 
   for (let i = 0; i < allIconIds.length; i++) {
@@ -361,10 +362,17 @@ export async function searchIconifyLive(
     if (nameWords.some((w) => blockedSet.has(w))) continue;
     if (!allowNoisy && nameWords.some((w) => NOISY_LIVE_WORDS.has(w))) continue;
 
-    // Max 6 icons per collection so results stay diverse
+    const cKey = cleanName
+      .replace(/\b(outline|solid|fill|filled|flat|color|colour|alt|regular|bold|1|2|3|4|5)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if ((conceptCounts.get(cKey) ?? 0) >= 2) continue;
+
+    // Max 5 icons per collection so results stay diverse & gamified
     const curCount = prefixCounts.get(prefix) ?? 0;
-    if (curCount >= 6) continue;
+    if (curCount >= 5) continue;
     prefixCounts.set(prefix, curCount + 1);
+    conceptCounts.set(cKey, (conceptCounts.get(cKey) ?? 0) + 1);
 
     const { category, mode, isColor } = classifyLivePrefix(prefix);
     const boost = SET_PRIORITY_BOOST[prefix] ?? (isColor ? 1.15 : 1.0);

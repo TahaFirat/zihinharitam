@@ -19,13 +19,15 @@ import {
   Search,
   Layers,
   Settings,
-  Zap,
   Timer,
   Play,
   Pause,
   Pencil,
   PenTool,
   ListTree,
+  Brain,
+  HelpCircle,
+  Grid3X3,
 } from 'lucide-react';
 import {
   DEPARTMENT_LABELS,
@@ -33,19 +35,24 @@ import {
   type CollaboratorPresence,
   type ExamRecallMode,
   type NodeVisualStyle,
+  type PaperStyleType,
   type PaywallTriggerReason,
 } from '../types/mindmap';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
-import { OfflineVisualSearchClient } from '../core/visuals/OfflineVisualSearchClient';
+
+export type WorkspaceTopTab = 'map' | 'draw' | 'study';
 
 interface TopMinimalHUDProps {
   mapTitle: string;
   department: AcademicDepartment;
   contextEmoji?: string;
   defaultNodeStyle: NodeVisualStyle;
+  paperStyle: PaperStyleType;
   onToggleDefaultNodeStyle: () => void;
+  onCyclePaperStyle: () => void;
   onOpenCommandPalette: () => void;
   onOpenOutline: () => void;
+  onOpenGuide: () => void;
   onRenameMap: (title: string) => void;
   onNavigateHome: () => void;
   onOpenSettings: () => void;
@@ -53,6 +60,7 @@ interface TopMinimalHUDProps {
   onOpenSmartGenerator: () => void;
   drawingMode: boolean;
   onToggleDrawingMode: () => void;
+  onExitDrawingMode: () => void;
   focusModeActive: boolean;
   onToggleFocusMode: () => void;
   examMode: ExamRecallMode;
@@ -72,14 +80,25 @@ interface TopMinimalHUDProps {
   zoomPercent: number;
 }
 
+const PAPER_LABELS: Record<PaperStyleType, string> = {
+  dots: 'Noktalı',
+  grid: 'Kareli',
+  lined: 'Çizgili',
+  blank: 'Düz Beyaz',
+  warm: 'Krem Defter',
+};
+
 export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   mapTitle,
   department,
   contextEmoji,
   defaultNodeStyle,
+  paperStyle,
   onToggleDefaultNodeStyle,
+  onCyclePaperStyle,
   onOpenCommandPalette,
   onOpenOutline,
+  onOpenGuide,
   onRenameMap,
   onNavigateHome,
   onOpenSettings,
@@ -87,6 +106,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   onOpenSmartGenerator,
   drawingMode,
   onToggleDrawingMode,
+  onExitDrawingMode,
   focusModeActive,
   onToggleFocusMode,
   examMode,
@@ -108,10 +128,9 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   const { isLifetimePro, localizedPrice } = useEntitlements();
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(mapTitle);
+  const [studyTabOpen, setStudyTabOpen] = useState(false);
   const [examMenuOpen, setExamMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [offlineReady, setOfflineReady] = useState(false);
-  const [offlineTotal, setOfflineTotal] = useState(0);
   const [showStudyTimer, setShowStudyTimer] = useState(false);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -136,18 +155,10 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   }, [mapTitle]);
 
   useEffect(() => {
-    let unsub: (() => void) | null = null;
-    const timer = window.setTimeout(() => {
-      unsub = OfflineVisualSearchClient.subscribeStatus((st) => {
-        setOfflineReady(st.ready);
-        setOfflineTotal(st.totalIndexed);
-      });
-    }, 350);
-    return () => {
-      window.clearTimeout(timer);
-      unsub?.();
-    };
-  }, []);
+    if (drawingMode) {
+      setStudyTabOpen(false);
+    }
+  }, [drawingMode]);
 
   useEffect(() => {
     const handleOutside = (e: PointerEvent) => {
@@ -173,99 +184,566 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   };
 
   const deptMeta = DEPARTMENT_LABELS[department] ?? DEPARTMENT_LABELS.genel;
+  const activeTopTab: WorkspaceTopTab = drawingMode
+    ? 'draw'
+    : studyTabOpen || examMode !== 'off' || focusModeActive
+    ? 'study'
+    : 'map';
 
   return (
     <header
-      className="pointer-events-none fixed inset-x-0 top-0 z-30 flex items-start justify-between gap-1.5 px-2 sm:gap-2 sm:px-4"
+      className="pointer-events-none fixed inset-x-0 top-0 z-30 flex flex-col gap-2 px-2.5 sm:px-4"
       style={{
         paddingTop: 'max(12px, calc(var(--safe-top) + 8px))',
-        paddingLeft: 'calc(var(--safe-left) + 8px)',
-        paddingRight: 'calc(var(--safe-right) + 8px)',
+        paddingLeft: 'calc(var(--safe-left) + 10px)',
+        paddingRight: 'calc(var(--safe-right) + 10px)',
       }}
     >
-      {/* Left Minimal Pill: ← Haritalarım + Map Name + Offline Ready Badge */}
-      <div
-        className="pointer-events-auto flex min-w-0 items-center gap-1.5 rounded-2xl border px-2 py-1 shadow-sm"
-        style={{
-          backgroundColor: 'var(--hud-bg)',
-          borderColor: 'var(--hud-border)',
-        }}
-      >
-        <button
-          type="button"
-          onClick={onNavigateHome}
-          data-testid="hud-back-home-btn"
-          title="Haritalarım Çalışma Alanına Dön"
-          className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl px-2 text-xs font-extrabold hover:bg-slate-500/10 active:scale-95"
+      {/* MAIN SIMPLIFIED 3-ZONE TOP BAR (Left: Back+Title | Center: 3 Big Mode Tabs | Right: 4 Clean Actions) */}
+      <div className="relative z-20 flex w-full items-center justify-between gap-1.5 sm:gap-2">
+        {/* Zone 1: Back + Map Title (On compact phones <640px, keep clean Back pill to avoid clipping; title rename lives in ⋯ menu) */}
+        <div
+          className="pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl border px-1 py-1 shadow-sm sm:px-1.5"
+          style={{
+            backgroundColor: 'var(--hud-bg)',
+            borderColor: 'var(--hud-border)',
+          }}
         >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden lg:inline">Haritalarım</span>
-        </button>
-
-        <div className="h-4 w-px shrink-0 bg-slate-400/25" />
-
-        {editingTitle ? (
-          <input
-            type="text"
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            onBlur={commitTitle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitTitle();
-              if (e.key === 'Escape') {
-                setDraftTitle(mapTitle);
-                setEditingTitle(false);
-              }
-            }}
-            autoFocus
-            className="allow-text-input w-28 rounded-lg bg-sky-500/10 px-2 py-0.5 text-base font-bold outline-none ring-1 ring-sky-500 sm:w-44 sm:text-sm"
-          />
-        ) : (
           <button
             type="button"
-            data-testid="hud-rename-map-btn"
-            onClick={() => setEditingTitle(true)}
-            title="Ağaç / Harita adını değiştirmek için dokunun"
-            className="group flex min-w-0 items-center gap-1.5 rounded-xl px-2 py-1 text-left hover:bg-sky-500/10"
+            onClick={onNavigateHome}
+            data-testid="hud-back-home-btn"
+            title="Haritalarım Ana Sayfasına Dön"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl text-xs font-extrabold hover:bg-slate-500/10 active:scale-95 sm:w-auto sm:px-2.5"
           >
-            <span className="text-sm leading-none" aria-hidden="true">
-              {contextEmoji || deptMeta.emoji}
-            </span>
-            <span className="max-w-[96px] truncate text-xs font-extrabold tracking-tight sm:max-w-[150px] md:max-w-[190px] lg:max-w-[300px] xl:max-w-[380px] sm:text-sm">
-              {mapTitle}
-            </span>
-            <Pencil className="h-3 w-3 shrink-0 text-sky-500 opacity-75 transition group-hover:scale-110 group-hover:opacity-100" />
+            <ArrowLeft className="h-4.5 w-4.5" />
+            <span className="hidden xl:inline">Haritalarım</span>
           </button>
-        )}
 
-        {offlineReady && (
-          <span
-            title={`${offlineTotal.toLocaleString('tr-TR')} Çevrimdışı + 540.000+ Online Vektör İkon Hazır`}
-            className="hidden shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 xl:inline-flex dark:text-emerald-300"
+          <div
+            className={`${editingTitle ? 'block' : 'hidden sm:block'} h-5 w-px shrink-0 bg-slate-400/25`}
+          />
+
+          {editingTitle ? (
+            <input
+              type="text"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitTitle();
+                if (e.key === 'Escape') {
+                  setDraftTitle(mapTitle);
+                  setEditingTitle(false);
+                }
+              }}
+              autoFocus
+              className="allow-text-input w-28 rounded-xl bg-sky-500/10 px-2.5 py-1 text-base font-extrabold outline-none ring-2 ring-sky-500 sm:w-44 sm:text-sm"
+            />
+          ) : (
+            <button
+              type="button"
+              data-testid="hud-rename-map-btn"
+              onClick={() => setEditingTitle(true)}
+              title="Harita adını değiştirmek için dokunun"
+              className="group hidden min-w-0 items-center gap-1.5 rounded-xl px-2 py-1.5 text-left hover:bg-sky-500/10 sm:flex"
+            >
+              <span className="text-base leading-none" aria-hidden="true">
+                {contextEmoji || deptMeta.emoji}
+              </span>
+              <span className="max-w-[140px] truncate text-sm font-extrabold tracking-tight md:max-w-[190px] lg:max-w-[260px]">
+                {mapTitle}
+              </span>
+              <Pencil className="h-3 w-3 shrink-0 text-sky-500 opacity-75" />
+            </button>
+          )}
+        </div>
+
+        {/* Zone 2: 3 BIG, CLEAR MODE TABS (`Harita` | `Çiz` | `Çalış`) */}
+        <div
+          data-testid="hud-mode-tabs"
+          className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border p-1 shadow-sm sm:gap-1"
+          style={{
+            backgroundColor: 'var(--hud-bg)',
+            borderColor: 'var(--hud-border)',
+          }}
+        >
+          <button
+            type="button"
+            data-testid="hud-tab-map"
+            onClick={() => {
+              onExitDrawingMode();
+              setStudyTabOpen(false);
+            }}
+            className={`inline-flex h-10 items-center gap-1 rounded-xl px-2 text-[11px] font-extrabold transition active:scale-95 sm:gap-1.5 sm:px-3.5 sm:text-[13px] ${
+              activeTopTab === 'map'
+                ? 'bg-slate-900 text-white shadow-xs dark:bg-sky-500 dark:text-slate-950'
+                : 'opacity-75 hover:bg-slate-500/10 hover:opacity-100'
+            }`}
           >
-            <Zap className="h-2.5 w-2.5" />
-            <span>{Math.max(25, Math.floor(offlineTotal / 1000))}K+ Offline</span>
-          </span>
-        )}
+            <Brain className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+            <span>Harita</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="hud-draw-toggle-btn"
+            onClick={onToggleDrawingMode}
+            title="Tuval Üzerine Kalem, Fosforlu, Şekil, Kement & Yapışkan Not"
+            className={`inline-flex h-10 items-center gap-1 rounded-xl px-2 text-[11px] font-extrabold transition active:scale-95 sm:gap-1.5 sm:px-3.5 sm:text-[13px] ${
+              activeTopTab === 'draw'
+                ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-xs'
+                : 'opacity-80 hover:bg-sky-500/12 hover:text-sky-700 hover:opacity-100 dark:hover:text-sky-300'
+            }`}
+          >
+            <PenTool className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+            <span>{drawingMode ? 'Çizim' : 'Çiz'}</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="hud-tab-study"
+            onClick={() => {
+              onExitDrawingMode();
+              setStudyTabOpen((v) => !v);
+            }}
+            title="Sınav Modu, Odak, Sayaç, Anahat & Akıllı Harita Araçları"
+            className={`inline-flex h-10 items-center gap-1 rounded-xl px-2 text-[11px] font-extrabold transition active:scale-95 sm:gap-1.5 sm:px-3.5 sm:text-[13px] ${
+              activeTopTab === 'study'
+                ? 'bg-violet-600 text-white shadow-xs'
+                : 'opacity-80 hover:bg-violet-500/12 hover:text-violet-700 hover:opacity-100 dark:hover:text-violet-300'
+            }`}
+          >
+            <GraduationCap className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+            <span>Çalış</span>
+            {examMode !== 'off' && (
+              <span className="rounded-md bg-white/25 px-1 py-0.5 text-[9.5px] font-black">
+                {examStats.revealed}/{examStats.total}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Zone 3: Ultra-Clean Right Actions (Undo, Search, Export, More Menu) */}
+        <div
+          className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border px-1 py-1 shadow-sm sm:gap-1 sm:px-1.5"
+          style={{
+            backgroundColor: 'var(--hud-bg)',
+            borderColor: 'var(--hud-border)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Geri Al"
+            className="hidden h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10 active:scale-95 disabled:opacity-30 md:flex"
+          >
+            <Undo2 className="h-4.5 w-4.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            title="Hızlı Dal & İkon Arama"
+            className="flex h-10 w-9 items-center justify-center rounded-xl hover:bg-sky-500/12 hover:text-sky-600 active:scale-95 sm:w-auto sm:gap-1.5 sm:px-3 dark:hover:text-sky-300"
+          >
+            <Search className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+            <span className="hidden text-xs font-extrabold lg:inline">Ara</span>
+          </button>
+
+          {collaborators.length > 1 && (
+            <div className="hidden items-center -space-x-1.5 px-1 xl:flex">
+              {collaborators.slice(0, 3).map((peer) => (
+                <div
+                  key={peer.id}
+                  title={peer.isLocal ? 'Sen' : peer.name}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-extrabold text-white dark:border-slate-900"
+                  style={{ backgroundColor: peer.color }}
+                >
+                  {peer.avatarInitials}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Share / Export Button */}
+          <button
+            type="button"
+            onClick={onOpenExport}
+            title="300 DPI PDF / PNG / SVG Çıktı ve Paylaşım"
+            className="flex h-10 w-9 items-center justify-center gap-1.5 rounded-xl bg-slate-900 text-xs font-extrabold text-white shadow-xs hover:opacity-95 active:scale-95 sm:w-auto sm:px-3 dark:bg-sky-500 dark:text-slate-950"
+          >
+            <Share2 className="h-4 w-4" />
+            <span className="hidden md:inline">Paylaş</span>
+          </button>
+
+          {/* Spacious Overflow Menu (`⋯`) — Holds Theme, Paper, Guide, Pro, Settings */}
+          <div ref={moreRef} className="relative">
+            <button
+              type="button"
+              data-testid="hud-more-menu-btn"
+              onClick={() => {
+                setExamMenuOpen(false);
+                setMoreMenuOpen((v) => !v);
+              }}
+              title="Görünüm, Kağıt Deseni, Rehber ve Ayarlar"
+              className={`flex h-10 w-9 items-center justify-center rounded-xl active:scale-95 sm:w-10 ${
+                moreMenuOpen ? 'bg-slate-500/15' : 'hover:bg-slate-500/10'
+              }`}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+
+            {moreMenuOpen && (
+              <div
+                className="absolute right-0 z-50 mt-2 w-72 rounded-3xl border p-2.5 shadow-2xl backdrop-blur-xl"
+                style={{
+                  backgroundColor: 'var(--canvas-bg)',
+                  borderColor: 'var(--hud-border)',
+                }}
+              >
+                {/* Mobile Map Title & Rename Row */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    setEditingTitle(true);
+                  }}
+                  className="mb-1.5 flex min-h-[40px] w-full items-center justify-between gap-2 rounded-2xl bg-sky-500/10 px-3 text-left text-xs font-extrabold text-sky-800 hover:bg-sky-500/15 sm:hidden dark:text-sky-200"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="text-base leading-none">{contextEmoji || deptMeta.emoji}</span>
+                    <span className="truncate">{mapTitle}</span>
+                  </span>
+                  <Pencil className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                </button>
+                {/* Quick Undo / Redo Row */}
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUndo();
+                      setMoreMenuOpen(false);
+                    }}
+                    disabled={!canUndo}
+                    className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-2xl bg-slate-500/10 text-xs font-extrabold hover:bg-slate-500/15 disabled:opacity-35"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    Geri Al
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRedo();
+                      setMoreMenuOpen(false);
+                    }}
+                    disabled={!canRedo}
+                    className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-2xl bg-slate-500/10 text-xs font-extrabold hover:bg-slate-500/15 disabled:opacity-35"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                    Yinele
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAutoLayout();
+                    setMoreMenuOpen(false);
+                  }}
+                  className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                >
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <span>Haritayı Otomatik Düzenle</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onFitToScreen();
+                    setMoreMenuOpen(false);
+                  }}
+                  className="flex min-h-[42px] w-full items-center justify-between rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Maximize2 className="h-4 w-4 text-sky-500" />
+                    <span>Ekrana Sığdır</span>
+                  </span>
+                  <span className="rounded-lg bg-slate-500/10 px-2 py-0.5 text-[11px] tabular-nums">
+                    %{zoomPercent}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCyclePaperStyle();
+                  }}
+                  className="flex min-h-[42px] w-full items-center justify-between rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Grid3X3 className="h-4 w-4 text-indigo-500" />
+                    <span>Kağıt Deseni</span>
+                  </span>
+                  <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-[11px] text-indigo-700 dark:text-indigo-300">
+                    {PAPER_LABELS[paperStyle]}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleDefaultNodeStyle();
+                    setMoreMenuOpen(false);
+                  }}
+                  className="flex min-h-[42px] w-full items-center justify-between rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Layers className="h-4 w-4 text-emerald-500" />
+                    <span>Düğüm Stili</span>
+                  </span>
+                  <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                    {defaultNodeStyle === 'organic' ? 'Organik' : 'Modern Kart'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleDarkMode();
+                    setMoreMenuOpen(false);
+                  }}
+                  className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                >
+                  {darkMode ? (
+                    <Sun className="h-4 w-4 text-amber-400" />
+                  ) : (
+                    <Moon className="h-4 w-4 text-indigo-500" />
+                  )}
+                  <span>{darkMode ? 'Açık Defter Teması' : 'Karanlık Çalışma Teması'}</span>
+                </button>
+
+                <div className="my-1.5 h-px bg-slate-400/20" />
+
+                <button
+                  type="button"
+                  data-testid="hud-guide-btn"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onOpenGuide();
+                  }}
+                  className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold text-sky-700 hover:bg-sky-500/12 dark:text-sky-300"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  <span>Uygulama Rehberi & Tanıtım</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="hud-settings-btn"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onOpenSettings();
+                  }}
+                  className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span>Ayarlar, Yedek & Lisans</span>
+                </button>
+
+                {!isLifetimePro && (
+                  <button
+                    type="button"
+                    data-testid="hud-pro-pill"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      onTriggerPaywall('header_pill');
+                    }}
+                    className="mt-1.5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-xs font-black text-slate-950 shadow-sm active:scale-95"
+                  >
+                    <Crown className="h-4 w-4" />
+                    <span>ZihinHaritam Pro • {localizedPrice}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Center / Sub-Header Active Exam Counter & Study Timer Pill (Visible on Mobile, Tablet & Desktop!) */}
-      {(examMode !== 'off' || showStudyTimer || timerRunning || timerSeconds > 0) && (
+      {/* CLEAN SECONDARY STUDY RIBBON (Shown ONLY when `🎓 Çalış` Tab is Open!) */}
+      {studyTabOpen && !drawingMode && (
         <div
-          className="pointer-events-none fixed inset-x-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-3 lg:static lg:w-auto lg:px-0"
-          style={{ top: 'max(64px, calc(var(--safe-top) + 56px))' }}
+          data-testid="hud-study-ribbon"
+          className="pointer-events-none relative z-10 flex w-full justify-center"
         >
+          <div
+            className="no-scrollbar pointer-events-auto flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl border px-2.5 py-1.5 shadow-lg backdrop-blur-md"
+            style={{
+              backgroundColor: 'var(--hud-bg)',
+              borderColor: 'var(--hud-border)',
+            }}
+          >
+            {/* Active Recall Exam Dropdown */}
+            <div ref={examRef} className="relative">
+              <button
+                type="button"
+                data-testid="study-exam-btn"
+                onClick={() => setExamMenuOpen((v) => !v)}
+                className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
+                  examMode !== 'off'
+                    ? 'bg-violet-600 text-white shadow-xs'
+                    : 'bg-violet-500/12 text-violet-700 hover:bg-violet-500/20 dark:text-violet-300'
+                }`}
+              >
+                <GraduationCap className="h-4 w-4" />
+                <span>Sınav Modu</span>
+              </button>
+
+              {examMenuOpen && (
+                <div
+                  className="fixed left-1/2 z-50 mt-2 w-72 -translate-x-1/2 rounded-3xl border p-2.5 shadow-2xl backdrop-blur-xl sm:absolute sm:left-0 sm:translate-x-0"
+                  style={{
+                    backgroundColor: 'var(--canvas-bg)',
+                    borderColor: 'var(--hud-border)',
+                  }}
+                >
+                  <div className="px-2.5 py-1 text-[11px] font-extrabold tracking-wider uppercase opacity-60">
+                    Aktif Hatırlama (Sınav Modu)
+                  </div>
+                  {(
+                    [
+                      {
+                        id: 'off',
+                        title: 'Normal Harita Görünümü',
+                        desc: 'Tüm görseller ve başlıklar açık',
+                        proOnly: false,
+                      },
+                      {
+                        id: 'hide_text',
+                        title: 'Başlıkları Gizle',
+                        desc: 'İkona bakıp kavramı hatırla, dokununca aç',
+                        proOnly: false,
+                      },
+                      {
+                        id: 'hide_visuals_children',
+                        title: 'Tam Sınav Modu (Görsel & Dallar)',
+                        desc: 'Ana başlıktan tüm alt dalları hatırla',
+                        proOnly: true,
+                      },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        if (opt.proOnly && !isLifetimePro) {
+                          setExamMenuOpen(false);
+                          onTriggerPaywall('exam_mode');
+                          return;
+                        }
+                        onChangeExamMode(opt.id);
+                        setExamMenuOpen(false);
+                      }}
+                      className={`mt-1 flex w-full items-start gap-2.5 rounded-2xl p-2.5 text-left ${
+                        examMode === opt.id
+                          ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
+                          : 'hover:bg-slate-500/10'
+                      }`}
+                    >
+                      <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-current">
+                        {examMode === opt.id && <Check className="h-2.5 w-2.5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-xs font-extrabold">
+                          <span>{opt.title}</span>
+                          {opt.proOnly && !isLifetimePro && (
+                            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9.5px] font-black text-amber-700 dark:text-amber-300">
+                              PRO
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] opacity-70">{opt.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onToggleFocusMode}
+              className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
+                focusModeActive
+                  ? 'bg-sky-500 text-white shadow-xs'
+                  : 'hover:bg-slate-500/10'
+              }`}
+            >
+              <Target className="h-4 w-4" />
+              <span>Odak</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="hud-timer-toggle-btn"
+              onClick={() => setShowStudyTimer((v) => !v)}
+              className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
+                showStudyTimer || timerRunning || timerSeconds > 0
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'hover:bg-slate-500/10'
+              }`}
+            >
+              <Timer className="h-4 w-4" />
+              <span>{timerSeconds > 0 ? formattedTimer : 'Sayaç'}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="hud-outline-btn"
+              onClick={onOpenOutline}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-500/12 px-3 text-xs font-extrabold whitespace-nowrap text-indigo-700 hover:bg-indigo-500/20 active:scale-95 dark:text-indigo-300"
+            >
+              <ListTree className="h-4 w-4" />
+              <span>Anahat</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenSmartGenerator}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-amber-500/15 px-3 text-xs font-extrabold whitespace-nowrap text-amber-700 hover:bg-amber-500/25 active:scale-95 dark:text-amber-300"
+            >
+              <Wand2 className="h-4 w-4" />
+              <span>Akıllı Dal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onAutoLayout}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold whitespace-nowrap hover:bg-slate-500/10 active:scale-95"
+            >
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              <span>Düzenle</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Active Exam Progress or Study Timer Pill (Only when actively running/open) */}
+      {(examMode !== 'off' || showStudyTimer || timerRunning || timerSeconds > 0) && (
+        <div className="pointer-events-none flex flex-wrap items-center justify-center gap-2">
           {examMode !== 'off' && (
             <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/15 px-3 py-1.5 text-xs font-extrabold text-amber-800 shadow-md backdrop-blur-md dark:text-amber-200">
-              <Eye className="h-3.5 w-3.5 shrink-0" />
+              <Eye className="h-4 w-4 shrink-0" />
               <span>
-                Sınav Sayacı: {examStats.revealed} / {examStats.total}
+                Sınav: {examStats.revealed} / {examStats.total}
               </span>
               <button
                 type="button"
                 data-testid="exam-counter-reset-btn"
                 onClick={onResetExamReveals}
-                className="ml-0.5 inline-flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-0.5 text-[11px] font-black text-slate-950 shadow-2xs transition hover:bg-amber-400 active:scale-95"
+                className="inline-flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-1 text-[11px] font-black text-slate-950 active:scale-95"
               >
                 <RotateCcw className="h-3 w-3" />
                 <span>Sıfırla</span>
@@ -276,36 +754,26 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           {(showStudyTimer || timerRunning || timerSeconds > 0) && (
             <div
               data-testid="study-timer-pill"
-              className="pointer-events-auto flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-xs font-extrabold shadow-md backdrop-blur-md"
+              className="pointer-events-auto flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-xs font-extrabold shadow-md backdrop-blur-md"
               style={{
                 backgroundColor: 'var(--hud-bg)',
                 borderColor: 'var(--hud-border)',
               }}
             >
-              <Timer className="h-3.5 w-3.5 shrink-0 text-sky-500" />
-              <span className="font-mono text-xs font-black tabular-nums">
+              <Timer className="h-4 w-4 shrink-0 text-sky-500" />
+              <span className="font-mono text-sm font-black tabular-nums">
                 {formattedTimer}
               </span>
               <button
                 type="button"
                 data-testid="study-timer-play-btn"
                 onClick={() => setTimerRunning((r) => !r)}
-                title={timerRunning ? 'Duraklat' : 'Başlat'}
-                className={`inline-flex items-center gap-1 rounded-xl px-2 py-0.5 text-[11px] font-black text-white shadow-2xs active:scale-95 ${
-                  timerRunning ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500'
+                className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-black active:scale-95 ${
+                  timerRunning ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-white'
                 }`}
               >
-                {timerRunning ? (
-                  <>
-                    <Pause className="h-3 w-3" />
-                    <span>Durdur</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3 w-3" />
-                    <span>Başlat</span>
-                  </>
-                )}
+                {timerRunning ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                <span>{timerRunning ? 'Durdur' : 'Başlat'}</span>
               </button>
               <button
                 type="button"
@@ -314,8 +782,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   setTimerRunning(false);
                   setTimerSeconds(0);
                 }}
-                title="Sayacı Sıfırla"
-                className="inline-flex items-center gap-1 rounded-xl border border-rose-500/35 bg-rose-500/12 px-2 py-0.5 text-[11px] font-black text-rose-600 hover:bg-rose-500/20 active:scale-95 dark:text-rose-300"
+                className="inline-flex items-center gap-1 rounded-xl border border-rose-500/35 bg-rose-500/12 px-2.5 py-1 text-[11px] font-black text-rose-600 active:scale-95 dark:text-rose-300"
               >
                 <RotateCcw className="h-3 w-3" />
                 <span>Sıfırla</span>
@@ -324,459 +791,6 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           )}
         </div>
       )}
-
-      {/* Right Minimal Pill */}
-      <div
-        className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-2xl border px-1.5 py-1.5 shadow-sm sm:gap-1.5 sm:px-2"
-        style={{
-          backgroundColor: 'var(--hud-bg)',
-          borderColor: 'var(--hud-border)',
-        }}
-      >
-        {/* 1-Tap Freehand Canvas Drawing Mode (Pen / Highlighter / Shapes / Eraser) */}
-        <button
-          type="button"
-          data-testid="hud-draw-toggle-btn"
-          onClick={onToggleDrawingMode}
-          title="Tuval Üzerine Serbest Çizim Modu (Kalem, Fosforlu, Ok, Kutu, Silgi)"
-          className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold active:scale-95 ${
-            drawingMode
-              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-sm'
-              : 'bg-sky-500/12 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300'
-          }`}
-        >
-          <PenTool className="h-4 w-4" />
-          <span className="hidden sm:inline">{drawingMode ? 'Çiziliyor' : 'Çiz'}</span>
-        </button>
-
-        {/* Quick Search & 540K+ Command Palette */}
-        <button
-          type="button"
-          onClick={onOpenCommandPalette}
-          title="Hızlı Dal & 540.000+ İkon Arama"
-          className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-500/10 px-2.5 text-xs font-extrabold hover:bg-sky-500/15 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
-        >
-          <Search className="h-4 w-4" />
-          <span className="hidden lg:inline">Ara</span>
-        </button>
-
-        {/* Hierarchical Outliner View (`📋 Anahat`) */}
-        <button
-          type="button"
-          data-testid="hud-outline-btn"
-          onClick={onOpenOutline}
-          title="Hiyerarşik Anahat & Uzun Notlar Görünümü"
-          className="hidden h-9 items-center gap-1.5 rounded-xl bg-indigo-500/12 px-2.5 text-xs font-extrabold text-indigo-700 hover:bg-indigo-500/20 active:scale-95 md:flex dark:text-indigo-300"
-        >
-          <ListTree className="h-4 w-4" />
-          <span className="hidden xl:inline">Anahat</span>
-        </button>
-
-        {/* Landscape Tablet & Desktop Undo/Redo */}
-        <div className="hidden items-center gap-0.5 lg:flex">
-          <button
-            type="button"
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Geri Al"
-            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
-          >
-            <Undo2 className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onRedo}
-            disabled={!canRedo}
-            title="Yinele"
-            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 disabled:opacity-30"
-          >
-            <Redo2 className="h-4 w-4" />
-          </button>
-          <div className="mx-0.5 h-4 w-px bg-slate-400/25" />
-        </div>
-
-        {/* Organic vs Card Style Switch (`lg+`) */}
-        <button
-          type="button"
-          onClick={onToggleDefaultNodeStyle}
-          title="Düğüm Görünüm Stili: Modern Kart veya Kutucuksuz Organik Çıkartma"
-          className={`hidden h-8 items-center gap-1 rounded-xl px-2 text-xs font-extrabold active:scale-95 lg:flex ${
-            defaultNodeStyle === 'organic'
-              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-              : 'hover:bg-slate-500/10'
-          }`}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          <span>{defaultNodeStyle === 'organic' ? 'Organik' : 'Kart'}</span>
-        </button>
-
-        {/* Smart Text-to-Map Generator (`lg+`; portrait tablets use More menu) */}
-        <button
-          type="button"
-          onClick={onOpenSmartGenerator}
-          title="Metinden / Konudan Otomatik Görsel Harita Üret"
-          className="hidden h-8 items-center gap-1.5 rounded-xl bg-amber-500/15 px-2.5 text-xs font-extrabold text-amber-700 hover:bg-amber-500/25 active:scale-95 lg:flex dark:text-amber-300"
-        >
-          <Wand2 className="h-3.5 w-3.5" />
-          <span className="hidden 2xl:inline">Metinden Harita</span>
-        </button>
-
-        {/* Focus Mode */}
-        <button
-          type="button"
-          onClick={onToggleFocusMode}
-          title="Odak Modu: Seçili ana dal dışındakileri %20 opaklığa düşürür"
-          className={`flex h-8 items-center gap-1.5 rounded-xl px-2 text-xs font-bold active:scale-95 ${
-            focusModeActive
-              ? 'bg-sky-500 text-white shadow-sm'
-              : 'hover:bg-slate-500/10'
-          }`}
-        >
-          <Target className="h-4 w-4" />
-          <span className="hidden 2xl:inline">Odak</span>
-        </button>
-
-        {/* Study Timer / Counter Toggle Button */}
-        <button
-          type="button"
-          data-testid="hud-timer-toggle-btn"
-          onClick={() => setShowStudyTimer((v) => !v)}
-          title="Çalışma Sayacı & Kronometre (Başlat / Sıfırla)"
-          className={`flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-bold active:scale-95 ${
-            showStudyTimer || timerRunning || timerSeconds > 0
-              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-              : 'hover:bg-slate-500/10'
-          }`}
-        >
-          <Timer className="h-4 w-4" />
-          {(timerRunning || timerSeconds > 0) && (
-            <span className="font-mono text-[10.5px] font-black tabular-nums">
-              {formattedTimer}
-            </span>
-          )}
-        </button>
-
-        {/* Active Recall / Exam Mode Dropdown */}
-        <div ref={examRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setExamMenuOpen((v) => !v)}
-            title="Aktif Hatırlama / Sınav Modu"
-            className={`flex h-8 items-center gap-1.5 rounded-xl px-2 text-xs font-bold active:scale-95 ${
-              examMode !== 'off'
-                ? 'bg-violet-600 text-white shadow-sm'
-                : 'hover:bg-slate-500/10'
-            }`}
-          >
-            <GraduationCap className="h-4 w-4" />
-            <span className="hidden 2xl:inline">Sınav</span>
-            {examMode !== 'off' && (
-              <span className="rounded-md bg-white/20 px-1 text-[10px] lg:hidden">
-                {examStats.revealed}/{examStats.total}
-              </span>
-            )}
-          </button>
-
-          {examMenuOpen && (
-            <div
-              className="absolute right-0 mt-2 w-68 rounded-2xl border p-2 shadow-xl backdrop-blur-xl"
-              style={{
-                backgroundColor: 'var(--hud-bg)',
-                borderColor: 'var(--hud-border)',
-              }}
-            >
-              <div className="px-2.5 py-1.5 text-[11px] font-extrabold tracking-wider uppercase opacity-60">
-                Aktif Hatırlama (Sınav Modu)
-              </div>
-
-              {(
-                [
-                  {
-                    id: 'off',
-                    title: 'Normal Harita Görünümü',
-                    desc: 'Tüm görseller ve başlıklar açık',
-                    proOnly: false,
-                  },
-                  {
-                    id: 'hide_text',
-                    title: 'Temel Önizleme: Metinleri Gizle',
-                    desc: 'Çıkartmaya bakıp terimi hatırla, dokununca aç',
-                    proOnly: false,
-                  },
-                  {
-                    id: 'hide_visuals_children',
-                    title: 'Tam Sınav Modu: Görsel & Alt Dalları Gizle',
-                    desc: 'Ana başlığa bakıp tüm alt dalları ve şemaları hatırla',
-                    proOnly: true,
-                  },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    if (opt.proOnly && !isLifetimePro) {
-                      setExamMenuOpen(false);
-                      onTriggerPaywall('exam_mode');
-                      return;
-                    }
-                    onChangeExamMode(opt.id);
-                    setExamMenuOpen(false);
-                  }}
-                  className={`mt-1 flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left ${
-                    examMode === opt.id
-                      ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
-                      : 'hover:bg-slate-500/10'
-                  }`}
-                >
-                  <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-current">
-                    {examMode === opt.id && <Check className="h-2.5 w-2.5" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs font-bold">
-                      <span>{opt.title}</span>
-                      {opt.proOnly && !isLifetimePro && (
-                        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-extrabold text-amber-600 dark:text-amber-400">
-                          PRO
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] opacity-70">{opt.desc}</div>
-                  </div>
-                </button>
-              ))}
-
-              {examMode !== 'off' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetExamReveals();
-                    setExamMenuOpen(false);
-                  }}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500/15 py-2 text-xs font-bold text-amber-600 hover:bg-amber-500/25 dark:text-amber-300"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Açılan Kartları Sıfırla ({examStats.revealed}/{examStats.total})
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Smart Auto-Layout */}
-        <button
-          type="button"
-          onClick={onAutoLayout}
-          title="Akıllı Otomatik Düzen (Çakışmaları Çöz)"
-          className="hidden h-8 items-center gap-1 rounded-xl px-2 text-xs font-bold hover:bg-slate-500/10 active:scale-95 sm:flex"
-        >
-          <Sparkles className="h-4 w-4 text-amber-500" />
-          <span className="hidden 2xl:inline">Düzenle</span>
-        </button>
-
-        {/* Fit to Screen */}
-        <button
-          type="button"
-          onClick={onFitToScreen}
-          title={`Ekrana Sığdır (%${zoomPercent})`}
-          className="hidden h-8 items-center gap-1 rounded-xl px-2 text-xs font-semibold hover:bg-slate-500/10 md:flex"
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-          <span className="text-[11px] tabular-nums opacity-75">{zoomPercent}%</span>
-        </button>
-
-        {/* Dark Study Mode */}
-        <button
-          type="button"
-          onClick={onToggleDarkMode}
-          title={darkMode ? 'Açık Defter Modu' : 'Karanlık Çalışma Modu'}
-          className="hidden h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10 md:flex"
-        >
-          {darkMode ? (
-            <Sun className="h-4 w-4 text-amber-400" />
-          ) : (
-            <Moon className="h-4 w-4" />
-          )}
-        </button>
-
-        {/* Mobile/Tablet Compact Overflow Menu */}
-        <div ref={moreRef} className="relative md:hidden">
-          <button
-            type="button"
-            onClick={() => setMoreMenuOpen((v) => !v)}
-            title="Hızlı Tuval Araçları"
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-
-          {moreMenuOpen && (
-            <div
-              className="absolute right-0 mt-2 w-64 rounded-2xl border p-2 shadow-xl backdrop-blur-xl"
-              style={{
-                backgroundColor: 'var(--hud-bg)',
-                borderColor: 'var(--hud-border)',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenOutline();
-                  setMoreMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-500/10 dark:text-indigo-300"
-              >
-                <ListTree className="h-4 w-4" />
-                Anahat & Uzun Notlar Listesi
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenSmartGenerator();
-                  setMoreMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-amber-600 hover:bg-amber-500/10 dark:text-amber-300"
-              >
-                <Wand2 className="h-4 w-4" />
-                Metinden Otomatik Harita Üret
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleDefaultNodeStyle();
-                  setMoreMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold hover:bg-slate-500/10"
-              >
-                <Layers className="h-4 w-4 text-emerald-500" />
-                Stil: {defaultNodeStyle === 'organic' ? 'Modern Kart Modu' : 'Organik Çıkartma Modu'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onAutoLayout();
-                  setMoreMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold hover:bg-slate-500/10"
-              >
-                <Sparkles className="h-4 w-4 text-amber-500" />
-                Otomatik Radyal Düzen
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onFitToScreen();
-                  setMoreMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold hover:bg-slate-500/10"
-              >
-                <Maximize2 className="h-4 w-4 text-sky-500" />
-                Haritayı Merkeze Sığdır ({zoomPercent}%)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleDarkMode();
-                  setMoreMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold hover:bg-slate-500/10"
-              >
-                {darkMode ? (
-                  <Sun className="h-4 w-4 text-amber-400" />
-                ) : (
-                  <Moon className="h-4 w-4 text-indigo-500" />
-                )}
-                {darkMode ? 'Açık Kağıt Zemini' : 'Karanlık Çalışma Modu'}
-              </button>
-              <div className="my-1 h-px bg-slate-400/20" />
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUndo();
-                    setMoreMenuOpen(false);
-                  }}
-                  disabled={!canUndo}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold hover:bg-slate-500/10 disabled:opacity-35"
-                >
-                  <Undo2 className="h-3.5 w-3.5" />
-                  Geri Al
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onRedo();
-                    setMoreMenuOpen(false);
-                  }}
-                  disabled={!canRedo}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold hover:bg-slate-500/10 disabled:opacity-35"
-                >
-                  <Redo2 className="h-3.5 w-3.5" />
-                  Yinele
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Live Collaborator Avatars Stack */}
-        <div className="hidden items-center -space-x-1.5 pl-1 xl:flex">
-          {collaborators.slice(0, 4).map((peer) => (
-            <div
-              key={peer.id}
-              title={peer.isLocal ? 'Sen (Çevrimiçi)' : `${peer.name} (Canlı Ortak Çalışma)`}
-              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-extrabold text-white shadow-xs dark:border-slate-900"
-              style={{ backgroundColor: peer.color }}
-            >
-              {peer.avatarInitials}
-            </div>
-          ))}
-        </div>
-
-        {/* Pro Status / Unlock Pill */}
-        {!isLifetimePro ? (
-          <button
-            type="button"
-            onClick={() => onTriggerPaywall('header_pill')}
-            data-testid="hud-pro-pill"
-            title="ZihinHaritam Pro Planlarını Gör"
-            className="hidden h-8 items-center gap-1 rounded-xl border border-amber-500/35 bg-amber-500/12 px-2 text-[11px] font-extrabold text-amber-700 hover:bg-amber-500/20 active:scale-95 md:inline-flex dark:text-amber-300"
-          >
-            <Crown className="h-3.5 w-3.5 text-amber-500" />
-            <span>{localizedPrice}</span>
-          </button>
-        ) : (
-          <span
-            data-testid="hud-pro-active-badge"
-            className="hidden h-8 items-center gap-1 rounded-xl bg-amber-500/12 px-2 text-[11px] font-extrabold text-amber-600 lg:inline-flex dark:text-amber-400"
-          >
-            <Crown className="h-3 w-3" />
-            <span>Pro</span>
-          </span>
-        )}
-
-        {/* Settings Button */}
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          data-testid="hud-settings-btn"
-          title="Ayarlar, Yedekleme & Lisans"
-          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10 active:scale-95"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
-
-        {/* Share & High-Res Export Button */}
-        <button
-          type="button"
-          onClick={onOpenExport}
-          title="300 DPI PDF / PNG / SVG Çıktı ve Canlı Paylaşım"
-          className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-900 px-2.5 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 lg:px-3 dark:bg-sky-500 dark:text-slate-950"
-        >
-          <Share2 className="h-3.5 w-3.5" />
-          <span className="hidden lg:inline">Paylaş</span>
-        </button>
-      </div>
     </header>
   );
 });
