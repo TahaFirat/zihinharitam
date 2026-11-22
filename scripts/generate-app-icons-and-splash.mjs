@@ -143,7 +143,7 @@ async function main() {
 
   // 1. Generate all 18 iOS AppIcon sizes (strictly 24-bit RGB without alpha)
   for (const slot of IOS_ICON_SLOTS) {
-    const pngBuf = await renderOpaqueIconPng(masterBuffer, slot.px, '#0EA5E9');
+    const pngBuf = await renderOpaqueIconPng(masterBuffer, slot.px, '#ECEFF3');
     await fs.writeFile(path.join(appIconDir, slot.filename), pngBuf);
   }
 
@@ -186,10 +186,11 @@ async function main() {
     'utf8'
   );
 
-  // 3. Generate Web / PWA Icons & Favicon
-  await fs.writeFile(path.join(publicDir, 'pwa-192x192.png'), await renderOpaqueIconPng(masterBuffer, 192));
-  await fs.writeFile(path.join(publicDir, 'pwa-512x512.png'), await renderOpaqueIconPng(masterBuffer, 512));
-  await fs.writeFile(path.join(publicDir, 'apple-touch-icon.png'), await renderOpaqueIconPng(masterBuffer, 180));
+  // 3. Generate Web / PWA Icons & In-App Brand Mark
+  await fs.writeFile(path.join(publicDir, 'pwa-192x192.png'), await renderOpaqueIconPng(masterBuffer, 192, '#ECEFF3'));
+  await fs.writeFile(path.join(publicDir, 'pwa-512x512.png'), await renderOpaqueIconPng(masterBuffer, 512, '#ECEFF3'));
+  await fs.writeFile(path.join(publicDir, 'apple-touch-icon.png'), await renderOpaqueIconPng(masterBuffer, 180, '#ECEFF3'));
+  await fs.writeFile(path.join(publicDir, 'app-icon.png'), await renderOpaqueIconPng(masterBuffer, 256, '#ECEFF3'));
   await fs.writeFile(path.join(publicDir, 'favicon.svg'), MASTER_ICON_SVG, 'utf8');
 
   // 4. Generate Native Android Launcher Icons & Splash Screens
@@ -208,7 +209,7 @@ async function main() {
       const mDir = path.join(androidResDir, m.folder);
       await fs.mkdir(mDir, { recursive: true });
 
-      const squareBuf = await renderOpaqueIconPng(masterBuffer, m.legacyPx, '#0EA5E9');
+      const squareBuf = await renderOpaqueIconPng(masterBuffer, m.legacyPx, '#ECEFF3');
       await fs.writeFile(path.join(mDir, 'ic_launcher.png'), squareBuf);
 
       const circleSvg = Buffer.from(
@@ -224,7 +225,7 @@ async function main() {
         .toBuffer();
       await fs.writeFile(path.join(mDir, 'ic_launcher_round.png'), roundBuf);
 
-      const innerPx = Math.round(m.fgPx * 0.68);
+      const innerPx = Math.round(m.fgPx * 0.72);
       const innerIcon = await sharp(masterBuffer)
         .resize(innerPx, innerPx, { fit: 'cover' })
         .png()
@@ -234,7 +235,7 @@ async function main() {
           width: m.fgPx,
           height: m.fgPx,
           channels: 4,
-          background: { r: 14, g: 165, b: 233, alpha: 1 },
+          background: { r: 236, g: 239, b: 243, alpha: 1 },
         },
       })
         .composite([
@@ -253,7 +254,7 @@ async function main() {
     await fs.mkdir(valuesDir, { recursive: true });
     await fs.writeFile(
       path.join(valuesDir, 'ic_launcher_background.xml'),
-      `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#0EA5E9</color>\n</resources>\n`,
+      `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#ECEFF3</color>\n</resources>\n`,
       'utf8'
     );
 

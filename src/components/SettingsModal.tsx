@@ -73,6 +73,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { isLifetimePro, localizedPrice, isBusy } = useEntitlements();
   const [hapticsOn, setHapticsOn] = useState<boolean>(() => getHapticsEnabled());
   const [snapshots, setSnapshots] = useState<MapRecoverySnapshot[]>([]);
+  const [storageHealth, setStorageHealth] = useState<{
+    estimatedMb: number;
+    quotaMb: number;
+    persisted: boolean;
+    mapsCount: number;
+    cachedIconsCount: number;
+  } | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [showPromoBox, setShowPromoBox] = useState(false);
   const [promoDraft, setPromoDraft] = useState('');
@@ -90,6 +97,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!isOpen) return;
     setStatusMessage(null);
     void LocalStore.getRecoverySnapshots(activeMap.id).then(setSnapshots);
+    void LocalStore.getStorageHealth().then(setStorageHealth);
   }, [isOpen, activeMap.id]);
 
   if (!isOpen) return null;
@@ -531,6 +539,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span>.zihin Yedeği İçe Aktar</span>
                 </button>
               </div>
+
+              {storageHealth && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/8 px-3 py-2 text-[11px]">
+                  <span className="font-semibold opacity-80">
+                    Depolama: <strong>{storageHealth.estimatedMb} MB</strong> •{' '}
+                    {storageHealth.mapsCount} harita • {storageHealth.cachedIconsCount} önbellek ikon
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await LocalStore.clearRegenerableCaches();
+                      const fresh = await LocalStore.getStorageHealth();
+                      setStorageHealth(fresh);
+                      void hapticSuccess();
+                      setStatusMessage('Geçici ikon önbelleği temizlendi (haritalarınız korundu).');
+                    }}
+                    className="font-extrabold text-sky-600 hover:underline dark:text-sky-400"
+                  >
+                    Önbelleği Temizle
+                  </button>
+                </div>
+              )}
 
               {onOpenGuide && (
                 <button

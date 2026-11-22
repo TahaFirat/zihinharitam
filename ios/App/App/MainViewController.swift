@@ -3,6 +3,8 @@ import Capacitor
 
 @objc(MainViewController)
 class MainViewController: CAPBridgeViewController {
+    private var lastPencilToggleAt: CFTimeInterval = 0
+
     override open func viewDidLoad() {
         super.viewDidLoad()
         let warmPaper = UIColor(red: 250.0 / 255.0, green: 249.0 / 255.0, blue: 245.0 / 255.0, alpha: 1.0)
@@ -28,6 +30,12 @@ class MainViewController: CAPBridgeViewController {
     }
 
     fileprivate func dispatchApplePencilToggle(gesture: String) {
+        // Debounce 240ms so iOS 17.5+ never double-fires legacy + modern delegate callbacks
+        // (which would otherwise toggle Eraser -> Pen instantaneously!)
+        let now = CACurrentMediaTime()
+        guard now - lastPencilToggleAt > 0.24 else { return }
+        lastPencilToggleAt = now
+
         DispatchQueue.main.async { [weak self] in
             self?.webView?.evaluateJavaScript(
                 "window.dispatchEvent(new CustomEvent('zh:stylus-eraser-toggle', { detail: { source: 'apple_pencil', gesture: '\(gesture)' } }));",

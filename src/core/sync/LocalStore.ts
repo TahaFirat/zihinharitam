@@ -5,6 +5,7 @@ import type {
   VisualStyleMode,
 } from '../../types/mindmap';
 import { globalStickerMemoryCache } from '../visuals/StickerMemoryCache';
+import { sanitizeImportedDocument } from '../security/Sanitizer';
 
 export interface StoredStickerBlob {
   key: string;
@@ -185,9 +186,21 @@ export const LocalStore = {
       updatedAt: options?.preserveUpdatedAt ? doc.updatedAt : Date.now(),
     };
 
-    await db.transaction('rw', db.maps, async () => {
-      await db.maps.put(toSave);
-    });
+    try {
+      await db.transaction('rw', db.maps, async () => {
+        await db.maps.put(toSave);
+      });
+    } catch (err) {
+      // Automatic QuotaExceededError resilience: evict regenerable SVG/Wiki caches and retry cleanly!
+      if (err instanceof Error && /quota/i.test(err.name + ' ' + err.message)) {
+        await this.clearRegenerableCaches();
+        await db.transaction('rw', db.maps, async () => {
+          await db.maps.put(toSave);
+        });
+      } else {
+        throw err;
+      }
+    }
 
     if (options?.forceSnapshot) {
       lastSnapshotTimeByMap.delete(doc.id);
@@ -231,10 +244,85 @@ export const LocalStore = {
         await db.recoverySnapshots.bulkDelete(snaps);
       }
     });
+    // Also clean up orphaned Yjs CRDT IndexedDB store so long-term device storage never leaks!
+    try {
+      if (typeof indexedDB !== 'undefined' && typeof indexedDB.deleteDatabase === 'function') {
+        indexedDB.deleteDatabase(`gzh-yjs-v2b-${id}`);
+      }
+    } catch {
+      // Non-fatal
+    }
   },
 
   async deleteMap(id: string): Promise<void> {
     await this.deleteMapPermanently(id);
+  },
+
+  async purgeAllTrashedMaps(): Promise<number> {
+    const all = await db.maps.toArray();
+    const trashedIds = all
+      .filter((m) => Boolean(m.deletedAt))
+      .map((m) => m.id);
+    for (const id of trashedIds) {
+      await this.deleteMapPermanently(id);
+    }
+    return trashedIds.length;
+  },
+
+  async clearRegenerableCaches(): Promise<void> {
+    try {
+      await db.transaction('rw', db.svgCache, db.wikiCache, db.stickerBlobs, async () => {
+        await db.svgCache.clear();
+        await db.wikiCache.clear();
+        const blobCount = await db.stickerBlobs.count();
+        if (blobCount > 120) {
+          const oldest = await db.stickerBlobs.orderBy('createdAt').limit(blobCount - 80).primaryKeys();
+          await db.stickerBlobs.bulkDelete(oldest);
+        }
+      });
+    } catch {
+      // Non-fatal
+    }
+  },
+
+  async requestPersistentStorage(): Promise<boolean> {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+        return await navigator.storage.persist();
+      }
+    } catch {
+      // Ignore
+    }
+    return false;
+  },
+
+  async getStorageHealth(): Promise<{
+    estimatedMb: number;
+    quotaMb: number;
+    persisted: boolean;
+    mapsCount: number;
+    cachedIconsCount: number;
+  }> {
+    let estimatedMb = 0;
+    let quotaMb = 0;
+    let persisted = false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+        const est = await navigator.storage.estimate();
+        estimatedMb = Number(((est.usage ?? 0) / (1024 * 1024)).toFixed(2));
+        quotaMb = Math.round((est.quota ?? 0) / (1024 * 1024));
+      }
+      if (typeof navigator !== 'undefined' && navigator.storage?.persisted) {
+        persisted = await navigator.storage.persisted();
+      }
+    } catch {
+      // Ignore
+    }
+    const [mapsCount, cachedIconsCount] = await Promise.all([
+      db.maps.count().catch(() => 0),
+      db.svgCache.count().catch(() => 0),
+    ]);
+    return { estimatedMb, quotaMb, persisted, mapsCount, cachedIconsCount };
   },
 
   async purgeExpiredTrash(retentionDays = 30): Promise<number> {
@@ -264,29 +352,31 @@ export const LocalStore = {
   },
 
   parseZihinImportPayload(rawJson: string): MindMapDocument[] {
+    if (typeof rawJson !== 'string' || rawJson.length > 18_000_000) {
+      throw new Error('Yedek dosyası çok büyük veya geçersiz (maksimum 18 MB).');
+    }
     const parsed = JSON.parse(rawJson) as
       | ZihinBackupBundle
       | MindMapDocument
       | MindMapDocument[];
 
+    let rawList: unknown[] = [];
     if (
       parsed &&
       typeof parsed === 'object' &&
       'format' in parsed &&
       Array.isArray(parsed.maps)
     ) {
-      return parsed.maps.filter((m) => m && m.nodes && m.rootNodeId);
+      rawList = parsed.maps.slice(0, 100);
+    } else if (Array.isArray(parsed)) {
+      rawList = parsed.slice(0, 100);
+    } else if (parsed && typeof parsed === 'object' && 'nodes' in parsed && 'rootNodeId' in parsed) {
+      rawList = [parsed];
     }
 
-    if (Array.isArray(parsed)) {
-      return parsed.filter((m) => m && m.nodes && m.rootNodeId);
-    }
-
-    if (parsed && typeof parsed === 'object' && 'nodes' in parsed && 'rootNodeId' in parsed) {
-      return [parsed as MindMapDocument];
-    }
-
-    return [];
+    return rawList
+      .map((item) => sanitizeImportedDocument(item))
+      .filter((doc): doc is MindMapDocument => doc !== null);
   },
 
   async getCachedStickerUrl(

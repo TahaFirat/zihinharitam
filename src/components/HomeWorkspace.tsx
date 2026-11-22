@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BookOpen,
   Copy,
-  Cpu,
   Crown,
   Download,
   FolderInput,
@@ -102,12 +100,19 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
 
-  // Clean new-map modal state
+  // Clean new-map & free permanent-delete confirmation modal state
   const [newMapPromptOpen, setNewMapPromptOpen] = useState(false);
   const [newMapTitle, setNewMapTitle] = useState('');
   const [newMapDept, setNewMapDept] = useState<AcademicDepartment>('genel');
+  const [confirmPermanentDeleteMap, setConfirmPermanentDeleteMap] = useState<MindMapDocument | null>(null);
 
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isLifetimePro && folderFilter === 'trash') {
+      setFolderFilter('all');
+    }
+  }, [isLifetimePro, folderFilter]);
 
   useEffect(() => {
     const closeMenu = () => setMenuOpenId(null);
@@ -459,24 +464,26 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {/* Folder & Trash Tabs */}
           <section className="space-y-4">
             <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto border-b pb-2.5" style={{ borderColor: 'var(--hud-border)' }}>
-              {(
-                [
-                  { id: 'all', label: `Tümü (${activeMaps.length})`, icon: null },
-                  { id: 'pinned', label: '📌 Sabitlenenler', icon: null },
-                  { id: 'study_exam', label: '📚 Ders & Sınav', icon: BookOpen },
-                  { id: 'engineering', label: '💻 Mühendislik', icon: Cpu },
-                  {
-                    id: 'trash',
-                    label: `🗑️ Çöp Kutusu (${trashedMaps.length})`,
-                    icon: null,
-                  },
-                ] as const
-              ).map((tab) => {
+              {[
+                { id: 'all' as const, label: `Tümü (${activeMaps.length})` },
+                { id: 'pinned' as const, label: '📌 Sabitlenenler' },
+                { id: 'study_exam' as const, label: '📚 Ders & Sınav' },
+                { id: 'engineering' as const, label: '💻 Mühendislik' },
+                ...(isLifetimePro
+                  ? [
+                      {
+                        id: 'trash' as const,
+                        label: `🗑️ Çöp Kutusu (${trashedMaps.length})`,
+                      },
+                    ]
+                  : []),
+              ].map((tab) => {
                 const active = folderFilter === tab.id;
                 return (
                   <button
                     key={tab.id}
                     type="button"
+                    data-testid={`folder-tab-${tab.id}`}
                     onClick={() => setFolderFilter(tab.id)}
                     className={`min-h-[40px] shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-extrabold transition ${
                       active
@@ -748,14 +755,19 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                                 <div className="my-1 h-px bg-slate-500/15" />
                                 <button
                                   type="button"
+                                  data-testid={`delete-map-btn-${map.id}`}
                                   onClick={() => {
                                     setMenuOpenId(null);
-                                    onMoveToTrash(map.id);
+                                    if (isLifetimePro) {
+                                      onMoveToTrash(map.id);
+                                    } else {
+                                      setConfirmPermanentDeleteMap(map);
+                                    }
                                   }}
                                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-rose-500 hover:bg-rose-500/10"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
-                                  <span>Çöpe Taşı</span>
+                                  <span>{isLifetimePro ? 'Çöpe Taşı' : 'Kalıcı Olarak Sil'}</span>
                                 </button>
                               </div>
                             )}
@@ -848,6 +860,59 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Permanent Delete Confirmation for Free Tier (No Trash Hoarding!) */}
+      {confirmPermanentDeleteMap && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-xs"
+          onClick={() => setConfirmPermanentDeleteMap(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            data-testid="free-permanent-delete-dialog"
+            className="w-full max-w-sm rounded-3xl border p-5 shadow-2xl"
+            style={{
+              backgroundColor: 'var(--canvas-bg)',
+              borderColor: 'var(--hud-border)',
+            }}
+          >
+            <div className="flex items-center gap-2.5 text-rose-600 dark:text-rose-400">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-500/15">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-extrabold">Harita Kalıcı Olarak Silinsin mi?</h3>
+            </div>
+            <p className="mt-2.5 text-xs leading-relaxed opacity-80">
+              <strong>“{confirmPermanentDeleteMap.title || 'Harita'}”</strong> cihazınızdan
+              kalıcı olarak silinecek ve geri alınamayacaktır.
+            </p>
+            <p className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+              30 gün Çöp Kutusu koruması ve sınırsız harita arşivi ZihinHaritam Pro ile açılır.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmPermanentDeleteMap(null)}
+                className="min-h-[42px] rounded-xl px-4 text-xs font-bold opacity-75 hover:bg-slate-500/10"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                data-testid="confirm-permanent-delete-btn"
+                onClick={() => {
+                  const id = confirmPermanentDeleteMap.id;
+                  setConfirmPermanentDeleteMap(null);
+                  onDeletePermanently(id);
+                }}
+                className="min-h-[42px] rounded-xl bg-rose-600 px-4 text-xs font-extrabold text-white shadow-xs active:scale-95"
+              >
+                Kalıcı Sil
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

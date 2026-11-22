@@ -109,7 +109,6 @@ export interface CrossLink {
 
 export type InkToolType =
   | 'pen'
-  | 'pencil'
   | 'highlighter'
   | 'laser'
   | 'line'
@@ -134,7 +133,7 @@ export interface CanvasStickyNote {
 
 export interface CanvasInkStroke {
   id: string;
-  tool: Exclude<InkToolType, 'eraser' | 'lasso' | 'laser'>;
+  tool: Exclude<InkToolType, 'eraser' | 'lasso' | 'laser'> | 'pencil';
   color: string;
   width: number;
   opacity: number;

@@ -768,8 +768,8 @@ async function ensureLifetimeProIap(client, appId) {
       return null;
     };
 
-    const usaPoint = await findIapPricePoint('USA', ['99.99', '99.9', '100.0']);
-    const turPoint = await findIapPricePoint('TUR', ['4999.99', '4999.0', '5000.0', '4999.9']);
+    const usaPoint = await findIapPricePoint('USA', ['69.99', '69.9', '70.0']);
+    const turPoint = await findIapPricePoint('TUR', ['3499.99', '3499.0', '3500.0', '3499.9']);
 
     if (usaPoint && turPoint) {
       await client.request('POST', '/v1/inAppPurchasePriceSchedules', {
@@ -874,7 +874,7 @@ async function ensureLifetimeProIap(client, appId) {
 }
 
 async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) {
-  console.log(`\n[6b/8] Otomatik Yenilenen Abonelikler (Aylık 499 ₺ / $9.99 & Yıllık 2.999 ₺ / $59.99) yapılandırılıyor...`);
+  console.log(`\n[6b/8] Otomatik Yenilenen Abonelikler (Aylık 349,99 ₺ / $6.99 & Yıllık 2.099,99 ₺ / $39.99) yapılandırılıyor...`);
   const groupsResp = await client.request('GET', `/v1/apps/${appId}/subscriptionGroups`);
   let group = (groupsResp?.data || []).find(
     (g) => g.attributes?.referenceName === 'ZihinHaritam Pro'
@@ -937,18 +937,18 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
       name: 'Yearly Pro Subscription (Yillik Pro)',
       period: 'ONE_YEAR',
       groupLevel: 1,
-      usaTargets: ['59.99', '59.9', '60.0'],
-      turTargets: ['2999.99', '2999.0', '3000.0', '2999.9'],
+      usaTargets: ['39.99', '39.9', '40.0'],
+      turTargets: ['2099.99', '2099.0', '2100.0', '2099.9'],
       locs: [
         {
           locale: 'tr',
           name: 'Yıllık Pro (%50 Avantajlı)',
-          description: 'Sınırsız harita, 50.000+ ikon ve 300 DPI PDF.',
+          description: 'Sınırsız harita, 43.000+ ikon ve 300 DPI PDF.',
         },
         {
           locale: 'en-US',
           name: 'Yearly Pro (Save 50%)',
-          description: 'Unlimited maps, 50,000+ stickers & PDF export.',
+          description: 'Unlimited maps, 43,000+ stickers & PDF export.',
         },
       ],
     },
@@ -957,18 +957,18 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
       name: 'Monthly Pro Subscription (Aylik Pro)',
       period: 'ONE_MONTH',
       groupLevel: 2,
-      usaTargets: ['9.99', '9.9', '10.0'],
-      turTargets: ['499.99', '499.0', '500.0', '499.9'],
+      usaTargets: ['6.99', '6.9', '7.0'],
+      turTargets: ['349.99', '349.0', '350.0', '349.9'],
       locs: [
         {
           locale: 'tr',
           name: 'Aylık Pro Abonelik',
-          description: 'Esnek aylık sınırsız harita ve 50.000+ ikon.',
+          description: 'Esnek aylık sınırsız harita ve 43.000+ ikon.',
         },
         {
           locale: 'en-US',
           name: 'Monthly Pro Subscription',
-          description: 'Monthly unlimited maps & 50,000+ stickers.',
+          description: 'Monthly unlimited maps & 43,000+ stickers.',
         },
       ],
     },
@@ -1099,40 +1099,47 @@ async function ensureAutoRenewableSubscriptions(client, appId, paywallShotPath) 
         const tomorrowIso = new Date(Date.now() + 86400 * 1000 * 2).toISOString().slice(0, 10);
         let updatedCount = 0;
 
-        for (const item of eqPoints) {
-          try {
-            await client.request('POST', '/v1/subscriptionPrices', {
-              data: {
-                type: 'subscriptionPrices',
-                attributes: { startDate: null, preserveCurrentPrice: false },
-                relationships: {
-                  subscription: { data: { type: 'subscriptions', id: sub.id } },
-                  subscriptionPricePoint: {
-                    data: { type: 'subscriptionPricePoints', id: item.pointId },
-                  },
-                },
-              },
-            });
-            updatedCount++;
-          } catch {
-            try {
-              await client.request('POST', '/v1/subscriptionPrices', {
-                data: {
-                  type: 'subscriptionPrices',
-                  attributes: { startDate: tomorrowIso, preserveCurrentPrice: false },
-                  relationships: {
-                    subscription: { data: { type: 'subscriptions', id: sub.id } },
-                    subscriptionPricePoint: {
-                      data: { type: 'subscriptionPricePoints', id: item.pointId },
+        // Batch 8 territories at a time so 175-country updates complete rapidly and reliably
+        const BATCH_SIZE = 8;
+        for (let i = 0; i < eqPoints.length; i += BATCH_SIZE) {
+          const batch = eqPoints.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map(async (item) => {
+              try {
+                await client.request('POST', '/v1/subscriptionPrices', {
+                  data: {
+                    type: 'subscriptionPrices',
+                    attributes: { startDate: null, preserveCurrentPrice: false },
+                    relationships: {
+                      subscription: { data: { type: 'subscriptions', id: sub.id } },
+                      subscriptionPricePoint: {
+                        data: { type: 'subscriptionPricePoints', id: item.pointId },
+                      },
                     },
                   },
-                },
-              });
-              updatedCount++;
-            } catch {
-              // Ignore individual territory conflict
-            }
-          }
+                });
+                updatedCount++;
+              } catch {
+                try {
+                  await client.request('POST', '/v1/subscriptionPrices', {
+                    data: {
+                      type: 'subscriptionPrices',
+                      attributes: { startDate: tomorrowIso, preserveCurrentPrice: false },
+                      relationships: {
+                        subscription: { data: { type: 'subscriptions', id: sub.id } },
+                        subscriptionPricePoint: {
+                          data: { type: 'subscriptionPricePoints', id: item.pointId },
+                        },
+                      },
+                    },
+                  });
+                  updatedCount++;
+                } catch {
+                  // Ignore individual territory conflict
+                }
+              }
+            })
+          );
         }
         void includedPts;
         console.log(

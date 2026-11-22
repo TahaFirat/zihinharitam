@@ -1,25 +1,22 @@
-Dear Apple App Review Team,
+ZihinHaritam v1.0.3 (Build 21) App Review Information:
 
-Thank you for reviewing ZihinHaritam (MindSticker) Version 1.0.3 (Build 20)!
+1. No Account Required:
+The app works 100% offline-first without login, signup, or external API keys. All mind maps, ink drawings, sticky notes, and icons are stored locally in on-device IndexedDB.
 
-IMPORTANT SUBSCRIPTION REVIEW NOTE:
-Please review and approve our two auto-renewable subscriptions in Subscription Group "ZihinHaritam Pro" together with Version 1.0.3:
-- Monthly Pro: com.tahafirat.zihinharitam.pro_monthly (TRY 499.99/mo, USD $9.99/mo)
-- Yearly Pro: com.tahafirat.zihinharitam.pro_yearly (TRY 2,999.99/yr, USD $59.99/yr)
-(Our Non-Consumable Lifetime Pro product com.tahafirat.zihinharitam.lifetime_pro was already approved in 1.0.2.)
+2. In-App Purchases & Subscriptions (StoreKit 2):
+- Monthly Pro (Auto-Renewable): com.tahafirat.zihinharitam.pro_monthly ($6.99/mo | ₺349.99/mo in Turkey)
+- Yearly Pro (Auto-Renewable): com.tahafirat.zihinharitam.pro_yearly ($39.99/yr | ₺2,099.99/yr in Turkey)
+- Lifetime Pro (Non-Consumable): com.tahafirat.zihinharitam.lifetime_pro ($69.99 | ₺3,499.99 in Turkey)
+- Offer Codes on iOS use Apple's official StoreKit 2 AppStore.presentOfferCodeRedeemSheet API (no external code redemption or payment bypass).
+- Strict SKU verification ensures the exact user-selected productId is requested from StoreKit 2.
+- "Restore Purchases" is accessible in both the Paywall modal and Settings -> License & Backup.
 
-1. What's New & Verified in Version 1.0.3 (Build 20):
-- Native Apple Pencil Pro & 2nd Gen Integration (`UIPencilInteraction` in `MainViewController.swift`): Double-tap or squeeze switches cleanly between Pen and Eraser!
-- Full Tablet Note-Taking Suite ("Çiz" tab): Pressure-sensitive Pen, Pencil, Highlighter, Presentation Laser Pointer, Hold-to-Snap Auto-Shape Assist, Lasso Select/Move/Recolor, Stroke & Area Eraser, Movable Pastel Sticky Notes, 5 Paper Templates (Dotted/Grid/Lined/Blank/Warm), and Stylus-Only Palm Rejection—all exported cleanly to PNG/SVG/PDF.
-- Simplified 3-Tab Interface: Decluttered canvas top bar into spacious "Harita / Çiz / Çalış" mode tabs + 3-tab bottom branch dock with larger touch targets, voice dictation, and an always-accessible Interactive Guide ("Rehber" in Home header, Canvas menu, and Settings).
-- Gamified Colorful Icon Search & Dynamic Context Sub-Branches: 43,722 bundled offline icons (prioritizing vibrant gamified styles with deduplication) + Turkish stemmer + dynamic topic-aware sub-branch suggestions.
-- Native Offer Code Redemption (Guideline 3.1.1 Compliant): On iOS, tapping "Hediye Kodu" opens Apple's native StoreKit 2 `AppStore.presentOfferCodeRedeemSheet(in:)` exclusively (zero custom promo text fields on iOS).
+3. Free vs Pro Quotas:
+- Free users can create up to 2 active mind maps (with permanent delete confirmation; 30-day Trash recovery is Pro-only) and browse 16,000+ free icons + full drawing tools.
+- Pro unlocks unlimited maps, 30-day Trash Can, 43,000+ vibrant gamified & 3D icons, Full Exam Mode, and 300 DPI PDF/SVG export.
 
-2. Confirmations & Compliance:
-- Account login / deletion: NONE (no login required; local-first IndexedDB storage).
-- User-generated content: NONE (no public feed, social sharing, or chat).
-- Paid content (Guideline 3.1.1 & 3.1.2): Native StoreKit 2 (StoreKitPlugin.swift) exclusively + prominent "Satın Alımları Geri Yükle" (`AppStore.sync()`), EULA & Privacy Policy links (`https://tahafirat.github.io/zihinharitam/`).
-- Privacy: ZERO tracking SDKs, ZERO ads (`NSPrivacyTracking = false`).
+4. Apple Pencil & Tablet Features:
+- Tap "Çiz" (Draw) in the top bar to open the draggable, edge-snapping floating drawing toolbar (Pen, Highlighter, Laser Pointer, Lasso, Stroke/Area Eraser, Shapes, Auto-Shape, Sticky Notes, Paper Templates, Palm Rejection).
+- Apple Pencil 2nd Gen double-tap and Apple Pencil Pro squeeze toggle Pen/Eraser cleanly via UIPencilInteractionDelegate.
 
-Best regards,
-Taha Firat
+Contact: tafifirat@gmail.com

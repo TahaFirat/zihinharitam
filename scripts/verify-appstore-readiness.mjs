@@ -238,11 +238,11 @@ async function runGate3IosNativePrivacyAndCI() {
     configTs.includes('com.tahafirat.zihinharitam.pro_monthly') &&
     configTs.includes('com.tahafirat.zihinharitam.pro_yearly') &&
     configTs.includes('com.tahafirat.zihinharitam.lifetime_pro') &&
-    configTs.includes('499 ₺') &&
-    configTs.includes('2.999 ₺') &&
-    configTs.includes('4.999 ₺')
+    configTs.includes('349,99 ₺') &&
+    configTs.includes('2.099,99 ₺') &&
+    configTs.includes('3.499,99 ₺')
   ) {
-    pass('Tek merkezli appReleaseConfig.ts kimlikleri', 'Bundle ID + Aylık(499₺) + Yıllık(2.999₺) + ÖmürBoyu(4.999₺) doğrulandı');
+    pass('Tek merkezli appReleaseConfig.ts kimlikleri', 'Bundle ID + Aylık(349,99₺) + Yıllık(2.099,99₺) + ÖmürBoyu(3.499,99₺) doğrulandı');
   } else {
     fail('Tek merkezli appReleaseConfig.ts kimlikleri', 'Eksik alan');
   }
@@ -436,13 +436,14 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       timeout: 8000,
     });
     const hasBrandLogo = await page.locator('[data-testid="brand-logo"]').isVisible();
+    const hasFreeTrashTab = await page.locator('[data-testid="folder-tab-trash"]').count();
     const initialCards = await page
       .locator('[data-testid^="workspace-map-card-"]')
       .count();
-    if (initialCards === 1 && hasBrandLogo) {
-      pass('Temiz kurulum başlangıç harita sayısı ve yeni BrandLogo', '1 / 2 Ücretsiz Harita + Yeni Logo');
+    if (initialCards === 1 && hasBrandLogo && hasFreeTrashTab === 0) {
+      pass('Temiz kurulum başlangıç harita sayısı, yeni BrandLogo & Ücretsizde Çöp Kutusu gizli', '1 / 2 Ücretsiz Harita + Yeni Logo + 0 Çöp Kutusu');
     } else {
-      fail('Temiz kurulum başlangıç harita sayısı', `Beklenen 1, bulunan ${initialCards}, logo=${hasBrandLogo}`);
+      fail('Temiz kurulum başlangıç harita sayısı', `Beklenen 1, bulunan ${initialCards}, logo=${hasBrandLogo}, freeTrash=${hasFreeTrashTab}`);
     }
 
     // Create 2nd map via template
@@ -461,21 +462,27 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     await paywallModal.waitFor({ state: 'visible', timeout: 6000 });
     const paywallText = await paywallModal.innerText();
 
+    // Verify selecting Monthly (349,99 ₺) updates CTA strictly to Monthly (never Yearly mismatch!)
+    await page.click('[data-testid="plan-card-monthly"]');
+    const monthlyCtaText = await page.locator('[data-testid="paywall-purchase-btn"]').innerText();
+
     if (
       countAtTwo === 2 &&
-      paywallText.includes('499 ₺') &&
-      paywallText.includes('2.999 ₺') &&
-      paywallText.includes('4.999 ₺') &&
+      paywallText.includes('349,99 ₺') &&
+      paywallText.includes('2.099,99 ₺') &&
+      paywallText.includes('3.499,99 ₺') &&
+      monthlyCtaText.includes('Aylık Pro') &&
+      monthlyCtaText.includes('349,99 ₺') &&
       paywallText.includes('Satın Alımları Geri Yükle')
     ) {
       pass(
-        '2 Ücretsiz Harita limiti ve 3. haritada 3-Katmanlı Pro Paywall (499₺/2.999₺/4.999₺)',
-        '2/2 korundu, Aylık + Yıllık + Ömür Boyu Paywall açtı'
+        '2 Ücretsiz Harita limiti & 3-Katmanlı Paywall (349,99₺/2.099,99₺/3.499,99₺) + SKU Kilidi',
+        '2/2 korundu, Aylık seçimi tam eşleşti'
       );
     } else {
       fail(
         '2 Ücretsiz Harita limiti ve 3. harita Paywall kilidi',
-        `count=${countAtTwo}`
+        `count=${countAtTwo}, monthlyCta=${monthlyCtaText}`
       );
     }
 
@@ -791,11 +798,12 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('Çalışma & Sınav Sayacı sıfırlama kontrolü', timerText);
     }
 
-    // Test Full Samsung Notes & Apple Pencil Pro Drawing Suite (Pen, Pencil, Highlighter, Laser, Lasso, Eraser, Sticky Notes, Paper Style, Palm Rejection)
+    // Test Draggable Samsung Notes & Apple Pencil Pro Drawing Suite (NO Pencil tool, Drag Handle, Eraser, Sticky Notes, Paper Style, Palm Rejection)
     await page.click('[data-testid="hud-draw-toggle-btn"]');
     await page.waitForSelector('[data-testid="canvas-drawing-toolbar"]', { timeout: 4000 });
     const hasPenTool = await page.locator('[data-testid="ink-tool-pen"]').isVisible();
-    const hasPencilTool = await page.locator('[data-testid="ink-tool-pencil"]').isVisible();
+    const hasRemovedPencil = (await page.locator('[data-testid="ink-tool-pencil"]').count()) === 0;
+    const hasDragHandle = await page.locator('[data-testid="ink-drag-handle"]').isVisible();
     const hasLaserTool = await page.locator('[data-testid="ink-tool-laser"]').isVisible();
     const hasLassoTool = await page.locator('[data-testid="ink-tool-lasso"]').isVisible();
     const hasStickyBtn = await page.locator('[data-testid="ink-add-sticky-btn"]').isVisible();
@@ -807,7 +815,8 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     await page.click('[data-testid="ink-close-btn"]');
     if (
       hasPenTool &&
-      hasPencilTool &&
+      hasRemovedPencil &&
+      hasDragHandle &&
       hasLaserTool &&
       hasLassoTool &&
       hasStickyBtn &&
@@ -816,13 +825,13 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       stickyAppeared
     ) {
       pass(
-        'Samsung Notes & Apple Pencil Pro çizim paketi (Kalem, Kurşun, Fosforlu, Lazer, Kement, Silgi, Yapışkan Not, Kağıt Deseni, Sadece Kalem)',
-        'Tüm araçlar ve taşınabilir yapışkan not doğrulandı'
+        'Taşınabilir Samsung Notes & Apple Pencil çizim paketi (Kurşun kaldırıldı, Sürüklenebilir Çubuk, Silgi, Kement, Yapışkan Not)',
+        'Tüm araçlar, sürükleme tutamacı ve yapışkan not doğrulandı'
       );
     } else {
       fail(
-        'Samsung Notes & Apple Pencil Pro çizim paketi',
-        `pen=${hasPenTool}, pencil=${hasPencilTool}, laser=${hasLaserTool}, lasso=${hasLassoTool}, sticky=${stickyAppeared}`
+        'Taşınabilir Samsung Notes & Apple Pencil çizim paketi',
+        `pen=${hasPenTool}, noPencil=${hasRemovedPencil}, drag=${hasDragHandle}, laser=${hasLaserTool}, lasso=${hasLassoTool}, sticky=${stickyAppeared}`
       );
     }
 

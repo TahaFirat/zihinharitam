@@ -1,3 +1,6 @@
-- S-PEN & APPLE PENCIL PRO NOT PAKETİ: Kalem, Kurşun Kalem, Fosforlu, Lazer İşaretçi, Oto-Şekil Düzeltme, Kement (Lasso) ile taşıma/boyama, Çizgi & Alan Silgisi, Yapışkan Notlar, 5 Defter Kağıdı Deseni ve Apple Pencil çift dokunuş / S-Pen yan silgi tuşu desteği!
-- OYUNLAŞTIRILMIŞ RENKLİ İKONLAR & GÜÇLÜ TÜRKÇE: 5 yeni canlı 3D/oyunlaştırılmış ikon paketi, Türkçe ek/kök bulucu ve tekrarsız akıllı sıralama ile yazdığınız her kelimenin renkli ikonu anında gelir.
-- SADE 3 SEKMELİ YENİ ARAYÜZ: Karmaşa tamamen kaldırıldı; büyük dokunmatik butonlu "Harita / Çiz / Çalış" sekmeleri, konuya özel akıllı alt dal önerileri, sesle dikte ve her zaman açılabilen Uygulama Rehberi eklendi.
+v1.0.3 — Büyük Tablet Notları, S-Pen / Apple Pencil & Arayüz Güncellemesi:
+• Yeni 3D uygulama ikonu ve daha sade, 3 sekmeli arayüz (Harita | Çiz | Çalış).
+• Samsung S-Pen & Apple Pencil silgi tuşu tam donanım düzeltmesi: harita kartları üzerinde bile anında ve pürüzsüz silme.
+• Samsung Notes & Apple PencilKit tarzı sürüklenebilir, kenara mıknatıs gibi oturan ve küçültülebilen çizim ve ikon panelleri.
+• 43.000+ canlı oyunlaştırılmış ikon, Türkçe kök/ek algılama ve harita konusuna göre dinamik alt dal önerileri.
+• Güçlendirilmiş veri güvenliği, önbellek sağlığı kontrolü ve her zaman erişilebilir uygulama rehberi.

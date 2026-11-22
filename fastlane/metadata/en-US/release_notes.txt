@@ -1,3 +1,6 @@
-- PRO TABLET NOTES & APPLE PENCIL SUITE: Pen, Pencil, Highlighter, Presentation Laser, Hold-to-Snap Auto-Shape, Lasso Select/Move/Recolor, Stroke/Area Eraser, Movable Sticky Notes, 5 Paper Templates, and native Apple Pencil double-tap/squeeze eraser switching!
-- GAMIFIED COLORFUL ICON ENGINE: Added 5 vibrant colorful packs, Turkish stemmer & concept deduplication so every searched topic yields crisp gamified icons.
-- SIMPLIFIED 3-TAB UI & GUIDE: Decluttered top HUD into spacious Map / Draw / Study tabs with larger buttons, voice dictation, dynamic topic-aware sub-branch suggestions, and an always-accessible interactive Guide.
+v1.0.3 — Major Tablet Notes, Apple Pencil & UX Update:
+• Brand-new tactile 3D app icon and simplified 3-tab interface (Map | Draw | Study).
+• Apple Pencil double-tap/squeeze & stylus eraser upgrade for instant smooth erasing right over mind-map cards.
+• Draggable, edge-snapping & collapsible PencilKit-style floating drawing toolbar and mobile bottom-sheet icon dock.
+• 43,000+ vibrant gamified icons, smart search, and dynamic topic-aware sub-branch suggestions.
+• Enhanced offline storage safety, cache controls, and an always-accessible interactive Guide.

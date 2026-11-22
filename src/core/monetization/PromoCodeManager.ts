@@ -41,6 +41,33 @@ export const VALID_FRIEND_PROMO_HASHES: readonly string[] = [
 
 const VALID_HASH_SET = new Set<string>(VALID_FRIEND_PROMO_HASHES);
 const REDEEMED_LOCAL_KEY = 'zh_v8_redeemed_promo_hashes';
+const PROMO_RATE_LIMIT_KEY = 'zh_v9_promo_attempts';
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MS = 60_000;
+
+function readAttemptState(): { fails: number; lockUntil: number } {
+  try {
+    const raw = localStorage.getItem(PROMO_RATE_LIMIT_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as { fails?: number; lockUntil?: number };
+      return {
+        fails: Number(p.fails) || 0,
+        lockUntil: Number(p.lockUntil) || 0,
+      };
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+  return { fails: 0, lockUntil: 0 };
+}
+
+function writeAttemptState(state: { fails: number; lockUntil: number }): void {
+  try {
+    localStorage.setItem(PROMO_RATE_LIMIT_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore
+  }
+}
 
 function normalizeCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -71,14 +98,30 @@ export async function verifyAndConsumeFriendPromoCode(rawCode: string): Promise<
   hash?: string;
   errorMessage?: string;
 }> {
+  const now = Date.now();
+  const attempts = readAttemptState();
+  if (attempts.lockUntil > now) {
+    const secLeft = Math.max(1, Math.ceil((attempts.lockUntil - now) / 1000));
+    return {
+      valid: false,
+      errorMessage: `Çok fazla hatalı deneme yapıldı. Güvenlik için lütfen ${secLeft} saniye sonra tekrar deneyin.`,
+    };
+  }
+
   const norm = normalizeCode(rawCode);
   if (norm.length < 8) {
     return { valid: false, errorMessage: 'Lütfen geçerli bir hediye kodu girin (örn. ZHPRO-01-XXXXXX).' };
   }
   const hash = await sha256Hex('zihinharitam:v1:' + norm);
   if (!VALID_HASH_SET.has(hash)) {
+    const nextFails = attempts.fails + 1;
+    writeAttemptState({
+      fails: nextFails >= MAX_FAILED_ATTEMPTS ? 0 : nextFails,
+      lockUntil: nextFails >= MAX_FAILED_ATTEMPTS ? now + LOCKOUT_MS : 0,
+    });
     return { valid: false, errorMessage: 'Geçersiz veya hatalı kod. Lütfen kodu kontrol edip tekrar deneyin.' };
   }
+  writeAttemptState({ fails: 0, lockUntil: 0 });
   const slotIndex = VALID_FRIEND_PROMO_HASHES.indexOf(hash);
   const localUsed = readLocallyRedeemedHashes();
   if (!localUsed.includes(hash)) {

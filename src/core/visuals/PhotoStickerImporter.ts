@@ -45,6 +45,9 @@ export async function importPhotoFileAsSticker(
   file: File,
   branchColor = '#0EA5E9'
 ): Promise<StickerAsset> {
+  if (file.size > 18 * 1024 * 1024) {
+    throw new Error('Görsel 18 MB sınırını aşıyor. Lütfen daha küçük bir fotoğraf seçin.');
+  }
   const { img } = await loadFileAsImage(file);
 
   const maxCanvas = 512;
@@ -105,7 +108,14 @@ export async function importPhotoFileAsSticker(
   ctx.stroke();
   ctx.restore();
 
-  const dataUrl = canvas.toDataURL('image/png');
+  // Encode as compact lossless-looking WebP (~70% smaller in IndexedDB than PNG!) with PNG fallback
+  let dataUrl = '';
+  try {
+    const webp = canvas.toDataURL('image/webp', 0.84);
+    dataUrl = webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/png');
+  } catch {
+    dataUrl = canvas.toDataURL('image/png');
+  }
   const cleanLabel = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Galeri Görseli';
 
   return {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   Crown,
@@ -116,6 +116,14 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
     text: string;
   } | null>(null);
   const isNativeIos = BillingService.isNativeIos();
+  const storeName = isNativeIos ? 'App Store' : 'Google Play';
+
+  useEffect(() => {
+    if (isOpen) {
+      setFeedback(null);
+      void EntitlementManager.refreshStoreProducts();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -123,10 +131,34 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
   const activePlan = plans[selectedTier] ?? plans.yearly;
   const activePlanCfg = APP_RELEASE_CONFIG.iap.plans[selectedTier];
 
+  // Dynamically derive the monthly equivalent from the live store yearly price (never hardcoded mismatch!)
+  const yearlyMonthlyEquiv = (() => {
+    const rawYearly = Number(plans.yearly.price);
+    if (!Number.isFinite(rawYearly) || rawYearly <= 0) {
+      return APP_RELEASE_CONFIG.iap.plans.yearly.monthlyEquivalentTr;
+    }
+    const perMonth = Math.floor((rawYearly / 12) * 100) / 100;
+    const isTrDisplay = plans.yearly.displayPrice.includes('₺') || plans.yearly.displayPrice.includes('TL');
+    if (isTrDisplay) {
+      return `${perMonth.toLocaleString('tr-TR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} ₺`;
+    }
+    if (plans.yearly.displayPrice.includes('$')) {
+      return `$${perMonth.toFixed(2)}`;
+    }
+    if (plans.yearly.displayPrice.includes('€')) {
+      return `€${perMonth.toFixed(2)}`;
+    }
+    return `${perMonth.toFixed(2)}`;
+  })();
+
   const handlePurchase = async () => {
     setFeedback(null);
     void hapticMedium();
-    const res = await EntitlementManager.purchasePlan(selectedTier);
+    const expectedProductId = APP_RELEASE_CONFIG.iap.plans[selectedTier].productId;
+    const res = await EntitlementManager.purchasePlan(selectedTier, expectedProductId);
 
     if (res.purchased) {
       void hapticSuccess();
@@ -150,7 +182,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
     if (res.pending) {
       setFeedback({
         type: 'info',
-        text: 'İşleminiz App Store onayı bekliyor. Onaylandığında otomatik açılacaktır.',
+        text: `İşleminiz ${storeName} onayı bekliyor. Onaylandığında otomatik açılacaktır.`,
       });
       return;
     }
@@ -419,7 +451,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
                   Yıllık Pro Abonelik
                 </div>
                 <div className="text-[11px] font-semibold opacity-75">
-                  Aylık sadece <strong>249 ₺</strong>’ye gelir • 12 ay tam erişim
+                  Aylık sadece <strong>{yearlyMonthlyEquiv}</strong>’ye gelir • 12 ay tam erişim
                 </div>
               </div>
             </div>
@@ -549,7 +581,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
           ) : isBusy ? (
             <>
               <RefreshCw className="h-4 w-4 animate-spin" />
-              <span>App Store Bağlanıyor...</span>
+              <span>{storeName} Bağlanıyor...</span>
             </>
           ) : (
             <>

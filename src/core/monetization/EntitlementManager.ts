@@ -267,10 +267,30 @@ class EntitlementStore {
     return this.snapshot.isLifetimePro;
   }
 
-  public async purchasePlan(tier: ProPlanTier = 'yearly'): Promise<PurchaseResult> {
+  public async refreshStoreProducts(): Promise<void> {
+    try {
+      const plans = await BillingService.fetchAllProPlans();
+      this.update({
+        plans,
+        localizedPrice:
+          plans.monthly.displayPrice || APP_RELEASE_CONFIG.iap.defaultDisplayPriceTr,
+        productTitle: plans.yearly.title || 'ZihinHaritam Pro',
+      });
+    } catch {
+      // Keep current fallback prices silently
+    }
+  }
+
+  public async purchasePlan(
+    tier: ProPlanTier,
+    expectedProductId?: string
+  ): Promise<PurchaseResult> {
+    if (this.snapshot.isBusy) {
+      return { purchased: false, errorMessage: 'Satın alma işlemi zaten devam ediyor.' };
+    }
     this.update({ isBusy: true });
     try {
-      const res = await BillingService.purchaseProPlan(tier);
+      const res = await BillingService.purchaseProPlan(tier, expectedProductId);
       if (res.purchased) {
         this.update({ isLifetimePro: true, isBusy: false });
       } else {
@@ -288,7 +308,7 @@ class EntitlementStore {
   }
 
   public async purchaseLifetime(): Promise<PurchaseResult> {
-    return this.purchasePlan('yearly');
+    return this.purchasePlan('lifetime', APP_RELEASE_CONFIG.iap.lifetimeProductId);
   }
 
   public async restorePurchases(): Promise<RestoreResult> {

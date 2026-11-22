@@ -423,9 +423,6 @@ export function drawInkStrokesToCanvas2D(
     ctx.lineWidth = s.width;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    if (s.tool === 'pencil') {
-      ctx.setLineDash([1.6, 0.8]);
-    }
     try {
       ctx.stroke(new Path2D(d));
     } catch {
@@ -470,8 +467,10 @@ export function generateInkStrokesSvgElements(
     .map((s) => {
       const d = buildInkSvgPath(s.tool, s.points, s.width);
       if (!d) return '';
-      const dash = s.tool === 'pencil' ? ' stroke-dasharray="2 0.8"' : '';
-      return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-opacity="${s.opacity}" stroke-linecap="round" stroke-linejoin="round"${dash}/>`;
+      const safeColor = /^#[0-9a-fA-F]{3,8}$|^rgba?\([\d\s.,%]+\)$/.test(s.color)
+        ? s.color
+        : '#0F172A';
+      return `<path d="${d}" fill="none" stroke="${safeColor}" stroke-width="${Number(s.width) || 3}" stroke-opacity="${Number(s.opacity) || 0.96}" stroke-linecap="round" stroke-linejoin="round"/>`;
     })
     .filter(Boolean)
     .join('\n');

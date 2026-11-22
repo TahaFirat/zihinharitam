@@ -28,6 +28,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     private let keychainAccount = "pro_lifetime_unlock"
     private var updatesTask: Task<Void, Never>?
     private var cachedProducts: [String: Product] = [:]
+    private var purchaseInFlight = false
 
     override public func load() {
         updatesTask = Task.detached { [weak self] in
@@ -109,16 +110,31 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func purchaseLifetime(_ call: CAPPluginCall) {
-        let productId = call.getString("productId") ?? yearlyProductId
+        // Strict SKU Lock: NEVER fall back silently to a different plan (prevents wrong-tier charges!)
+        guard let rawId = call.getString("productId")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawId.isEmpty,
+              allProProductIds.contains(rawId) else {
+            call.reject("Gecersiz plan secimi. Lutfen satin almak istediginiz paketi tekrar secin.")
+            return
+        }
+        let productId = rawId
+
+        if purchaseInFlight {
+            call.reject("Devam eden bir satin alma islemi var. Lutfen mevcut pencerenin tamamlanmasini bekleyin.")
+            return
+        }
+        purchaseInFlight = true
+
         Task {
+            defer { self.purchaseInFlight = false }
             do {
                 var product = cachedProducts[productId]
-                if product == nil {
+                if product == nil || product?.id != productId {
                     let products = try await fetchProductsWithRetry(ids: [productId])
-                    product = products.first
+                    product = products.first(where: { $0.id == productId })
                 }
-                guard let product = product else {
-                    call.reject("Bu plan su anda App Store sunucularinda guncelleniyor. Lutfen birazdan tekrar deneyin veya Omur Boyu Pro secenegini kullanin.")
+                guard let product = product, product.id == productId else {
+                    call.reject("Secilen plan (\(productId)) su anda App Store sunucularindan alinamadi. Lutfen birazdan tekrar deneyin.")
                     return
                 }
                 let result = try await product.purchase()
@@ -126,6 +142,10 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 case .success(let verification):
                     switch verification {
                     case .verified(let transaction):
+                        guard allProProductIds.contains(transaction.productID) else {
+                            call.reject("Beklenmeyen urun kimligi dogrulandi.")
+                            return
+                        }
                         saveKeychainEntitlement(true)
                         await transaction.finish()
                         call.resolve([

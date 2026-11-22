@@ -12,6 +12,7 @@ import {
   PenTool,
 } from 'lucide-react';
 import { useKeyboardInset } from './core/native/useKeyboardInset';
+import { APP_RELEASE_CONFIG } from './config/appReleaseConfig';
 import type {
   AcademicDepartment,
   CanvasInkStroke,
@@ -301,6 +302,15 @@ export const App: React.FC = () => {
         }
 
         await LocalStore.purgeExpiredTrash(30);
+        // Request persistent IndexedDB quota so iOS/Android never evicts user maps on low storage
+        void LocalStore.requestPersistentStorage();
+        // Free tier has NO Trash Can (prevents hoarding past 2-map limit); purge any legacy soft-trashed maps!
+        if (!EntitlementManager.getSnapshot().isLifetimePro) {
+          await LocalStore.purgeAllTrashedMaps();
+        }
+        // Auto-purge expired 30-day trash on Pro accounts
+        await LocalStore.purgeExpiredTrash(APP_RELEASE_CONFIG.quotas.trashRetentionDays);
+
         let existing = await LocalStore.listMaps();
 
         // If user already created extra maps or edited their starter map previously, never show onboarding again
@@ -795,7 +805,12 @@ export const App: React.FC = () => {
   );
 
   const handleMoveToTrash = useCallback(async (mapId: string) => {
-    await LocalStore.moveToTrash(mapId);
+    // Free tier has NO Trash Can -> immediately delete permanently so users cannot hoard deleted maps!
+    if (!EntitlementManager.getSnapshot().isLifetimePro) {
+      await LocalStore.deleteMapPermanently(mapId);
+    } else {
+      await LocalStore.moveToTrash(mapId);
+    }
     const list = await LocalStore.listMaps();
     setSavedMaps(list);
     if (docRef.current.id === mapId) {
@@ -808,6 +823,10 @@ export const App: React.FC = () => {
 
   const handleRestoreFromTrash = useCallback(
     async (mapId: string) => {
+      if (!EntitlementManager.getSnapshot().isLifetimePro) {
+        openPaywall('map_limit');
+        return;
+      }
       if (!EntitlementManager.canCreateActiveMap(activeMapsCount)) {
         openPaywall('map_limit');
         return;
@@ -821,7 +840,14 @@ export const App: React.FC = () => {
 
   const handleDeletePermanently = useCallback(async (mapId: string) => {
     await LocalStore.deleteMapPermanently(mapId);
-    setSavedMaps(await LocalStore.listMaps());
+    const list = await LocalStore.listMaps();
+    setSavedMaps(list);
+    if (docRef.current.id === mapId) {
+      const nextActive = list.find((m) => !m.deletedAt);
+      if (nextActive) {
+        setDoc(nextActive);
+      }
+    }
   }, []);
 
   const handleImportMapsBatch = useCallback(
@@ -2188,6 +2214,7 @@ export const App: React.FC = () => {
             onAddInkStroke={handleAddInkStroke}
             onDeleteInkStroke={handleDeleteInkStroke}
             onReplaceInkStrokes={handleReplaceInkStrokes}
+            onPushInkHistory={() => pushHistory(docRef.current)}
             onSelectLassoIds={setSelectedLassoIds}
             onUpdateStickyNote={handleUpdateStickyNote}
             onDeleteStickyNote={handleDeleteStickyNote}

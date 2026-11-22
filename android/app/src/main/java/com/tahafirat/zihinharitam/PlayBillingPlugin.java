@@ -202,6 +202,23 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
         }
     }
 
+    /**
+     * Deterministically chooses the primary base-plan offer for a subscription ProductDetails
+     * so the displayed price and the launched Google Play Billing sheet ALWAYS match identically!
+     */
+    @Nullable
+    private ProductDetails.SubscriptionOfferDetails selectPrimaryOffer(@NonNull ProductDetails pd) {
+        List<ProductDetails.SubscriptionOfferDetails> offers = pd.getSubscriptionOfferDetails();
+        if (offers == null || offers.isEmpty()) return null;
+        // Prefer standard base-plan offer (offerId == null) so introductory/promo mismatches never occur
+        for (ProductDetails.SubscriptionOfferDetails offer : offers) {
+            if (offer.getOfferId() == null) {
+                return offer;
+            }
+        }
+        return offers.get(0);
+    }
+
     private JSObject toProductJson(ProductDetails pd) {
         JSObject obj = new JSObject();
         obj.put("id", pd.getProductId());
@@ -212,9 +229,9 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
         double numericPrice = 0.0;
 
         if (BillingClient.ProductType.SUBS.equals(pd.getProductType())) {
-            List<ProductDetails.SubscriptionOfferDetails> offers = pd.getSubscriptionOfferDetails();
-            if (offers != null && !offers.isEmpty()) {
-                List<ProductDetails.PricingPhase> phases = offers.get(0).getPricingPhases().getPricingPhaseList();
+            ProductDetails.SubscriptionOfferDetails primaryOffer = selectPrimaryOffer(pd);
+            if (primaryOffer != null) {
+                List<ProductDetails.PricingPhase> phases = primaryOffer.getPricingPhases().getPricingPhaseList();
                 if (!phases.isEmpty()) {
                     ProductDetails.PricingPhase phase = phases.get(phases.size() - 1);
                     displayPrice = phase.getFormattedPrice();
@@ -236,7 +253,23 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
 
     @PluginMethod
     public void purchaseLifetime(PluginCall call) {
-        String productId = call.getString("productId", "com.tahafirat.zihinharitam.pro_yearly");
+        // Strict SKU Lock: NEVER default to another plan (prevents launching Yearly when Monthly was tapped!)
+        String productId = call.getString("productId");
+        if (productId == null || productId.trim().isEmpty()
+                || (!SUBSCRIPTION_IDS.contains(productId) && !INAPP_IDS.contains(productId))) {
+            JSObject ret = new JSObject();
+            ret.put("purchased", false);
+            ret.put("errorMessage", "Geçersiz plan seçimi. Lütfen satın almak istediğiniz paketi tekrar seçin.");
+            call.resolve(ret);
+            return;
+        }
+        if (pendingPurchaseCall != null) {
+            JSObject ret = new JSObject();
+            ret.put("purchased", false);
+            ret.put("errorMessage", "Devam eden bir Google Play satın alma işlemi var. Lütfen tamamlanmasını bekleyin.");
+            call.resolve(ret);
+            return;
+        }
         Activity activity = getActivity();
         if (activity == null) {
             JSObject ret = new JSObject();
@@ -248,8 +281,8 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
 
         withConnectedBilling(() -> {
             ProductDetails cached = productCache.get(productId);
-            if (cached != null) {
-                launchFlowForProduct(activity, cached, call);
+            if (cached != null && productId.equals(cached.getProductId())) {
+                launchFlowForProduct(activity, cached, productId, call);
                 return;
             }
 
@@ -269,14 +302,22 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
                 QueryProductDetailsParams.newBuilder().setProductList(single).build(),
                 (res, queryResult) -> {
                     List<ProductDetails> list = queryResult != null ? queryResult.getProductDetailsList() : null;
-                    if (res.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null && !list.isEmpty()) {
-                        ProductDetails pd = list.get(0);
-                        productCache.put(pd.getProductId(), pd);
-                        launchFlowForProduct(activity, pd, call);
+                    ProductDetails matchedPd = null;
+                    if (res.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
+                        for (ProductDetails candidate : list) {
+                            if (productId.equals(candidate.getProductId())) {
+                                matchedPd = candidate;
+                                break;
+                            }
+                        }
+                    }
+                    if (matchedPd != null) {
+                        productCache.put(matchedPd.getProductId(), matchedPd);
+                        launchFlowForProduct(activity, matchedPd, productId, call);
                     } else {
                         JSObject ret = new JSObject();
                         ret.put("purchased", false);
-                        ret.put("errorMessage", "Ürün Google Play mağazasında henüz aktif değil. Lütfen daha sonra tekrar deneyin.");
+                        ret.put("errorMessage", "Seçilen plan Google Play mağazasında şu anda aktif değil. Lütfen daha sonra tekrar deneyin.");
                         call.resolve(ret);
                     }
                 }
@@ -289,20 +330,27 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
         });
     }
 
-    private void launchFlowForProduct(Activity activity, ProductDetails pd, PluginCall call) {
+    private void launchFlowForProduct(Activity activity, ProductDetails pd, String expectedProductId, PluginCall call) {
+        if (!expectedProductId.equals(pd.getProductId())) {
+            JSObject ret = new JSObject();
+            ret.put("purchased", false);
+            ret.put("errorMessage", "Ürün kimliği doğrulanamadı. Lütfen tekrar deneyin.");
+            call.resolve(ret);
+            return;
+        }
         BillingFlowParams.ProductDetailsParams.Builder prodParamsBuilder =
             BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(pd);
 
         if (BillingClient.ProductType.SUBS.equals(pd.getProductType())) {
-            List<ProductDetails.SubscriptionOfferDetails> offers = pd.getSubscriptionOfferDetails();
-            if (offers == null || offers.isEmpty()) {
+            ProductDetails.SubscriptionOfferDetails primaryOffer = selectPrimaryOffer(pd);
+            if (primaryOffer == null || primaryOffer.getOfferToken() == null || primaryOffer.getOfferToken().isEmpty()) {
                 JSObject ret = new JSObject();
                 ret.put("purchased", false);
                 ret.put("errorMessage", "Abonelik teklifi bulunamadı.");
                 call.resolve(ret);
                 return;
             }
-            prodParamsBuilder.setOfferToken(offers.get(0).getOfferToken());
+            prodParamsBuilder.setOfferToken(primaryOffer.getOfferToken());
         }
 
         List<BillingFlowParams.ProductDetailsParams> paramsList = new ArrayList<>();

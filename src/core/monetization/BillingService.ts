@@ -165,13 +165,13 @@ export const BillingService = {
           productIds: [...ALL_PRO_PRODUCT_IDS],
         });
         for (const p of products) {
-          if (!p?.displayPrice) continue;
+          if (!p?.displayPrice || (typeof p.price === 'number' && p.price <= 0)) continue;
           if (p.id === defaults.monthly.id) {
-            defaults.monthly = { ...defaults.monthly, ...p, tier: 'monthly' };
+            defaults.monthly = { ...defaults.monthly, ...p, id: defaults.monthly.id, tier: 'monthly' };
           } else if (p.id === defaults.yearly.id) {
-            defaults.yearly = { ...defaults.yearly, ...p, tier: 'yearly' };
+            defaults.yearly = { ...defaults.yearly, ...p, id: defaults.yearly.id, tier: 'yearly' };
           } else if (p.id === defaults.lifetime.id) {
-            defaults.lifetime = { ...defaults.lifetime, ...p, tier: 'lifetime' };
+            defaults.lifetime = { ...defaults.lifetime, ...p, id: defaults.lifetime.id, tier: 'lifetime' };
           }
         }
       } catch {
@@ -187,16 +187,31 @@ export const BillingService = {
     return plans.monthly;
   },
 
-  async purchaseProPlan(tier: ProPlanTier = 'yearly'): Promise<PurchaseResult> {
-    const planCfg = APP_RELEASE_CONFIG.iap.plans[tier] ?? APP_RELEASE_CONFIG.iap.plans.yearly;
+  async purchaseProPlan(
+    tier: ProPlanTier,
+    expectedProductId?: string
+  ): Promise<PurchaseResult> {
+    const planCfg = APP_RELEASE_CONFIG.iap.plans[tier];
+    if (!planCfg) {
+      return {
+        purchased: false,
+        errorMessage: 'Geçersiz abonelik planı seçildi. Lütfen paketi tekrar seçin.',
+      };
+    }
     const productId = planCfg.productId;
+    if (expectedProductId && expectedProductId !== productId) {
+      return {
+        purchased: false,
+        errorMessage: 'Seçilen paket kimliği uyuşmadı. Lütfen paketi yeniden seçip deneyin.',
+      };
+    }
 
-    // 1. Native Apple StoreKit 2 (iOS) or Google Play Billing v7.1 (Android)
+    // 1. Native Apple StoreKit 2 (iOS) or Google Play Billing v8 (Android)
     if (this.isNativeStorePlatform()) {
       try {
         const res = await StoreKitBilling.purchaseLifetime({ productId });
         if (res.purchased) {
-          await persistVerifiedEntitlement(true, res.transactionId, productId);
+          await persistVerifiedEntitlement(true, res.transactionId, res.productId || productId);
         }
         return res;
       } catch (err) {

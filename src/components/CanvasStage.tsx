@@ -86,6 +86,7 @@ interface CanvasStageProps {
   onAddInkStroke?: (stroke: CanvasInkStroke) => void;
   onDeleteInkStroke?: (strokeId: string) => void;
   onReplaceInkStrokes?: (strokes: CanvasInkStroke[]) => void;
+  onPushInkHistory?: () => void;
   onSelectLassoIds?: (ids: string[]) => void;
   onUpdateStickyNote?: (id: string, patch: Partial<CanvasStickyNote>) => void;
   onDeleteStickyNote?: (id: string) => void;
@@ -325,6 +326,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   onAddInkStroke,
   onDeleteInkStroke,
   onReplaceInkStrokes,
+  onPushInkHistory,
   onSelectLassoIds,
   onUpdateStickyNote,
   onDeleteStickyNote,
@@ -410,6 +412,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     origY: number;
   } | null>(null);
   const activeEraserPointerRef = useRef<number | null>(null);
+  const lastEraserWorldPtRef = useRef<{ x: number; y: number } | null>(null);
+  const eraserPushedHistoryRef = useRef<boolean>(false);
+  const liveInkStrokesRef = useRef<CanvasInkStroke[]>(inkStrokes ?? []);
+  liveInkStrokesRef.current = inkStrokes ?? [];
   const inkRafPendingRef = useRef<boolean>(false);
   const resizeRafRef = useRef<number | null>(null);
   const pendingResizeIdsRef = useRef<Set<string>>(new Set());
@@ -551,11 +557,127 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     nodeDragRef.current = null;
     branchDragRef.current = null;
     dragPreviewRef.current = null;
+    activeEraserPointerRef.current = null;
+    lastEraserWorldPtRef.current = null;
+    eraserPushedHistoryRef.current = false;
     penActiveRef.current = false;
     setLiftingNodeId(null);
     setActiveDragIds([]);
     setInteractingAttr(false);
   }, [clearLongPressTimer, setInteractingAttr]);
+
+  const isEventHardwareEraser = useCallback(
+    (ev: { pointerType: string; button: number; buttons: number }) =>
+      hardwareEraserActive ||
+      ev.pointerType === 'eraser' ||
+      (ev.pointerType === 'pen' &&
+        ((ev.buttons & 32) !== 0 ||
+          (ev.buttons & 2) !== 0 ||
+          ev.button === 5 ||
+          ev.button === 2)),
+    [hardwareEraserActive]
+  );
+
+  /**
+   * 120Hz Interpolated Synchronized Ink Eraser (Samsung S-Pen + Apple Pencil + Touch):
+   * - Interpolates along fast swipe segments so thin strokes are NEVER skipped!
+   * - Mutates `liveInkStrokesRef.current` synchronously so 8ms consecutive frames NEVER overwrite
+   *   previous erasures with stale React props!
+   * - Pushes a single clean Undo snapshot per swipe gesture.
+   */
+  const performInterpolatedErase = useCallback(
+    (targetWorldPts: Array<{ x: number; y: number }>) => {
+      if (targetWorldPts.length === 0) return;
+      const current = liveInkStrokesRef.current;
+      if (!current || current.length === 0) {
+        lastEraserWorldPtRef.current = targetWorldPts[targetWorldPts.length - 1];
+        return;
+      }
+
+      const scale = Math.max(0.25, viewportRef.current.getTransform().scale);
+      const rWorld = Math.max(18, 26 / scale);
+      const stepWorld = Math.max(6, rWorld * 0.45);
+
+      const samples: Array<{ x: number; y: number }> = [];
+      let prevPt = lastEraserWorldPtRef.current;
+
+      for (const pt of targetWorldPts) {
+        if (prevPt) {
+          const dist = Math.hypot(pt.x - prevPt.x, pt.y - prevPt.y);
+          if (dist > stepWorld) {
+            const steps = Math.min(28, Math.ceil(dist / stepWorld));
+            for (let i = 1; i < steps; i++) {
+              const t = i / steps;
+              samples.push({
+                x: prevPt.x + (pt.x - prevPt.x) * t,
+                y: prevPt.y + (pt.y - prevPt.y) * t,
+              });
+            }
+          }
+        }
+        samples.push(pt);
+        prevPt = pt;
+      }
+      lastEraserWorldPtRef.current = prevPt;
+
+      let working = current;
+      let anyChanged = false;
+
+      if (eraserMode === 'area' && onReplaceInkStrokes) {
+        for (const sPt of samples) {
+          let stepChanged = false;
+          const next: CanvasInkStroke[] = [];
+          for (const st of working) {
+            const res = eraseAreaFromStroke(st, sPt.x, sPt.y, rWorld);
+            if (res === null) {
+              next.push(st);
+            } else {
+              stepChanged = true;
+              next.push(...res);
+            }
+          }
+          if (stepChanged) {
+            working = next;
+            anyChanged = true;
+          }
+        }
+        if (anyChanged) {
+          if (!eraserPushedHistoryRef.current) {
+            eraserPushedHistoryRef.current = true;
+            onPushInkHistory?.();
+            void hapticLight();
+          }
+          liveInkStrokesRef.current = working;
+          onReplaceInkStrokes(working);
+        }
+      } else {
+        const hitIds = new Set<string>();
+        for (const st of working) {
+          for (const sPt of samples) {
+            if (hitTestInkStroke(st, sPt.x, sPt.y, rWorld)) {
+              hitIds.add(st.id);
+              break;
+            }
+          }
+        }
+        if (hitIds.size > 0) {
+          if (!eraserPushedHistoryRef.current) {
+            eraserPushedHistoryRef.current = true;
+            onPushInkHistory?.();
+            void hapticLight();
+          }
+          const remaining = working.filter((st) => !hitIds.has(st.id));
+          liveInkStrokesRef.current = remaining;
+          if (onReplaceInkStrokes) {
+            onReplaceInkStrokes(remaining);
+          } else if (onDeleteInkStroke) {
+            hitIds.forEach((id) => onDeleteInkStroke(id));
+          }
+        }
+      }
+    },
+    [eraserMode, onDeleteInkStroke, onPushInkHistory, onReplaceInkStrokes]
+  );
 
   const treeMeta = useMemo(
     () =>
@@ -1239,20 +1361,17 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
 
     if (activeTouchesRef.current.size === 1) {
-      // Hardware Stylus Eraser Detection:
-      // Works for Samsung S-Pen Side Barrel Button (buttons & 32 or buttons & 2 or button 5/2),
-      // Android TOOL_TYPE_ERASER (`pointerType === 'eraser'`), AND native MainActivity / Apple Pencil events!
-      const isStylusHardwareEraser =
-        hardwareEraserActive ||
-        (e.pointerType as string) === 'eraser' ||
-        (e.pointerType === 'pen' &&
-          ((e.buttons & 32) !== 0 || (e.buttons & 2) !== 0 || e.button === 5 || e.button === 2));
+      // Hardware Stylus Eraser Detection (Samsung S-Pen side button, Android TOOL_TYPE_ERASER, Apple Pencil)
+      const isStylusHardwareEraser = isEventHardwareEraser(e);
 
       // Freehand Tablet / S-Pen / Apple Pencil / Finger Canvas Drawing Intercept (`drawingMode === true`)
       const shouldDrawWithPointer =
         (drawingMode || isStylusHardwareEraser) &&
         !spacePressed &&
-        (!stylusOnly || e.pointerType === 'pen' || (e.pointerType as string) === 'eraser' || e.pointerType === 'mouse');
+        (!stylusOnly ||
+          e.pointerType === 'pen' ||
+          (e.pointerType as string) === 'eraser' ||
+          e.pointerType === 'mouse');
 
       if (shouldDrawWithPointer) {
         const wPt = viewportRef.current.screenToWorld(sx, sy);
@@ -1260,29 +1379,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
 
         if (effTool === 'eraser') {
           activeEraserPointerRef.current = e.pointerId;
-          const rWorld = 20 / Math.max(0.25, viewportRef.current.getTransform().scale);
-          if (inkStrokes && inkStrokes.length > 0) {
-            if (eraserMode === 'area' && onReplaceInkStrokes) {
-              let changed = false;
-              const next: CanvasInkStroke[] = [];
-              for (const st of inkStrokes) {
-                const res = eraseAreaFromStroke(st, wPt.x, wPt.y, rWorld);
-                if (res === null) {
-                  next.push(st);
-                } else {
-                  changed = true;
-                  next.push(...res);
-                }
-              }
-              if (changed) onReplaceInkStrokes(next);
-            } else if (onDeleteInkStroke) {
-              for (const st of inkStrokes) {
-                if (hitTestInkStroke(st, wPt.x, wPt.y, rWorld)) {
-                  onDeleteInkStroke(st.id);
-                  break;
-                }
-              }
-            }
+          lastEraserWorldPtRef.current = wPt;
+          eraserPushedHistoryRef.current = false;
+          performInterpolatedErase([wPt]);
+          if (stylusHoverRef.current) {
+            stylusHoverRef.current.style.opacity = '1';
+            stylusHoverRef.current.style.transform = `translate3d(${sx}px, ${sy}px, 0) translate(-50%, -50%)`;
+            stylusHoverRef.current.style.borderColor = '#F43F5E';
+            stylusHoverRef.current.style.width = '34px';
+            stylusHoverRef.current.style.height = '34px';
           }
           return;
         }
@@ -1344,15 +1449,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
 
         const pressure = e.pressure > 0 ? e.pressure : 0.5;
         const pressureScale =
-          effTool === 'pen' || effTool === 'pencil'
-            ? 0.72 + Math.min(1, pressure) * 0.56
-            : 1;
+          effTool === 'pen' ? 0.72 + Math.min(1, pressure) * 0.56 : 1;
         const effWidth =
           effTool === 'highlighter'
             ? Math.max(15, inkWidth * 3.8)
             : Number((inkWidth * pressureScale).toFixed(2));
-        const effOpacity =
-          effTool === 'highlighter' ? 0.34 : effTool === 'pencil' ? 0.72 : 0.96;
+        const effOpacity = effTool === 'highlighter' ? 0.34 : 0.96;
 
         activeInkRef.current = {
           pointerId: e.pointerId,
@@ -1367,11 +1469,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
           liveInkPathRef.current.setAttribute('stroke', inkColor);
           liveInkPathRef.current.setAttribute('stroke-width', String(effWidth));
           liveInkPathRef.current.setAttribute('stroke-opacity', String(effOpacity));
-          if (effTool === 'pencil') {
-            liveInkPathRef.current.setAttribute('stroke-dasharray', '2 0.8');
-          } else {
-            liveInkPathRef.current.removeAttribute('stroke-dasharray');
-          }
+          liveInkPathRef.current.removeAttribute('stroke-dasharray');
           liveInkPathRef.current.setAttribute(
             'd',
             buildInkSvgPath(effTool, activeInkRef.current.points, effWidth)
@@ -1428,19 +1526,23 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       });
     }
 
-    // S-Pen & Apple Pencil Hover Cursor Ring Preview (Samsung Notes Air Command / iPadOS Hover!)
+    // S-Pen & Apple Pencil Hover & Live Active-Eraser Ring Preview
     if (stylusHoverRef.current) {
-      if (e.pointerType === 'pen' && e.buttons === 0 && drawingMode) {
+      const isActivelyErasing = activeEraserPointerRef.current === e.pointerId;
+      const isPenHover =
+        (e.pointerType === 'pen' || (e.pointerType as string) === 'eraser') &&
+        e.pressure === 0 &&
+        (drawingMode || hardwareEraserActive);
+      if (isActivelyErasing || isPenHover) {
         const hoverIsEraser =
-          hardwareEraserActive ||
+          isActivelyErasing ||
           inkTool === 'eraser' ||
-          (e.buttons & 32) !== 0 ||
-          (e.buttons & 2) !== 0;
+          isEventHardwareEraser(e);
         stylusHoverRef.current.style.opacity = '1';
         stylusHoverRef.current.style.transform = `translate3d(${sx}px, ${sy}px, 0) translate(-50%, -50%)`;
         stylusHoverRef.current.style.borderColor = hoverIsEraser ? '#F43F5E' : inkColor;
-        stylusHoverRef.current.style.width = hoverIsEraser ? '26px' : `${Math.max(10, inkWidth * 2.2)}px`;
-        stylusHoverRef.current.style.height = hoverIsEraser ? '26px' : `${Math.max(10, inkWidth * 2.2)}px`;
+        stylusHoverRef.current.style.width = hoverIsEraser ? '34px' : `${Math.max(10, inkWidth * 2.2)}px`;
+        stylusHoverRef.current.style.height = hoverIsEraser ? '34px' : `${Math.max(10, inkWidth * 2.2)}px`;
       } else {
         stylusHoverRef.current.style.opacity = '0';
       }
@@ -1495,35 +1597,34 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       return;
     }
 
-    // 0. 120Hz Zero-React-Render Freehand Canvas Drawing & Smart Swipe-to-Erase!
+    // 0. 120Hz Zero-React-Render Freehand Canvas Drawing & Smart Interpolated Swipe-to-Erase!
     if (activeEraserPointerRef.current === e.pointerId) {
-      const rWorld = 20 / Math.max(0.25, viewportRef.current.getTransform().scale);
-      if (inkStrokes && inkStrokes.length > 0) {
-        if (eraserMode === 'area' && onReplaceInkStrokes) {
-          let changed = false;
-          const next: CanvasInkStroke[] = [];
-          for (const st of inkStrokes) {
-            const res = eraseAreaFromStroke(st, worldPt.x, worldPt.y, rWorld);
-            if (res === null) {
-              next.push(st);
-            } else {
-              changed = true;
-              next.push(...res);
-            }
-          }
-          if (changed) onReplaceInkStrokes(next);
-        } else if (onDeleteInkStroke) {
-          for (const st of inkStrokes) {
-            if (hitTestInkStroke(st, worldPt.x, worldPt.y, rWorld)) {
-              onDeleteInkStroke(st.id);
-            }
-          }
-        }
-      }
+      const samples = coalesced.length > 0 ? coalesced : [e.nativeEvent];
+      const worldSamples = samples.map((s) =>
+        viewportRef.current.screenToWorld(s.clientX - rect.left, s.clientY - rect.top)
+      );
+      performInterpolatedErase(worldSamples);
       return;
     }
 
     if (activeInkRef.current && activeInkRef.current.pointerId === e.pointerId) {
+      // Mid-stroke chorded S-Pen side button press: seamlessly abort ink and erase!
+      if (isEventHardwareEraser(e)) {
+        if (shapeHoldTimerRef.current !== null) {
+          window.clearTimeout(shapeHoldTimerRef.current);
+          shapeHoldTimerRef.current = null;
+        }
+        activeInkRef.current = null;
+        if (liveInkPathRef.current) {
+          liveInkPathRef.current.setAttribute('d', '');
+        }
+        activeEraserPointerRef.current = e.pointerId;
+        lastEraserWorldPtRef.current = worldPt;
+        eraserPushedHistoryRef.current = false;
+        performInterpolatedErase([worldPt]);
+        return;
+      }
+
       const stroke = activeInkRef.current;
       const samples = coalesced.length > 0 ? coalesced : [e.nativeEvent];
       let movedEnough = false;
@@ -1534,9 +1635,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
         );
         const prev = stroke.points[stroke.points.length - 1];
         const minDist =
-          stroke.tool === 'pen' || stroke.tool === 'pencil' || stroke.tool === 'highlighter'
-            ? 1.8
-            : 0.5;
+          stroke.tool === 'pen' || stroke.tool === 'highlighter' ? 1.8 : 0.5;
         if (!prev || Math.hypot(pt.x - prev[0], pt.y - prev[1]) >= minDist) {
           movedEnough = true;
           const pVal = sample.pressure > 0 ? sample.pressure : 0.5;
@@ -1860,6 +1959,11 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
 
     if (activeEraserPointerRef.current === e.pointerId) {
       activeEraserPointerRef.current = null;
+      lastEraserWorldPtRef.current = null;
+      eraserPushedHistoryRef.current = false;
+      if (stylusHoverRef.current) {
+        stylusHoverRef.current.style.opacity = '0';
+      }
       return;
     }
 
@@ -2023,6 +2127,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       penActiveRef.current = false;
     }
     if (spacePressed) return;
+    // Never steal stylus/eraser/pen strokes from the drawing layer when drawing or holding hardware eraser!
+    if (drawingMode || isEventHardwareEraser(e)) return;
     if (editingNodeId === node.id && !kbSnap.isTouchDevice) return;
 
     e.stopPropagation();
@@ -2131,7 +2237,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     if (e.pointerType === 'touch' && penActiveRef.current) {
       penActiveRef.current = false;
     }
-    if (spacePressed) return;
+    if (spacePressed || drawingMode || isEventHardwareEraser(e)) return;
     e.stopPropagation();
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
@@ -2386,8 +2492,16 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                 </g>
               );
             })}
+        </svg>
 
-          {/* 120Hz World-Space Freehand Ink, Pencil, Highlighter, Shapes, Laser & Lasso Layer */}
+        {/* Foreground 120Hz World-Space Ink, Highlighter, Shapes, Laser & Lasso Layer (zIndex: 35 — ALWAYS visible ABOVE node cards!) */}
+        <svg
+          width="1"
+          height="1"
+          data-testid="world-ink-layer"
+          className="pointer-events-none absolute top-0 left-0 overflow-visible"
+          style={{ zIndex: 35 }}
+        >
           {(inkStrokes ?? []).map((stroke) => {
             const isLassoSelected = selectedLassoIds.includes(stroke.id);
             const pathD = buildInkSvgPath(stroke.tool, stroke.points, stroke.width);
@@ -2412,7 +2526,6 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                   strokeOpacity={stroke.opacity}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeDasharray={stroke.tool === 'pencil' ? '2 0.8' : undefined}
                 />
               </g>
             );
@@ -2477,7 +2590,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
             <div
               key={note.id}
               data-testid={`canvas-sticky-${note.id}`}
-              onPointerDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => {
+                if (isEventHardwareEraser(e)) return;
+                e.stopPropagation();
+              }}
               style={{
                 transform: `translate3d(${note.x}px, ${note.y}px, 0)`,
                 width: `${note.width ?? 204}px`,

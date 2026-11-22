@@ -26,6 +26,9 @@ import {
   Palette,
   Mic,
   MicOff,
+  ChevronDown,
+  ChevronUp,
+  GripHorizontal,
 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -190,6 +193,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const [isListeningVoice, setIsListeningVoice] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [dockOffset, setDockOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isSheetMinimized, setIsSheetMinimized] = useState(false);
+  const [isDraggingDock, setIsDraggingDock] = useState(false);
 
   const iconSearchInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -199,6 +205,16 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const voiceRecRef = useRef<SpeechRecLike | null>(null);
   const requestSeqRef = useRef(0);
   const swipeStartYRef = useRef<number | null>(null);
+  const dockDragRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    origX: number;
+    origY: number;
+    barW: number;
+    barH: number;
+    moved: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!activeNode) {
@@ -226,7 +242,18 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     setShowTechBadgeInput(false);
     setBrokenIds(new Set());
     setDockTab('icons');
+    setIsSheetMinimized(false);
   }, [activeNode?.id]);
+
+  // Keep panel grounded & clamped cleanly when viewport rotates/resizes or virtual keyboard opens
+  useEffect(() => {
+    if (kb.isKeyboardOpen || kb.isPhone) {
+      setDockOffset({ x: 0, y: 0 });
+      if (barRef.current) {
+        barRef.current.style.transform = 'translate3d(0px, 0px, 0)';
+      }
+    }
+  }, [kb.isKeyboardOpen, kb.isPhone, kb.viewportW]);
 
   useEffect(() => {
     return () => {
@@ -470,6 +497,117 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   };
 
   const useFullWidthBottomSheet = kb.isPhone;
+  const dockW = useFullWidthBottomSheet
+    ? kb.viewportW
+    : Math.min(780, Math.max(320, kb.viewportW - 28));
+  const baseLeft = useFullWidthBottomSheet
+    ? 0
+    : Math.max(14, Math.round((kb.viewportW - dockW) * 0.5));
+
+  const clampDockOffset = (rawX: number, rawY: number, barW: number, barH: number) => {
+    if (useFullWidthBottomSheet) {
+      return { x: 0, y: 0 };
+    }
+    const minOffsetX = 12 - baseLeft;
+    const maxOffsetX = kb.viewportW - barW - 12 - baseLeft;
+    const maxUp = -(Math.max(40, kb.viewportH - barH - 86));
+    return {
+      x: Math.round(Math.max(minOffsetX, Math.min(maxOffsetX, rawX))),
+      y: Math.round(Math.max(maxUp, Math.min(0, rawY))),
+    };
+  };
+
+  const handleDockDragStart = (e: React.PointerEvent<HTMLElement>) => {
+    e.stopPropagation();
+    const el = barRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    dockDragRef.current = {
+      pointerId: e.pointerId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      origX: dockOffset.x,
+      origY: dockOffset.y,
+      barW: rect.width,
+      barH: rect.height,
+      moved: false,
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore synthetic capture issues
+    }
+    setIsDraggingDock(true);
+  };
+
+  const handleDockDragMove = (e: React.PointerEvent<HTMLElement>) => {
+    const dr = dockDragRef.current;
+    const el = barRef.current;
+    if (!dr || !el || dr.pointerId !== e.pointerId) return;
+    const dx = e.clientX - dr.startClientX;
+    const dy = e.clientY - dr.startClientY;
+    if (Math.hypot(dx, dy) > 4) {
+      dr.moved = true;
+    }
+    if (useFullWidthBottomSheet) {
+      const clampedY = Math.max(-54, Math.min(180, dy));
+      el.style.transform = `translate3d(0px, ${Math.round(clampedY)}px, 0)`;
+    } else {
+      const next = clampDockOffset(dr.origX + dx, dr.origY + dy, dr.barW, dr.barH);
+      el.style.transform = `translate3d(${next.x}px, ${next.y}px, 0)`;
+    }
+  };
+
+  const handleDockDragEnd = (e: React.PointerEvent<HTMLElement>) => {
+    const dr = dockDragRef.current;
+    const el = barRef.current;
+    if (!dr || dr.pointerId !== e.pointerId) return;
+    dockDragRef.current = null;
+    try {
+      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // Ignore
+    }
+    setIsDraggingDock(false);
+
+    const dx = e.clientX - dr.startClientX;
+    const dy = e.clientY - dr.startClientY;
+
+    if (!dr.moved) {
+      if (el) {
+        el.style.transform = `translate3d(${dockOffset.x}px, ${dockOffset.y}px, 0)`;
+      }
+      return;
+    }
+
+    if (useFullWidthBottomSheet) {
+      if (el) el.style.transform = 'translate3d(0px, 0px, 0)';
+      if (dy > 58) {
+        void hapticLight();
+        setIsSheetMinimized((prev) => {
+          if (prev) {
+            onCloseEdit();
+            return false;
+          }
+          return true;
+        });
+      } else if (dy < -42) {
+        void hapticLight();
+        if (isSheetMinimized) {
+          setIsSheetMinimized(false);
+        } else if (dockTab === 'icons') {
+          onOpenGalleryDrawer(searchQuery);
+        }
+      }
+      return;
+    }
+
+    const next = clampDockOffset(dr.origX + dx, dr.origY + dy, dr.barW, dr.barH);
+    setDockOffset(next);
+  };
+
   const containerStyle: React.CSSProperties = useFullWidthBottomSheet
     ? {
         position: 'fixed',
@@ -481,24 +619,30 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         maxHeight: `${
           kb.isKeyboardOpen
             ? Math.min(182, Math.max(106, kb.viewportH - 72))
-            : Math.min(350, Math.max(220, kb.viewportH - 86))
+            : Math.min(358, Math.max(220, kb.viewportH - 86))
         }px`,
-        transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
+        transform: 'translate3d(0px, 0px, 0)',
+        transition: isDraggingDock
+          ? 'none'
+          : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
       }
     : {
         position: 'fixed',
-        left: `${Math.max(14, Math.round((kb.viewportW - Math.min(780, Math.max(320, kb.viewportW - 28))) * 0.5))}px`,
+        left: `${baseLeft}px`,
         bottom: kb.isKeyboardOpen
           ? `${kb.keyboardHeight + 8}px`
-          : 'max(28px, calc(var(--safe-bottom) + 22px))',
-        width: `${Math.min(780, Math.max(320, kb.viewportW - 28))}px`,
+          : 'max(14px, calc(var(--safe-bottom) + 10px))',
+        width: `${dockW}px`,
         maxWidth: 'calc(100vw - 28px)',
         maxHeight: `${
           kb.isKeyboardOpen
             ? Math.min(186, Math.max(108, kb.viewportH - 72))
-            : Math.min(340, Math.max(220, kb.viewportH - 96))
+            : Math.min(352, Math.max(220, kb.viewportH - 96))
         }px`,
-        transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
+        transform: `translate3d(${dockOffset.x}px, ${dockOffset.y}px, 0)`,
+        transition: isDraggingDock
+          ? 'none'
+          : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
       };
 
   const voiceSupported =
@@ -528,7 +672,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         ) {
           const dy = swipeStartYRef.current - e.changedTouches[0].clientY;
           swipeStartYRef.current = null;
-          if (dy > 52 && dockTab === 'icons') {
+          if (dy > 58 && dockTab === 'icons' && !isSheetMinimized) {
             onOpenGalleryDrawer(searchQuery);
           }
         }
@@ -536,10 +680,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       className="animate-studio-dock z-40 box-border select-none"
     >
       <div
-        className={`flex max-h-full w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border shadow-2xl ${
+        className={`flex max-h-full w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border shadow-2xl backdrop-blur-2xl ring-1 ring-slate-900/6 dark:ring-white/10 ${
           useFullWidthBottomSheet
-            ? 'rounded-t-3xl border-x-0 border-b-0 px-3 pt-2'
-            : 'rounded-3xl px-4 py-2.5'
+            ? 'rounded-t-[28px] border-x-0 border-b-0 px-3 pt-1.5'
+            : 'rounded-[26px] px-4 pt-1.5 pb-2.5'
         }`}
         style={{
           backgroundColor: 'var(--hud-bg)',
@@ -547,10 +691,61 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           paddingBottom: isSlimKeyboardMode
             ? '8px'
             : useFullWidthBottomSheet && !kb.isKeyboardOpen
-            ? 'max(22px, calc(var(--safe-bottom) + 14px))'
+            ? 'max(14px, calc(var(--safe-bottom) + 10px))'
             : '12px',
         }}
       >
+        {/* Tactile Smooth Drag / Swipe Handle Bar (Drag freely on tablets, swipe down to minimize on mobile!) */}
+        {!isSlimKeyboardMode && (
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div
+              data-testid="studio-drag-handle"
+              onPointerDown={handleDockDragStart}
+              onPointerMove={handleDockDragMove}
+              onPointerUp={handleDockDragEnd}
+              onPointerCancel={handleDockDragEnd}
+              onDoubleClick={() => {
+                void hapticLight();
+                setDockOffset({ x: 0, y: 0 });
+              }}
+              title={
+                useFullWidthBottomSheet
+                  ? 'Aşağı kaydır: Küçült • Yukarı kaydır: Tam Galeri'
+                  : 'Paneli sağa, sola veya yukarı sürükleyerek taşıyın (Çift tıkla: Ortala)'
+              }
+              className="flex h-5 flex-1 cursor-grab items-center justify-center gap-1.5 rounded-full hover:bg-slate-500/8 active:cursor-grabbing"
+            >
+              <span className="h-1 w-11 rounded-full bg-slate-400/55" />
+              {!useFullWidthBottomSheet && (
+                <GripHorizontal className="h-3.5 w-3.5 opacity-40" />
+              )}
+            </div>
+            <button
+              type="button"
+              data-testid="studio-minimize-btn"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => {
+                void hapticLight();
+                setIsSheetMinimized((v) => !v);
+              }}
+              title={isSheetMinimized ? 'Paneli Genişlet' : 'Paneli Küçült'}
+              className="inline-flex h-6 items-center gap-1 rounded-full bg-slate-500/10 px-2 text-[10px] font-extrabold opacity-75 hover:opacity-100 active:scale-95"
+            >
+              {isSheetMinimized ? (
+                <>
+                  <ChevronUp className="h-3 w-3" />
+                  <span>Aç</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3" />
+                  <span className="hidden sm:inline">Küçült</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* ROW 0: Clean Spacious Title Input + Voice Mic + +Alt Dal + Done */}
         <div className="mb-2 flex items-center gap-1.5">
           <div
@@ -685,6 +880,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           </button>
         </div>
 
+        {!isSheetMinimized && (
+        <>
         {/* 3 BIG, CRYSTAL-CLEAR BRANCH DOCK TABS (Hidden while typing on touch devices so keyboard stays uncluttered) */}
         {!isSlimKeyboardMode && (
           <div className="mb-2 flex items-center gap-1.5 rounded-2xl bg-slate-500/10 p-1">
@@ -1202,6 +1399,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               </button>
             )}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
