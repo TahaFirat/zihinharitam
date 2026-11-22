@@ -5,6 +5,7 @@ import {
   Download,
   ExternalLink,
   FileCheck2,
+  Gift,
   History,
   Layers,
   Mail,
@@ -18,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { APP_RELEASE_CONFIG } from '../config/appReleaseConfig';
+import { BillingService } from '../core/monetization/BillingService';
 import {
   EntitlementManager,
   useEntitlements,
@@ -69,6 +71,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [hapticsOn, setHapticsOn] = useState<boolean>(() => getHapticsEnabled());
   const [snapshots, setSnapshots] = useState<MapRecoverySnapshot[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [showPromoBox, setShowPromoBox] = useState(false);
+  const [promoDraft, setPromoDraft] = useState('');
+  const isNativeIos = BillingService.isNativeIos();
   const [activeLegalView, setActiveLegalView] = useState<
     'privacy' | 'terms' | 'support' | null
   >(initialLegalDoc);
@@ -251,13 +256,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div>
                     <div className="text-sm font-extrabold">
                       {isLifetimePro
-                        ? 'Ömür Boyu Pro Lisansı Aktif'
-                        : 'Ücretsiz Başlangıç Planı (3 Harita)'}
+                        ? 'ZihinHaritam Pro Lisansı Aktif'
+                        : 'Ücretsiz Başlangıç Planı (2 Harita)'}
                     </div>
                     <div className="text-xs opacity-70">
                       {isLifetimePro
-                        ? 'Sınırsız harita, 540.000+ çıkartma ve 300 DPI PDF açık.'
-                        : `Tek seferlik ${localizedPrice} ile tüm sınırları ömür boyu kaldırın.`}
+                        ? 'Sınırsız harita, 30.000+ renkli 3D ikon ve 300 DPI PDF açık.'
+                        : `Aylık ${localizedPrice}, %50 avantajlı Yıllık veya Ömür Boyu Pro ile sınırları kaldırın.`}
                     </div>
                   </div>
                 </div>
@@ -286,19 +291,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Daha önce satın aldıysanız Apple kimliğinizle ücretsiz geri yükleyin:
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void hapticSuccess();
-                      EntitlementManager.resetUsageCounters();
-                      setStatusMessage('Ücretsiz kullanım ve deneme sayaçları sıfırlandı.');
-                    }}
-                    data-testid="settings-reset-counters-btn"
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/12 px-3 py-1.5 text-xs font-extrabold text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    <span>Sayaçları Sıfırla</span>
-                  </button>
+                  {!isLifetimePro && (
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      data-testid="settings-redeem-code-btn"
+                      onClick={async () => {
+                        setStatusMessage(null);
+                        void hapticLight();
+                        if (isNativeIos) {
+                          const res = await EntitlementManager.presentIosOfferCodeSheet();
+                          if (res.isLifetimePro) {
+                            void hapticSuccess();
+                            setStatusMessage('Hediye / teklif kodunuz onaylandı! ZihinHaritam Pro açıldı.');
+                          } else if (res.errorMessage) {
+                            setStatusMessage(res.errorMessage);
+                          }
+                          return;
+                        }
+                        setShowPromoBox((v) => !v);
+                      }}
+                      className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                    >
+                      <Gift className="h-3.5 w-3.5" />
+                      <span>Hediye Kodu</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={isBusy}
@@ -312,6 +330,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {!isNativeIos && showPromoBox && !isLifetimePro && (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setStatusMessage(null);
+                    const res = await EntitlementManager.redeemFriendPromoCode(promoDraft);
+                    if (res.redeemed) {
+                      void hapticSuccess();
+                      setPromoDraft('');
+                      setShowPromoBox(false);
+                      setStatusMessage(`Hediye kodu (#${res.slotNumber}/30) onaylandı! ZihinHaritam Pro açıldı.`);
+                    } else {
+                      setStatusMessage(res.errorMessage || 'Hediye kodu geçersiz.');
+                    }
+                  }}
+                  className="mt-2.5 flex items-center gap-1.5 rounded-2xl border border-emerald-500/35 bg-emerald-500/8 p-2"
+                  data-testid="settings-promo-form"
+                >
+                  <input
+                    type="text"
+                    value={promoDraft}
+                    onChange={(e) => setPromoDraft(e.target.value.toUpperCase())}
+                    placeholder="Hediye kodu (örn. ZHPRO-01-XXXXXX)"
+                    data-testid="settings-promo-input"
+                    className="allow-text-input min-w-0 flex-1 rounded-xl border bg-white/90 px-2.5 py-1.5 font-mono text-xs font-extrabold uppercase outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-900/90"
+                    style={{ borderColor: 'var(--hud-border)' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isBusy || promoDraft.trim().length < 6}
+                    data-testid="settings-promo-submit-btn"
+                    className="min-h-[36px] shrink-0 rounded-xl bg-emerald-600 px-3 text-xs font-extrabold text-white shadow-xs active:scale-95 disabled:opacity-50"
+                  >
+                    Onayla
+                  </button>
+                </form>
+              )}
             </div>
 
             {statusMessage && (

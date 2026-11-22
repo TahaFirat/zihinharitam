@@ -121,12 +121,12 @@ const SCENES = [
       grad: 'linear-gradient(155deg, #1E1B4B 0%, #4C1D95 52%, #9333EA 100%)',
       glowA: 'rgba(192, 132, 252, 0.44)',
       glowB: 'rgba(16, 185, 129, 0.30)',
-      badge: '🎁 25.000+ İKON • 3D STÜDYO • GALERİ FOTO',
+      badge: '⚡ 43.000+ İKON • SERBEST ÇİZİM • 120 FPS',
       badgeBg: 'rgba(16, 185, 129, 0.24)',
       badgeBorder: 'rgba(110, 231, 183, 0.5)',
-      headline: 'Yazarken Anında İkon & Galeriden Foto Ekle',
-      subline: 'Ücretsiz ikon filtresi, S/M/L/XL boyut ayarı, 3D tasarım ve kendi fotoğrafların.',
-      chips: ['🎁 Bol Ücretsiz İkon', '🖼️ Galeriden Foto', '📐 S / M / L / XL Boyut'],
+      headline: 'Yazarken Anında İkon & Harita Üzerine Çizim',
+      subline: 'Akıllı Türkçe ikon algılama, S/M/L/XL boyut, 3D tasarım ve Apple Pencil çizimi.',
+      chips: ['🎯 Akıllı İkon Eşleştirme', '✏️ Serbest Çizim', '📐 S / M / L / XL'],
     },
     prepare: async (page) => {
       await page.waitForSelector('canvas', { timeout: 10000 });
@@ -185,16 +185,8 @@ const SCENES = [
       const cardsCount = await page
         .locator('[data-testid^="workspace-map-card-"]')
         .count();
-      if (cardsCount < 3) {
+      if (cardsCount < 2) {
         await page.click('[data-testid="template-card-tpl_tip_kardiyoloji"]');
-        await page.waitForSelector('[data-testid="hud-back-home-btn"]', {
-          timeout: 8000,
-        });
-        await page.click('[data-testid="hud-back-home-btn"]');
-        await page.waitForSelector('[data-testid="template-card-tpl_hukuk_istinaf"]', {
-          timeout: 8000,
-        });
-        await page.click('[data-testid="template-card-tpl_hukuk_istinaf"]');
         await page.waitForSelector('[data-testid="hud-back-home-btn"]', {
           timeout: 8000,
         });

@@ -35,3 +35,4 @@ export function expandSemanticQueryV3(
 ): ExpandedSemanticQueryV3;
 export const RAW_TAXONOMY_CLUSTERS: Array<[string, string, string, string?, string?]>;
 export const DIRECT_TR_EN_PAIRS: Record<string, string[]>;
+export const EN_CONCEPT_INTENT_MAP: Record<string, string[]>;

@@ -24,6 +24,7 @@ import {
   Play,
   Pause,
   Pencil,
+  PenTool,
   ListTree,
 } from 'lucide-react';
 import {
@@ -50,6 +51,8 @@ interface TopMinimalHUDProps {
   onOpenSettings: () => void;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
   onOpenSmartGenerator: () => void;
+  drawingMode: boolean;
+  onToggleDrawingMode: () => void;
   focusModeActive: boolean;
   onToggleFocusMode: () => void;
   examMode: ExamRecallMode;
@@ -82,6 +85,8 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   onOpenSettings,
   onTriggerPaywall,
   onOpenSmartGenerator,
+  drawingMode,
+  onToggleDrawingMode,
   focusModeActive,
   onToggleFocusMode,
   examMode,
@@ -328,6 +333,22 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           borderColor: 'var(--hud-border)',
         }}
       >
+        {/* 1-Tap Freehand Canvas Drawing Mode (Pen / Highlighter / Shapes / Eraser) */}
+        <button
+          type="button"
+          data-testid="hud-draw-toggle-btn"
+          onClick={onToggleDrawingMode}
+          title="Tuval Üzerine Serbest Çizim Modu (Kalem, Fosforlu, Ok, Kutu, Silgi)"
+          className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold active:scale-95 ${
+            drawingMode
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-sm'
+              : 'bg-sky-500/12 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300'
+          }`}
+        >
+          <PenTool className="h-4 w-4" />
+          <span className="hidden sm:inline">{drawingMode ? 'Çiziliyor' : 'Çiz'}</span>
+        </button>
+
         {/* Quick Search & 540K+ Command Palette */}
         <button
           type="button"

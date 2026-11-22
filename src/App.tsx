@@ -9,13 +9,16 @@ import {
   Undo2,
   Trash2,
   ListTree,
+  PenTool,
 } from 'lucide-react';
 import { useKeyboardInset } from './core/native/useKeyboardInset';
 import type {
   AcademicDepartment,
+  CanvasInkStroke,
   CollaboratorPresence,
   CrossLink,
   ExamRecallMode,
+  InkToolType,
   MindMapDocument,
   MindMapFolder,
   MindNode,
@@ -50,6 +53,7 @@ import { TopicContextIntelligence } from './core/visuals/TopicContextIntelligenc
 import { OfflineVisualSearchClient } from './core/visuals/OfflineVisualSearchClient';
 import { VisualSearchOrchestrator } from './core/visuals/VisualSearchOrchestrator';
 import { CanvasStage } from './components/CanvasStage';
+import { CanvasDrawingToolbar } from './components/CanvasDrawingToolbar';
 import { TopMinimalHUD } from './components/TopMinimalHUD';
 import { KeyboardVisualBar } from './components/KeyboardVisualBar';
 import { StickerGalleryDrawer } from './components/StickerGalleryDrawer';
@@ -145,6 +149,11 @@ export const App: React.FC = () => {
   } | null>(null);
 
   const [focusMode, setFocusMode] = useState(false);
+  const [drawingMode, setDrawingMode] = useState(false);
+  const [inkTool, setInkTool] = useState<InkToolType>('pen');
+  const [inkColor, setInkColor] = useState('#0F172A');
+  const [inkWidth, setInkWidth] = useState(4.5);
+  const [stylusOnly, setStylusOnly] = useState(false);
   const [examMode, setExamMode] = useState<ExamRecallMode>('off');
   const [revealedExamIds, setRevealedExamIds] = useState<Set<string>>(new Set());
   const [zoomPercent, setZoomPercent] = useState(100);
@@ -609,6 +618,7 @@ export const App: React.FC = () => {
       };
       setPastDocs([]);
       setFutureDocs([]);
+      setDrawingMode(false);
       setLinkingFromNodeId(null);
       setExamMode('off');
       setRevealedExamIds(new Set());
@@ -638,6 +648,7 @@ export const App: React.FC = () => {
       };
       setDoc(finalDoc);
     }
+    setDrawingMode(false);
     setEditingNodeId(null);
     setSelectedNodeId(null);
     setLinkingFromNodeId(null);
@@ -1750,6 +1761,9 @@ export const App: React.FC = () => {
       ) {
         e.preventDefault();
         handleDeleteNode(selectedNodeId);
+      } else if (e.key === 'Escape' && drawingMode) {
+        e.preventDefault();
+        setDrawingMode(false);
       } else if (e.key.toLowerCase() === 'f') {
         setFocusMode((v) => !v);
       } else if (e.key === '0') {
@@ -1797,13 +1811,76 @@ export const App: React.FC = () => {
     };
   }, [doc.nodes, doc.rootNodeId, revealedExamIds]);
 
+  const handleToggleDrawingMode = useCallback(() => {
+    void hapticLight();
+    setDrawingMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setSelectedNodeId(null);
+        setEditingNodeId(null);
+        setLinkingFromNodeId(null);
+        if (docRef.current.darkMode && inkColor === '#0F172A') {
+          setInkColor('#38BDF8');
+        }
+      }
+      return next;
+    });
+  }, [inkColor]);
+
+  const handleAddInkStroke = useCallback(
+    (stroke: CanvasInkStroke) => {
+      pushHistory(docRef.current);
+      setDoc((prev) => ({
+        ...prev,
+        inkStrokes: [...(prev.inkStrokes ?? []), stroke],
+        updatedAt: Date.now(),
+      }));
+    },
+    [pushHistory]
+  );
+
+  const handleDeleteInkStroke = useCallback(
+    (strokeId: string) => {
+      pushHistory(docRef.current);
+      setDoc((prev) => ({
+        ...prev,
+        inkStrokes: (prev.inkStrokes ?? []).filter((s) => s.id !== strokeId),
+        updatedAt: Date.now(),
+      }));
+    },
+    [pushHistory]
+  );
+
+  const handleUndoInkStroke = useCallback(() => {
+    const existing = docRef.current.inkStrokes ?? [];
+    if (existing.length === 0) return;
+    pushHistory(docRef.current);
+    setDoc((prev) => ({
+      ...prev,
+      inkStrokes: (prev.inkStrokes ?? []).slice(0, -1),
+      updatedAt: Date.now(),
+    }));
+  }, [pushHistory]);
+
+  const handleClearAllInk = useCallback(() => {
+    const existing = docRef.current.inkStrokes ?? [];
+    if (existing.length === 0) return;
+    pushHistory(docRef.current);
+    setDoc((prev) => ({
+      ...prev,
+      inkStrokes: [],
+      updatedAt: Date.now(),
+    }));
+  }, [pushHistory]);
+
   const defaultNodeStyle: NodeVisualStyle = doc.defaultNodeStyle ?? 'card';
   const activeEditNode = editingNodeId ? doc.nodes[editingNodeId] ?? null : null;
-  const activeStudioNode =
-    activeEditNode ??
-    (examMode === 'off' && !linkingFromNodeId && selectedNodeId
-      ? doc.nodes[selectedNodeId] ?? null
-      : null);
+  const activeStudioNode = drawingMode
+    ? null
+    : activeEditNode ??
+      (examMode === 'off' && !linkingFromNodeId && selectedNodeId
+        ? doc.nodes[selectedNodeId] ?? null
+        : null);
   const targetModalNodeId = editingNodeId ?? selectedNodeId ?? doc.rootNodeId;
   const targetModalNode =
     doc.nodes[targetModalNodeId] ?? doc.nodes[doc.rootNodeId];
@@ -1834,22 +1911,6 @@ export const App: React.FC = () => {
             setSettingsOpen(true);
           }}
           onTriggerPaywall={(reason) => openPaywall(reason, null)}
-          onResetMapCounter={() => {
-            void (async () => {
-              void hapticSuccess();
-              EntitlementManager.resetUsageCounters();
-              const all = await LocalStore.listMaps();
-              const active = all
-                .filter((m) => !m.deletedAt)
-                .sort((a, b) => b.updatedAt - a.updatedAt);
-              if (active.length > 1) {
-                for (let i = 1; i < active.length; i++) {
-                  await LocalStore.moveToTrash(active[i].id);
-                }
-              }
-              setSavedMaps(await LocalStore.listMaps());
-            })();
-          }}
         />
       ) : (
         <>
@@ -1914,6 +1975,8 @@ export const App: React.FC = () => {
             onOpenSmartGenerator={() =>
               handleRequestOpenSmartGenerator('text_to_map', false)
             }
+            drawingMode={drawingMode}
+            onToggleDrawingMode={handleToggleDrawingMode}
             focusModeActive={focusMode}
             onToggleFocusMode={() => {
               void hapticLight();
@@ -1949,6 +2012,14 @@ export const App: React.FC = () => {
           <CanvasStage
             nodes={doc.nodes}
             crossLinks={doc.crossLinks}
+            inkStrokes={doc.inkStrokes}
+            drawingMode={drawingMode}
+            inkTool={inkTool}
+            inkColor={inkColor}
+            inkWidth={inkWidth}
+            stylusOnly={stylusOnly}
+            onAddInkStroke={handleAddInkStroke}
+            onDeleteInkStroke={handleDeleteInkStroke}
             rootNodeId={doc.rootNodeId}
             department={doc.department}
             darkMode={Boolean(doc.darkMode)}
@@ -2020,7 +2091,7 @@ export const App: React.FC = () => {
             viewport={radarSnap.vp}
             stageWidth={radarSnap.w}
             stageHeight={radarSnap.h}
-            isObstructedByBottomBar={Boolean(activeStudioNode)}
+            isObstructedByBottomBar={Boolean(activeStudioNode) || drawingMode}
             onJumpToWorldPoint={(wx, wy) => {
               setRadarJump((prev) => ({
                 x: wx,
@@ -2129,6 +2200,8 @@ export const App: React.FC = () => {
                 borderColor: 'var(--hud-border)',
                 bottom: activeStudioNode
                   ? `${Math.max(250, kbInset.studioBarHeight + 36)}px`
+                  : drawingMode
+                  ? 'max(142px, calc(var(--safe-bottom) + 136px))'
                   : 'max(88px, calc(var(--safe-bottom) + 84px))',
               }}
             >
@@ -2181,8 +2254,25 @@ export const App: React.FC = () => {
             </div>
           )}
 
+          <CanvasDrawingToolbar
+            isOpen={drawingMode}
+            activeTool={inkTool}
+            inkColor={inkColor}
+            strokeWidth={inkWidth}
+            stylusOnly={stylusOnly}
+            strokeCount={(doc.inkStrokes ?? []).length}
+            onChangeTool={setInkTool}
+            onChangeColor={setInkColor}
+            onChangeWidth={setInkWidth}
+            onToggleStylusOnly={() => setStylusOnly((v) => !v)}
+            onUndoInk={handleUndoInkStroke}
+            onClearAllInk={handleClearAllInk}
+            onClose={() => setDrawingMode(false)}
+          />
+
           {/* Mobile & Tablet Thumb-Reachable Bottom Quick-Action Pill (When idle) */}
-          {!selectedNodeId &&
+          {!drawingMode &&
+            !selectedNodeId &&
             !editingNodeId &&
             !linkingFromNodeId &&
             examMode === 'off' && (
@@ -2219,6 +2309,15 @@ export const App: React.FC = () => {
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Yeni Dal</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="mobile-draw-toggle-btn"
+                    onClick={handleToggleDrawingMode}
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl bg-indigo-500/15 px-2.5 py-1.5 text-indigo-700 hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
+                  >
+                    <PenTool className="h-3.5 w-3.5" />
+                    <span>Çiz</span>
                   </button>
                   <button
                     type="button"

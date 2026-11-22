@@ -31,6 +31,7 @@ interface StoreKitBillingPlugin {
   purchaseLifetime(options: { productId: string }): Promise<PurchaseResult>;
   restorePurchases(): Promise<{ restored: boolean; isLifetimePro: boolean }>;
   checkEntitlements(): Promise<{ isLifetimePro: boolean }>;
+  presentOfferCodeRedeemSheet?(): Promise<{ presented: boolean; isLifetimePro: boolean }>;
 }
 
 const StoreKitBilling = registerPlugin<StoreKitBillingPlugin>('StoreKitBilling');
@@ -95,9 +96,19 @@ export async function readCachedEntitlement(): Promise<boolean> {
 }
 
 function getDefaultPlansMap(): Record<ProPlanTier, StoreProductInfo> {
+  let tz = '';
+  try {
+    tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    tz = '';
+  }
+  const navLang = typeof navigator !== 'undefined' ? (navigator.language || 'tr').toLowerCase() : 'tr';
   const isTrLocale =
     typeof navigator === 'undefined' ||
-    (navigator.language || 'tr').toLowerCase().startsWith('tr');
+    navLang.startsWith('tr') ||
+    navLang.endsWith('-tr') ||
+    navLang.includes('_tr') ||
+    tz.includes('Istanbul');
   const { monthly, yearly, lifetime } = APP_RELEASE_CONFIG.iap.plans;
 
   return {
@@ -297,6 +308,44 @@ export const BillingService = {
     }
 
     return cached;
+  },
+
+  async presentIosOfferCodeRedeemSheet(): Promise<{
+    presented: boolean;
+    isLifetimePro: boolean;
+    errorMessage?: string;
+  }> {
+    if (!this.isNativeIos() || !StoreKitBilling.presentOfferCodeRedeemSheet) {
+      return {
+        presented: false,
+        isLifetimePro: await readCachedEntitlement(),
+      };
+    }
+    try {
+      const res = await StoreKitBilling.presentOfferCodeRedeemSheet();
+      if (res.isLifetimePro) {
+        await persistVerifiedEntitlement(true, 'apple_offer_code_redeem');
+      }
+      return {
+        presented: Boolean(res.presented),
+        isLifetimePro: Boolean(res.isLifetimePro),
+      };
+    } catch (err) {
+      return {
+        presented: false,
+        isLifetimePro: await readCachedEntitlement(),
+        errorMessage:
+          err instanceof Error ? err.message : 'Teklif kodu penceresi açılamadı.',
+      };
+    }
+  },
+
+  async unlockViaFriendPromoCode(codeHash: string, slotNumber: number): Promise<void> {
+    await persistVerifiedEntitlement(
+      true,
+      `friend_gift_slot_${slotNumber}_${codeHash.slice(0, 10)}`,
+      APP_RELEASE_CONFIG.iap.lifetimeProductId
+    );
   },
 
   async resetLocalEntitlementForTesting(keepCloudReceiptForRestore = true): Promise<void> {

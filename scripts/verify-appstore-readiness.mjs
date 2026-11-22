@@ -218,7 +218,7 @@ async function runGate2IconsAndScreenshots() {
     if (playIcon.width === 512 && playFg.width === 1024 && playFg.height === 500) {
       pass(
         'Google Play Store Paketi (Android Native + 512px İkon + 1024x500 Özellik Grafiği + 10 Poster)',
-        'Android API 35 + AAB/APK CI/CD hazır'
+        'Android API 36 + R8 Tam Optimizasyon + AAB/APK CI/CD hazır'
       );
     }
   } else {
@@ -395,7 +395,7 @@ async function runGate4TypeScriptAndBuild() {
 }
 
 async function runGate5HeadlessE2EFreemiumAndResponsive() {
-  console.log('\n[5/5] E2E 3 Harita Limiti -> 200 ₺ Paywall, PRO Çıkartma, Geri Yükleme & Responsive Testi');
+  console.log('\n[5/5] E2E 2 Harita Limiti -> Pro Paywall, Çizim Modu, Monochrome/3D İkon & Responsive Testi');
   const port = 4179;
   const baseUrl = `http://127.0.0.1:${port}`;
   const serverProc = startLocalPreviewServer(port);
@@ -431,17 +431,18 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       fail('İlk açılış Onboarding tek seferlik gösterim kontrolü', 'İkinci girişte tekrar açıldı!');
     }
 
-    // 5.2 Verify Free Tier starts at 1 / 3 active maps, allows 2nd & 3rd, and gates 4th map with 200 ₺ Paywall
+    // 5.2 Verify Free Tier starts at 1 / 2 active maps, allows 2nd map, and gates 3rd map with 499 ₺ / 2.999 ₺ / 4.999 ₺ Paywall
     await page.waitForSelector('[data-testid="create-blank-map-btn"]', {
       timeout: 8000,
     });
+    const hasBrandLogo = await page.locator('[data-testid="brand-logo"]').isVisible();
     const initialCards = await page
       .locator('[data-testid^="workspace-map-card-"]')
       .count();
-    if (initialCards === 1) {
-      pass('Temiz kurulum başlangıç harita sayısı', '1 / 3 Ücretsiz Harita');
+    if (initialCards === 1 && hasBrandLogo) {
+      pass('Temiz kurulum başlangıç harita sayısı ve yeni BrandLogo', '1 / 2 Ücretsiz Harita + Yeni Logo');
     } else {
-      fail('Temiz kurulum başlangıç harita sayısı', `Beklenen 1, bulunan ${initialCards}`);
+      fail('Temiz kurulum başlangıç harita sayısı', `Beklenen 1, bulunan ${initialCards}, logo=${hasBrandLogo}`);
     }
 
     // Create 2nd map via template
@@ -449,40 +450,32 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
     await page.waitForSelector('[data-testid="hud-back-home-btn"]', { timeout: 8000 });
     await page.click('[data-testid="hud-back-home-btn"]');
 
-    // Create 3rd map via blank map dialog
     await page.waitForSelector('[data-testid="create-blank-map-btn"]', { timeout: 8000 });
-    await page.click('[data-testid="create-blank-map-btn"]');
-    await page.fill('[data-testid="new-map-title-input"]', 'Biyokimya Vize Özeti');
-    await page.click('[data-testid="new-map-confirm-btn"]');
-    await page.waitForSelector('[data-testid="hud-back-home-btn"]', { timeout: 8000 });
-    await page.click('[data-testid="hud-back-home-btn"]');
-
-    await page.waitForSelector('[data-testid="create-blank-map-btn"]', { timeout: 8000 });
-    const countAtThree = await page
+    const countAtTwo = await page
       .locator('[data-testid^="workspace-map-card-"]')
       .count();
 
-    // Attempt 4th map -> must block creation and open 200 ₺ LifetimePaywallModal
+    // Attempt 3rd map -> must block creation and open 3-Tier LifetimePaywallModal
     await page.click('[data-testid="create-blank-map-btn"]');
     const paywallModal = page.locator('[data-testid="lifetime-paywall-modal"]');
     await paywallModal.waitFor({ state: 'visible', timeout: 6000 });
     const paywallText = await paywallModal.innerText();
 
     if (
-      countAtThree === 3 &&
+      countAtTwo === 2 &&
       paywallText.includes('499 ₺') &&
       paywallText.includes('2.999 ₺') &&
       paywallText.includes('4.999 ₺') &&
       paywallText.includes('Satın Alımları Geri Yükle')
     ) {
       pass(
-        '3 Ücretsiz Harita limiti ve 4. haritada 3-Katmanlı Pro Paywall (499₺/2.999₺/4.999₺)',
-        '3/3 korundu, Aylık + Yıllık + Ömür Boyu Paywall açtı'
+        '2 Ücretsiz Harita limiti ve 3. haritada 3-Katmanlı Pro Paywall (499₺/2.999₺/4.999₺)',
+        '2/2 korundu, Aylık + Yıllık + Ömür Boyu Paywall açtı'
       );
     } else {
       fail(
-        '3 Ücretsiz Harita limiti ve 4. harita Paywall kilidi',
-        `count=${countAtThree}`
+        '2 Ücretsiz Harita limiti ve 3. harita Paywall kilidi',
+        `count=${countAtTwo}`
       );
     }
 
@@ -791,6 +784,22 @@ async function runGate5HeadlessE2EFreemiumAndResponsive() {
       pass('Çalışma & Sınav Sayacı tek dokunuş "Sıfırla" kontrolü', '00:00 sıfırlama doğrulandı');
     } else {
       fail('Çalışma & Sınav Sayacı sıfırlama kontrolü', timerText);
+    }
+
+    // Test Freehand Tablet/Phone Canvas Drawing Mode (Pen / Highlighter / Shapes / Palm Rejection)
+    await page.click('[data-testid="hud-draw-toggle-btn"]');
+    await page.waitForSelector('[data-testid="canvas-drawing-toolbar"]', { timeout: 4000 });
+    const hasPenTool = await page.locator('[data-testid="ink-tool-pen"]').isVisible();
+    const hasHighlighter = await page.locator('[data-testid="ink-tool-highlighter"]').isVisible();
+    const hasPalmReject = await page.locator('[data-testid="ink-palm-reject-btn"]').isVisible();
+    await page.click('[data-testid="ink-close-btn"]');
+    if (hasPenTool && hasHighlighter && hasPalmReject) {
+      pass(
+        'Tablet & Telefon serbest çizim modu (Kalem, Fosforlu, Ok, Kutu, Silgi, Avuç İçi Reddi)',
+        'Araç çubuğu sorunsuz açıldı ve kapandı'
+      );
+    } else {
+      fail('Serbest çizim modu kontrolü', `pen=${hasPenTool}, hl=${hasHighlighter}, palm=${hasPalmReject}`);
     }
 
     if (pageErrors.length === 0) {

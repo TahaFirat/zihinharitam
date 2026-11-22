@@ -7,7 +7,7 @@ export type ProPlanTier = 'monthly' | 'yearly' | 'lifetime';
 export const APP_RELEASE_CONFIG = {
   appName: 'ZihinHaritam',
   appSubtitle: 'Görsel Zihin Haritası & Not',
-  version: '1.0.2',
+  version: '1.0.3',
   bundleId: 'com.tahafirat.zihinharitam',
 
   appStore: {
@@ -80,9 +80,9 @@ export const APP_RELEASE_CONFIG = {
   },
 
   quotas: {
-    freeActiveMapsLimit: 3,
+    freeActiveMapsLimit: 2,
     freeNodesPerMapLimit: 60,
-    freeSearchCarouselSlots: 18,
+    freeSearchCarouselSlots: 10,
     freeNoteCropsLimit: 5,
     freeSmartMapGenerationsLimit: 2,
     freeAiStickerDrawsLimit: 999,

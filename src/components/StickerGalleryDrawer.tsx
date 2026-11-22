@@ -55,7 +55,6 @@ const CATEGORY_TABS: Array<{ id: GalleryCategoryFilter; label: string; emoji: st
   { id: 'system_arch', label: 'Sistem & Mimari', emoji: '🖧' },
   { id: 'medical_academic', label: 'Akademik & Bilim', emoji: '🩺' },
   { id: 'diagram', label: 'Şema & Diyagram', emoji: '📐' },
-  { id: 'photo', label: 'Fotoğraf', emoji: '📷' },
 ];
 
 const SIZE_OPTIONS: Array<{ id: StickerSizePreset; label: string }> = [
@@ -238,7 +237,10 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
-      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
+      style={{
+        paddingTop: 'max(54px, calc(var(--safe-top) + 12px))',
+        paddingBottom: `${kb.keyboardHeight}px`,
+      }}
       onClick={onClose}
       data-testid="sticker-gallery-drawer"
     >
@@ -249,11 +251,11 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
           height: kb.isKeyboardOpen
-            ? `${Math.max(260, kb.viewportH - 18)}px`
+            ? `${Math.max(250, kb.viewportH - 64)}px`
             : kb.isPhone
-            ? '90dvh'
+            ? 'calc(100dvh - max(58px, var(--safe-top) + 14px))'
             : '86dvh',
-          maxHeight: `${Math.max(260, kb.viewportH - 16)}px`,
+          maxHeight: `${Math.max(250, kb.viewportH - 64)}px`,
           paddingBottom: kb.isKeyboardOpen
             ? '6px'
             : 'max(20px, calc(var(--safe-bottom) + 14px))',

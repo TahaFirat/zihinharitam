@@ -107,6 +107,25 @@ export interface CrossLink {
   style?: 'dashed_flow' | 'solid_arrow';
 }
 
+export type InkToolType =
+  | 'pen'
+  | 'highlighter'
+  | 'line'
+  | 'arrow'
+  | 'rect'
+  | 'ellipse'
+  | 'eraser';
+
+export interface CanvasInkStroke {
+  id: string;
+  tool: Exclude<InkToolType, 'eraser'>;
+  color: string;
+  width: number;
+  opacity: number;
+  /** World-space coordinates `[worldX, worldY, pressure]` so ink pans/zooms at 120Hz in lockstep with branches! */
+  points: Array<[number, number, number]>;
+}
+
 export interface MindMapDocument {
   id: string;
   title: string;
@@ -114,6 +133,7 @@ export interface MindMapDocument {
   rootNodeId: string;
   nodes: Record<string, MindNode>;
   crossLinks?: CrossLink[];
+  inkStrokes?: CanvasInkStroke[];
   createdAt: number;
   updatedAt: number;
   darkMode?: boolean;

@@ -451,28 +451,47 @@ export class OfflineBM25Engine {
       .filter((c) => c.finalScore >= minScore)
       .sort((a, b) => b.finalScore - a.finalScore);
 
-    // Diversity interleave across packs so top results showcase 3D, flat color, hand-drawn & crisp vectors
+    // Diversity interleave across packs (strictly preserving relevance order!)
+    // Also reserve up to 8 relevant simple-monochrome `free` hits inside the returned batch so Free users
+    // ALWAYS get crisp relevant monochrome options alongside the vibrant 3D/colorful Pro top hits!
     const packCounts = new Map();
     const balanced = [];
     const overflow = [];
+    const reservedFree = [];
 
     for (const entry of qualified) {
       const p = entry.item.pack;
       const count = packCounts.get(p) || 0;
-      const capInTop = entry.item.isMultiColor ? 14 : 10;
-      if (count < capInTop) {
+      const capInTop = entry.item.isMultiColor ? 12 : 8;
+      if (entry.item.tier === 'free' && reservedFree.length < 10) {
+        reservedFree.push(entry);
+      }
+      if (count < capInTop && balanced.length < limit) {
         packCounts.set(p, count + 1);
         balanced.push(entry);
       } else {
         overflow.push(entry);
       }
-      if (balanced.length >= limit) break;
     }
 
-    const merged =
-      balanced.length < limit
-        ? [...balanced, ...overflow.slice(0, limit - balanced.length)]
-        : balanced;
+    const balancedIds = new Set(balanced.map((b) => b.item.id));
+    const missingFree = reservedFree.filter((f) => !balancedIds.has(f.item.id));
+
+    let merged;
+    if (missingFree.length > 0 && balanced.length >= limit) {
+      merged = [
+        ...balanced.slice(0, Math.max(8, limit - missingFree.length)),
+        ...missingFree,
+      ];
+    } else if (balanced.length < limit) {
+      const extra = [...missingFree, ...overflow.filter((o) => !balancedIds.has(o.item.id))];
+      merged = [...balanced, ...extra.slice(0, limit - balanced.length)];
+    } else {
+      merged = balanced;
+    }
+
+    // Re-sort strictly by relevance (`finalScore` descending) so #1 is ALWAYS the most relevant icon!
+    merged.sort((a, b) => b.finalScore - a.finalScore);
 
     // Confidence-calibrated normalizedScore ceiling so weak prefix-only offline hits (`maxRawScore < 620`)
     // NEVER outrank exact 546,996-icon live matches (`0.992`) when an uncommon word is translated online!

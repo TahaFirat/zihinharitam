@@ -18,6 +18,56 @@
  */
 
 import { EXTRA_DOMAIN_LEXICON } from './taxonomyBankExtra.js';
+import { CLDR_TR_TO_EN_CONCEPTS } from './cldrTrLexicon.js';
+
+/**
+ * English Concept-Intent Visual Proxy Map:
+ * When users type (or live-translate to) abstract English nouns like "commander", "leadership",
+ * "honeycomb", "radiator", "discipline", "motivation", maps them immediately to iconic visual symbols
+ * so icon search ALWAYS understands user intent and NEVER returns empty or unrelated results!
+ */
+export const EN_CONCEPT_INTENT_MAP = {
+  commander: ['military-medal', 'crossed-swords', 'shield', 'helmet', 'star', 'crown', 'flag'],
+  general: ['military-medal', 'crossed-swords', 'shield', 'star', 'crown', 'helmet'],
+  officer: ['military-medal', 'shield', 'badge', 'star', 'helmet'],
+  soldier: ['helmet', 'shield', 'crossed-swords', 'military-medal', 'flag'],
+  warrior: ['crossed-swords', 'shield', 'helmet', 'axe', 'sword'],
+  knight: ['shield', 'crossed-swords', 'helmet', 'castle', 'horse'],
+  captain: ['anchor', 'ship', 'helm', 'compass', 'star'],
+  leader: ['crown', 'flag', 'trophy', 'compass', 'star'],
+  leadership: ['crown', 'flag', 'compass', 'trophy', 'users'],
+  honeycomb: ['honey-pot', 'honeybee', 'bee', 'hexagon'],
+  radiator: ['heater', 'thermometer', 'flame', 'fire'],
+  heater: ['thermometer', 'flame', 'fire', 'sun'],
+  motivation: ['rocket', 'fire', 'sparkles', 'light-bulb', 'trophy'],
+  discipline: ['target', 'check-mark-button', 'calendar', 'stopwatch', 'clipboard'],
+  strategy: ['chess-pawn', 'target', 'compass', 'map', 'brain'],
+  success: ['trophy', '1st-place-medal', 'star', 'rocket', 'check-mark-button'],
+  victory: ['trophy', '1st-place-medal', 'crown', 'flag', 'star'],
+  freedom: ['dove', 'bird', 'flag', 'wings', 'sun'],
+  peace: ['dove', 'peace-symbol', 'handshake', 'heart'],
+  justice: ['balance-scale', 'gavel', 'scroll', 'shield'],
+  communication: ['speech-balloon', 'megaphone', 'mail', 'message'],
+  presentation: ['chart-increasing', 'screen', 'microphone', 'light-bulb'],
+  meeting: ['users', 'handshake', 'calendar', 'speech-balloon'],
+  economy: ['chart-increasing', 'money-bag', 'coin', 'bank'],
+  investment: ['chart-increasing', 'money-bag', 'seedling', 'coin'],
+  education: ['graduation-cap', 'books', 'open-book', 'school'],
+  learning: ['brain', 'open-book', 'light-bulb', 'graduation-cap'],
+  memory: ['brain', 'light-bulb', 'puzzle-piece', 'sparkles'],
+  focus: ['target', 'bullseye', 'eye', 'stopwatch'],
+  habit: ['calendar', 'check-mark-button', 'repeat', 'stopwatch'],
+  creativity: ['light-bulb', 'artist-palette', 'sparkles', 'rocket'],
+  innovation: ['light-bulb', 'rocket', 'atom-symbol', 'sparkles'],
+  teamwork: ['handshake', 'users', 'puzzle-piece', 'trophy'],
+  problem: ['warning', 'magnifying-glass-tilted-left', 'puzzle-piece', 'question'],
+  solution: ['check-mark-button', 'light-bulb', 'key', 'puzzle-piece'],
+  advantage: ['thumbs-up', 'check-mark-button', 'trophy', 'chart-increasing'],
+  disadvantage: ['thumbs-down', 'warning', 'cross-mark', 'chart-decreasing'],
+  introduction: ['compass', 'open-book', 'sparkles', 'flag'],
+  summary: ['clipboard', 'check-mark-button', 'books', 'star'],
+  conclusion: ['flag', 'check-mark-button', 'trophy', 'target'],
+};
 
 /**
  * Normalizes Turkish & Latin characters into clean lowercase ASCII search tokens
@@ -1004,6 +1054,24 @@ for (const row of RAW_TAXONOMY_CLUSTERS) {
   });
 }
 
+// 3. Register 3,482 Official Unicode CLDR v49 Turkish Concepts LAST (ONLY for words NOT already in our curated 1-to-1 / academic / homonym tables!)
+for (const [trTerm, enSlugs] of Object.entries(CLDR_TR_TO_EN_CONCEPTS)) {
+  const normKey = normalizeTrToken(trTerm);
+  if (!normKey || trPhraseMap.has(normKey) || HOMONYM_DISCIPLINE_RULES[normKey]) continue;
+  const stemKey = stemTurkishSafe(normKey);
+  if (stemKey && (trPhraseMap.has(stemKey) || HOMONYM_DISCIPLINE_RULES[stemKey])) continue;
+  const cleanSlugs = enSlugs.filter((s) => !s.includes('face') && s !== 'mosquito');
+  if (cleanSlugs.length === 0) continue;
+  registerClusterInLookup({
+    domain: 'general',
+    trTerms: [normKey],
+    enTokens: cleanSlugs,
+    blockedTokens: [],
+    packIds: [],
+    isExactLexicon: true,
+  });
+}
+
 /**
  * Used at build time (`scripts/build-offline-icon-shards.mjs`) to enrich every English Iconify
  * icon with accurate Turkish tags + academic domain!
@@ -1198,10 +1266,19 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  // Always preserve any direct English/tech words typed by the user (e.g. `react`, `docker`, `python`, `redis`, `dragon`, `sushi`)!
+  // Always preserve any direct English/tech words typed by the user (e.g. `react`, `docker`, `python`, `commander`, `honeycomb`)
+  // AND expand abstract English intent words via `EN_CONCEPT_INTENT_MAP` so English queries like "commander" ALWAYS find crisp relevant icons!
+  let matchedEnglishIntent = false;
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     const sw = stemmedWords[i];
+    const intentProxies = EN_CONCEPT_INTENT_MAP[w];
+    if (intentProxies) {
+      matchedEnglishIntent = true;
+      primaryEn.add(w);
+      intentProxies.forEach((p) => primaryEn.add(p));
+      continue;
+    }
     if (w.length >= 2 && !TURKISH_STOPWORDS.has(w)) {
       const matchedTr = trPhraseMap.has(w) || trPhraseMap.has(sw);
       if (!matchedTr && (w.length >= 3 || words.length === 1)) {
@@ -1250,7 +1327,10 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   const secondaryArr = Array.from(secondaryEn);
 
   const hasLexiconMatch =
-    isHomonym || phraseClusters.length > 0 || wordClusters.length > 0;
+    isHomonym ||
+    matchedEnglishIntent ||
+    phraseClusters.length > 0 ||
+    wordClusters.length > 0;
 
   return {
     normalizedQuery: norm,

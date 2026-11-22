@@ -25,6 +25,10 @@ import {
   generateCrossLinkSvgElements,
 } from '../core/canvas/CrossLinkRenderer';
 import {
+  drawInkStrokesToCanvas2D,
+  generateInkStrokesSvgElements,
+} from '../core/canvas/InkStrokeEngine';
+import {
   OrganicBranchRenderer,
   generateTaperedBranchSvgPath,
 } from '../core/canvas/OrganicBranchRenderer';
@@ -157,6 +161,9 @@ async function renderHighResMapCanvas(
         meta.hiddenNodeIds,
         Boolean(doc.darkMode)
       );
+
+      // 2b. Freehand Tablet/Stylus Ink Strokes
+      drawInkStrokesToCanvas2D(ctx, doc.inkStrokes);
 
       // 3. Nodes (Stickers + Pill Cards + Tech Badges)
       visibleNodes.forEach((node, idx) => {
@@ -330,11 +337,19 @@ function buildVectorSvgBlob(doc: MindMapDocument): Blob {
     }
   }
 
+  const inkSvgMarkup = generateInkStrokesSvgElements(
+    (doc.inkStrokes ?? []).map((s) => ({
+      ...s,
+      points: s.points.map(([px, py, pr]) => [px + ox, py + oy, pr] as [number, number, number]),
+    }))
+  );
+
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
   <rect width="100%" height="100%" fill="${doc.darkMode ? '#0F141D' : '#FAF9F5'}" />
   <g>${branchPaths.join('\n')}</g>
   <g>${crossLinkElements.join('\n')}</g>
+  <g>${inkSvgMarkup}</g>
   <g>${nodeElements.join('\n')}</g>
 </svg>`;
 

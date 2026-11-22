@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { APP_RELEASE_CONFIG } from '../config/appReleaseConfig';
+import { BrandLogo } from './BrandLogo';
 import { generateMapThumbnailDataUrl } from '../core/canvas/ThumbnailGenerator';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
 import { hapticLight, shareOrDownloadFile } from '../core/native/NativeBridge';
@@ -56,7 +57,6 @@ interface HomeWorkspaceProps {
   onImportZihinFile: (rawJson: string) => void;
   onOpenSettings: () => void;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
-  onResetMapCounter?: () => void;
 }
 
 function formatRelativeDateTr(ts: number): string {
@@ -91,7 +91,6 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onImportZihinFile,
   onOpenSettings,
   onTriggerPaywall,
-  onResetMapCounter,
 }) => {
   const { isLifetimePro, localizedPrice } = useEntitlements();
   const [searchQuery, setSearchQuery] = useState('');
@@ -216,34 +215,14 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       >
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2.5">
           {/* App Brand Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-xs dark:bg-amber-500 dark:text-slate-950">
-              <svg viewBox="0 0 32 32" className="h-6 w-6">
-                <circle cx="10" cy="16" r="4" fill="currentColor" />
-                <path
-                  d="M13 15 C17 15, 18 9, 23 9"
-                  stroke="#38BDF8"
-                  strokeWidth="2.8"
-                  strokeLinecap="round"
-                  fill="none"
-                />
-                <path
-                  d="M13 17 C17 17, 18 23, 23 23"
-                  stroke="#F59E0B"
-                  strokeWidth="2.8"
-                  strokeLinecap="round"
-                  fill="none"
-                />
-                <circle cx="24" cy="9" r="3" fill="#38BDF8" />
-                <circle cx="24" cy="23" r="3" fill="#F59E0B" />
-              </svg>
-            </div>
+          <div className="flex items-center gap-3">
+            <BrandLogo size="md" />
             <div>
-              <h1 className="text-base leading-tight font-extrabold tracking-tight sm:text-lg">
+              <h1 className="text-base leading-tight font-black tracking-tight sm:text-lg">
                 {APP_RELEASE_CONFIG.appName}
               </h1>
-              <p className="hidden text-[11px] opacity-65 sm:block">
-                {APP_RELEASE_CONFIG.appSubtitle}
+              <p className="hidden text-[11px] font-medium opacity-65 sm:block">
+                Görsel Zihin Haritası & Çizim Defteri
               </p>
             </div>
           </div>
@@ -318,53 +297,38 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {/* Quick Start Actions + Academic Templates Strip */}
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-xs font-extrabold tracking-wider uppercase opacity-60">
-                Hızlı Başlangıç & Akademik Şablonlar
+              <h2 className="text-xs font-extrabold tracking-wider uppercase opacity-65">
+                Hemen Başla & Hazır Şablonlar
               </h2>
 
-              {/* Free Tier Transparent Map Counter + 1-Tap Counter Reset */}
+              {/* Free Tier Transparent Map Counter (Clean & Simple) */}
               {!isLifetimePro && (
-                <div className="inline-flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => onTriggerPaywall('map_limit')}
-                    data-testid="free-map-quota-badge"
-                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-bold hover:bg-slate-500/5"
-                    style={{
-                      backgroundColor: 'var(--hud-bg)',
-                      borderColor: 'var(--hud-border)',
-                    }}
-                  >
-                    <span>
-                      Ücretsiz Harita:{' '}
-                      <strong>
-                        {Math.min(activeMapsCount, freeLimit)} / {freeLimit}
-                      </strong>{' '}
-                      Kullanıldı
-                    </span>
-                    <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-400/25">
-                      <span
-                        className="block h-full rounded-full bg-amber-500 transition-all"
-                        style={{
-                          width: `${Math.min(100, (activeMapsCount / freeLimit) * 100)}%`,
-                        }}
-                      />
-                    </span>
-                  </button>
-
-                  {onResetMapCounter && (
-                    <button
-                      type="button"
-                      data-testid="reset-map-counter-btn"
-                      onClick={onResetMapCounter}
-                      title="Harita ve ücretsiz kullanım sayacını sıfırla"
-                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/35 bg-sky-500/12 px-2.5 py-1 text-[11px] font-extrabold text-sky-700 transition hover:bg-sky-500/20 active:scale-95 dark:text-sky-300"
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                      <span>Sayacı Sıfırla</span>
-                    </button>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onTriggerPaywall('map_limit')}
+                  data-testid="free-map-quota-badge"
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-bold hover:bg-slate-500/5 active:scale-95"
+                  style={{
+                    backgroundColor: 'var(--hud-bg)',
+                    borderColor: 'var(--hud-border)',
+                  }}
+                >
+                  <span>
+                    Ücretsiz Hak:{' '}
+                    <strong>
+                      {Math.min(activeMapsCount, freeLimit)} / {freeLimit}
+                    </strong>{' '}
+                    Harita
+                  </span>
+                  <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-400/25">
+                    <span
+                      className="block h-full rounded-full bg-amber-500 transition-all"
+                      style={{
+                        width: `${Math.min(100, (activeMapsCount / freeLimit) * 100)}%`,
+                      }}
+                    />
+                  </span>
+                </button>
               )}
             </div>
 
@@ -375,15 +339,15 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 type="button"
                 onClick={handleClickNewBlankMap}
                 data-testid="create-blank-map-btn"
-                className="flex min-h-[108px] w-48 shrink-0 flex-col justify-between rounded-2xl bg-slate-900 p-4 text-left text-white shadow-sm transition hover:bg-slate-800 active:scale-[0.98] dark:bg-sky-500 dark:text-slate-950"
+                className="flex min-h-[104px] w-46 shrink-0 flex-col justify-between rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950 p-4 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] dark:from-sky-500 dark:to-blue-600 dark:text-slate-950"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 dark:bg-slate-950/15">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/18 dark:bg-slate-950/15">
                   <Plus className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-sm font-extrabold">+ Boş Görsel Harita</div>
+                  <div className="text-sm font-extrabold">+ Yeni Harita</div>
                   <div className="text-[11px] opacity-80">
-                    Sıfırdan merkez konuyla başla
+                    Sıfırdan hemen başla
                   </div>
                 </div>
               </button>
@@ -393,7 +357,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 type="button"
                 onClick={onOpenSmartMapGenerator}
                 data-testid="home-smart-map-btn"
-                className="flex min-h-[108px] w-48 shrink-0 flex-col justify-between rounded-2xl border p-4 text-left transition hover:border-amber-500/50 hover:bg-amber-500/5 active:scale-[0.98]"
+                className="flex min-h-[104px] w-46 shrink-0 flex-col justify-between rounded-2xl border p-4 text-left transition hover:border-amber-500/50 hover:bg-amber-500/5 active:scale-[0.98]"
                 style={{
                   backgroundColor: 'var(--hud-bg)',
                   borderColor: 'var(--hud-border)',
@@ -403,9 +367,9 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   <Wand2 className="h-4.5 w-4.5" />
                 </div>
                 <div>
-                  <div className="text-sm font-extrabold">Metinden Harita Kur</div>
+                  <div className="text-sm font-extrabold">Metinden Harita</div>
                   <div className="text-[11px] opacity-65">
-                    Ders notunu otomatik dallandır
+                    Notu otomatik haritaya çevir
                   </div>
                 </div>
               </button>
@@ -428,15 +392,15 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               <button
                 type="button"
                 onClick={() => importInputRef.current?.click()}
-                className="flex min-h-[108px] w-40 shrink-0 flex-col justify-between rounded-2xl border border-dashed p-4 text-left transition hover:bg-slate-500/5 active:scale-[0.98]"
+                className="flex min-h-[104px] w-38 shrink-0 flex-col justify-between rounded-2xl border border-dashed p-4 text-left transition hover:bg-slate-500/5 active:scale-[0.98]"
                 style={{ borderColor: 'var(--hud-border)' }}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-500/10">
                   <Upload className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-extrabold">.zihin İçe Aktar</div>
-                  <div className="text-[11px] opacity-65">Yedek dosyasından aç</div>
+                  <div className="text-xs font-extrabold">Yedek Yükle</div>
+                  <div className="text-[11px] opacity-65">.zihin dosyası aç</div>
                 </div>
               </button>
 

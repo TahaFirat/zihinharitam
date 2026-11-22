@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import UIKit
 import Capacitor
 import StoreKit
 
@@ -12,7 +13,8 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getProducts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "purchaseLifetime", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "checkEntitlements", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "checkEntitlements", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "presentOfferCodeRedeemSheet", returnType: CAPPluginReturnPromise)
     ]
 
     private let monthlyProductId = "com.tahafirat.zihinharitam.pro_monthly"
@@ -52,23 +54,37 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func fetchProductsWithRetry(ids: [String], allowSyncRetry: Bool = true) async throws -> [Product] {
-        let initial = try await Product.products(for: Set(ids))
+        let requested = Set(ids)
+        var foundById: [String: Product] = [:]
+
+        let initial = (try? await Product.products(for: requested)) ?? []
         for p in initial {
             cachedProducts[p.id] = p
-        }
-        if !initial.isEmpty || !allowSyncRetry {
-            return initial
+            foundById[p.id] = p
         }
 
-        // Sandbox/TestFlight sessions occasionally return empty before AppStore sync warms up
-        try? await AppStore.sync()
-        try? await Task.sleep(nanoseconds: 350_000_000)
-
-        let retried = try await Product.products(for: Set(ids))
-        for p in retried {
-            cachedProducts[p.id] = p
+        // If any requested product ID didn't return in the batch (e.g. cold StoreKit cache), retry missing IDs individually!
+        var missing = requested.subtracting(foundById.keys)
+        if !missing.isEmpty && allowSyncRetry {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            for mid in missing {
+                if let single = try? await Product.products(for: [mid]).first {
+                    cachedProducts[single.id] = single
+                    foundById[single.id] = single
+                }
+            }
+            missing = requested.subtracting(foundById.keys)
+            if !missing.isEmpty {
+                try? await AppStore.sync()
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                let retried = (try? await Product.products(for: missing)) ?? []
+                for p in retried {
+                    cachedProducts[p.id] = p
+                    foundById[p.id] = p
+                }
+            }
         }
-        return retried
+        return ids.compactMap { foundById[$0] }
     }
 
     @objc func getProducts(_ call: CAPPluginCall) {
@@ -102,7 +118,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                     product = products.first
                 }
                 guard let product = product else {
-                    call.reject("App Store urunu (\(productId)) su anda Apple sunucularindan alinamadi. TestFlight/inceleme asamasinda App Store Connect -> Isletme (Ucretli Uygulamalar Sozlesmesi / Vergi ve Banka onayi) tamamlanip aktif olana kadar satin alma test urunu donmeyebilir.")
+                    call.reject("Bu plan su anda App Store sunucularinda guncelleniyor. Lutfen birazdan tekrar deneyin veya Omur Boyu Pro secenegini kullanin.")
                     return
                 }
                 let result = try await product.purchase()
@@ -150,6 +166,29 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             let unlocked = await hasVerifiedEntitlement()
             call.resolve(["isLifetimePro": unlocked])
+        }
+    }
+
+    @objc func presentOfferCodeRedeemSheet(_ call: CAPPluginCall) {
+        if #available(iOS 16.0, *) {
+            Task { @MainActor in
+                guard let scene = self.bridge?.viewController?.view.window?.windowScene
+                        ?? UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+                    call.reject("Teklif kodu penceresi acilamadi.")
+                    return
+                }
+                do {
+                    try await AppStore.presentOfferCodeRedeemSheet(in: scene)
+                    try? await AppStore.sync()
+                    let unlocked = await self.hasVerifiedEntitlement()
+                    self.saveKeychainEntitlement(unlocked)
+                    call.resolve(["presented": true, "isLifetimePro": unlocked])
+                } catch {
+                    call.reject("Teklif kodu ekrani kapatildi veya hata olustu: \(error.localizedDescription)")
+                }
+            }
+        } else {
+            call.reject("Hediye/teklif kodu kullanimi iOS 16 ve uzeri gerektirir.")
         }
     }
 

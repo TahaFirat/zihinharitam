@@ -1,4 +1,4 @@
-- PERFORMANCE: Zero-idle on-demand rendering engine, cached vector paths, and hardware-accelerated 60/120 FPS canvas for ultra-cool battery life and zero lag.
-- MASSIVE ICON LIBRARY: 43,000+ bundled offline icons plus 540,000+ live online vector icons with automatic multilingual matching.
-- TABLET & PHONE POLISH: Full system-bar and tablet taskbar safe-area clearance with enlarged S/M/L/XL sizing touch targets.
-- NEW: Multi-line branch notes, task checkboxes, Hierarchical Outliner view, gallery photo import, and one-time onboarding.
+- 120 FPS SILKY CANVAS: Redesigned zero-jank GPU pan/zoom pipeline eliminating freezes and stutter on iPhone and iPad.
+- FREEHAND CANVAS DRAWING: Draw directly on mind maps with Pen, Highlighter, Arrow, Box, Circle, Eraser, and Stylus-Only Palm Rejection (included in PNG/SVG/PDF exports).
+- INTENT-AWARE ICON ENGINE: Upgraded with 3,480+ official multilingual concepts and removed unrelated external photos for fast, accurate icon ranking.
+- SIMPLIFIED HOME & STOREKIT POLISH: New brand emblem, streamlined home screen, tablet keyboard safe-area layout, and native App Store Offer Code redemption.

@@ -167,6 +167,11 @@ svg {
   animation: cardRevealFlip 160ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
 }
 
+/* Layout & style isolation per node card so typing in 1 branch NEVER triggers layout recalc on sibling nodes in WKWebView/Blink */
+.mind-node-wrapper {
+  contain: layout style;
+}
+
 /* Zero-Jitter Interaction Lock + Mobile GPU Drop-Shadow Bypass during active pan/zoom/drag */
 .canvas-stage[data-interacting="true"],
 .canvas-stage[data-interacting="true"] * {

@@ -23,9 +23,11 @@ import {
 } from 'lucide-react';
 import type {
   AcademicDepartment,
+  CanvasInkStroke,
   CollaboratorPresence,
   CrossLink,
   ExamRecallMode,
+  InkToolType,
   MindNode,
   NodePriorityTag,
   NodeVisualStyle,
@@ -39,6 +41,10 @@ import {
 } from '../core/canvas/CrossLinkRenderer';
 import { HitTestSpatialIndex } from '../core/canvas/HitTestSpatialIndex';
 import { InfiniteViewport } from '../core/canvas/InfiniteViewport';
+import {
+  buildInkSvgPath,
+  hitTestInkStroke,
+} from '../core/canvas/InkStrokeEngine';
 import {
   generateTaperedBranchSvgPath,
   OrganicBranchRenderer,
@@ -57,6 +63,14 @@ import { getViewportKeyboardSnapshot, useKeyboardInset } from '../core/native/us
 interface CanvasStageProps {
   nodes: Record<string, MindNode>;
   crossLinks?: CrossLink[];
+  inkStrokes?: CanvasInkStroke[];
+  drawingMode?: boolean;
+  inkTool?: InkToolType;
+  inkColor?: string;
+  inkWidth?: number;
+  stylusOnly?: boolean;
+  onAddInkStroke?: (stroke: CanvasInkStroke) => void;
+  onDeleteInkStroke?: (strokeId: string) => void;
   rootNodeId: string;
   department?: AcademicDepartment;
   darkMode: boolean;
@@ -278,6 +292,14 @@ function buildCrossLinkArrowTransform(tipX: number, tipY: number, angleRad: numb
 export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   nodes,
   crossLinks,
+  inkStrokes,
+  drawingMode = false,
+  inkTool = 'pen',
+  inkColor = '#0F172A',
+  inkWidth = 4.5,
+  stylusOnly = false,
+  onAddInkStroke,
+  onDeleteInkStroke,
   rootNodeId,
   department = 'genel',
   darkMode,
@@ -319,8 +341,22 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   onActiveNodeScreenPosition,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const dotGridRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const domWorldRef = useRef<HTMLDivElement>(null);
+  const liveInkPathRef = useRef<SVGPathElement>(null);
+  const activeInkRef = useRef<{
+    pointerId: number;
+    tool: Exclude<InkToolType, 'eraser'>;
+    color: string;
+    width: number;
+    opacity: number;
+    points: Array<[number, number, number]>;
+  } | null>(null);
+  const activeEraserPointerRef = useRef<number | null>(null);
+  const inkRafPendingRef = useRef<boolean>(false);
+  const resizeRafRef = useRef<number | null>(null);
+  const pendingResizeIdsRef = useRef<Set<string>>(new Set());
   const stageRectRef = useRef<{ left: number; top: number; width: number; height: number }>({
     left: 0,
     top: 0,
@@ -506,11 +542,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     linkingFromNodeId,
   };
 
-  // Shared ResizeObserver measuring real rendered widths/heights of node cards and updating SVG branch anchors in O(k)
+  // Shared ResizeObserver measuring real rendered widths/heights of node cards and updating SVG branch anchors in rAF (zero synchronous layout thrash!)
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver((entries) => {
-      const changedIds = new Set<string>();
       for (const entry of entries) {
         const el = entry.target as HTMLElement;
         const id = el.dataset.nodeCardId;
@@ -520,28 +555,33 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
         const prev = nodeDimensionsRef.current.get(id);
         if (!prev || Math.abs(prev.w - w) > 2 || Math.abs(prev.h - h) > 2) {
           nodeDimensionsRef.current.set(id, { w, h });
-          changedIds.add(id);
+          pendingResizeIdsRef.current.add(id);
         }
       }
-      if (changedIds.size > 0) {
-        const curNodes = renderDataRef.current.nodes;
-        const curDepthMap = renderDataRef.current.treeMeta.depthMap;
-        for (const n of Object.values(curNodes)) {
-          if (!n.parentId || n.id === renderDataRef.current.rootNodeId) continue;
-          if (!changedIds.has(n.id) && !changedIds.has(n.parentId)) continue;
-          const p = curNodes[n.parentId];
-          if (!p) continue;
-          const trN = transientPositionsRef.current.get(n.id);
-          const trP = transientPositionsRef.current.get(p.id);
-          const dStr = computeBranchSvgPathForNode(
-            trN ? { id: n.id, x: trN.x, y: trN.y } : n,
-            trP ? { id: p.id, x: trP.x, y: trP.y } : p,
-            curDepthMap.get(n.id) ?? 1,
-            nodeDimensionsRef.current
-          );
-          branchPathRefs.current.get(n.id)?.setAttribute('d', dStr);
-          branchHaloRefs.current.get(n.id)?.setAttribute('d', dStr);
-        }
+      if (pendingResizeIdsRef.current.size > 0 && resizeRafRef.current === null) {
+        resizeRafRef.current = requestAnimationFrame(() => {
+          resizeRafRef.current = null;
+          const changedIds = pendingResizeIdsRef.current;
+          pendingResizeIdsRef.current = new Set();
+          const curNodes = renderDataRef.current.nodes;
+          const curDepthMap = renderDataRef.current.treeMeta.depthMap;
+          for (const n of Object.values(curNodes)) {
+            if (!n.parentId || n.id === renderDataRef.current.rootNodeId) continue;
+            if (!changedIds.has(n.id) && !changedIds.has(n.parentId)) continue;
+            const p = curNodes[n.parentId];
+            if (!p) continue;
+            const trN = transientPositionsRef.current.get(n.id);
+            const trP = transientPositionsRef.current.get(p.id);
+            const dStr = computeBranchSvgPathForNode(
+              trN ? { id: n.id, x: trN.x, y: trN.y } : n,
+              trP ? { id: p.id, x: trP.x, y: trP.y } : p,
+              curDepthMap.get(n.id) ?? 1,
+              nodeDimensionsRef.current
+            );
+            branchPathRefs.current.get(n.id)?.setAttribute('d', dStr);
+            branchHaloRefs.current.get(n.id)?.setAttribute('d', dStr);
+          }
+        });
       }
     });
     cardResizeObserverRef.current = ro;
@@ -549,6 +589,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     return () => {
       ro.disconnect();
       cardResizeObserverRef.current = null;
+      if (resizeRafRef.current !== null) {
+        cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = null;
+      }
     };
   }, []);
 
@@ -589,11 +633,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     h: number;
     hiddenCount: number;
   } | null>(null);
-  const lastSnapSentAtRef = useRef<number>(0);
   const lastZoomSentRef = useRef<number>(100);
-  const lastZoomSentAtRef = useRef<number>(0);
-  const lastScreenPosSentRef = useRef<{ x: number; y: number } | null>(null);
-  const lastScreenPosSentAtRef = useRef<number>(0);
   const lastPointerBroadcastAtRef = useRef<number>(0);
 
   const syncDomWorldLayer = useCallback((forceFlush = false) => {
@@ -602,75 +642,48 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       domWorldRef.current.style.transform = `translate3d(${vp.x}px, ${vp.y}px, 0) scale(${vp.scale})`;
     }
 
-    // 120Hz GPU Procedural Paper Dot-Grid (0 Canvas2D texture uploads!)
-    if (containerRef.current) {
-      const gridStep = Math.max(12, Math.min(76, 26 * vp.scale));
-      const dotR = Math.max(0.85, Math.min(2.1, 1.25 * vp.scale));
-      const ox = ((vp.x % gridStep) + gridStep) % gridStep;
-      const oy = ((vp.y % gridStep) + gridStep) % gridStep;
-      containerRef.current.style.backgroundSize = `${gridStep.toFixed(2)}px ${gridStep.toFixed(2)}px`;
-      containerRef.current.style.backgroundPosition = `${ox.toFixed(2)}px ${oy.toFixed(2)}px`;
-      containerRef.current.style.setProperty('--dot-radius', `${dotR.toFixed(2)}px`);
+    // 120Hz Pure GPU Compositor Dot-Grid: translate3d ONLY (ZERO radial-gradient re-rasterization or CSS-var cascade!)
+    if (dotGridRef.current) {
+      const tileStep = 28;
+      const ox = ((vp.x % tileStep) + tileStep) % tileStep - tileStep;
+      const oy = ((vp.y % tileStep) + tileStep) % tileStep - tileStep;
+      dotGridRef.current.style.transform = `translate3d(${ox.toFixed(1)}px, ${oy.toFixed(1)}px, 0)`;
     }
 
-    const nowTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    const nextZoomPct = Math.round(vp.scale * 100);
-    if (
-      nextZoomPct !== lastZoomSentRef.current &&
-      (forceFlush || nowTs - lastZoomSentAtRef.current >= 140)
-    ) {
-      lastZoomSentRef.current = nextZoomPct;
-      lastZoomSentAtRef.current = nowTs;
-      callbacksRef.current.onZoomChange(nextZoomPct);
-    }
-
-    const w = renderDataRef.current.stageSize.w;
-    const h = renderDataRef.current.stageSize.h;
-    if (w >= 640) {
-      const hiddenIds = renderDataRef.current.treeMeta.hiddenNodeIds;
-      const prevSnap = lastSnapSentRef.current;
-      const snapChanged =
-        !prevSnap ||
-        Math.abs(prevSnap.x - vp.x) > 4 ||
-        Math.abs(prevSnap.y - vp.y) > 4 ||
-        Math.abs(prevSnap.scale - vp.scale) > 0.01 ||
-        prevSnap.w !== w ||
-        prevSnap.h !== h ||
-        prevSnap.hiddenCount !== hiddenIds.size;
-
-      if (snapChanged && (forceFlush || nowTs - lastSnapSentAtRef.current >= 180)) {
-        lastSnapSentRef.current = {
-          x: vp.x,
-          y: vp.y,
-          scale: vp.scale,
-          w,
-          h,
-          hiddenCount: hiddenIds.size,
-        };
-        lastSnapSentAtRef.current = nowTs;
-        callbacksRef.current.onViewportSnapshot(vp, w, h, hiddenIds);
+    // ZERO React Root Re-Renders during active pan/zoom/inertia! Flush zoom% & MiniMap ONLY after motion settles (`forceFlush`).
+    if (forceFlush) {
+      const nextZoomPct = Math.round(vp.scale * 100);
+      if (nextZoomPct !== lastZoomSentRef.current) {
+        lastZoomSentRef.current = nextZoomPct;
+        callbacksRef.current.onZoomChange(nextZoomPct);
       }
-    }
 
-    const editId = renderDataRef.current.editingNodeId;
-    if (editId && renderDataRef.current.nodes[editId]) {
-      const n = renderDataRef.current.nodes[editId];
-      const tr = transientPositionsRef.current.get(editId);
-      const sp = viewportRef.current.worldToScreen(tr ? tr.x : n.x, tr ? tr.y : n.y);
-      const prevPos = lastScreenPosSentRef.current;
-      if (
-        (!prevPos ||
-          Math.abs(prevPos.x - sp.x) > 8 ||
-          Math.abs(prevPos.y - sp.y) > 8) &&
-        (forceFlush || nowTs - lastScreenPosSentAtRef.current >= 140)
-      ) {
-        lastScreenPosSentRef.current = sp;
-        lastScreenPosSentAtRef.current = nowTs;
-        callbacksRef.current.onActiveNodeScreenPosition(sp);
+      const w = renderDataRef.current.stageSize.w;
+      const h = renderDataRef.current.stageSize.h;
+      if (w >= 640) {
+        const hiddenIds = renderDataRef.current.treeMeta.hiddenNodeIds;
+        const prevSnap = lastSnapSentRef.current;
+        const snapChanged =
+          !prevSnap ||
+          Math.abs(prevSnap.x - vp.x) > 4 ||
+          Math.abs(prevSnap.y - vp.y) > 4 ||
+          Math.abs(prevSnap.scale - vp.scale) > 0.01 ||
+          prevSnap.w !== w ||
+          prevSnap.h !== h ||
+          prevSnap.hiddenCount !== hiddenIds.size;
+
+        if (snapChanged) {
+          lastSnapSentRef.current = {
+            x: vp.x,
+            y: vp.y,
+            scale: vp.scale,
+            w,
+            h,
+            hiddenCount: hiddenIds.size,
+          };
+          callbacksRef.current.onViewportSnapshot(vp, w, h, hiddenIds);
+        }
       }
-    } else if (lastScreenPosSentRef.current !== null) {
-      lastScreenPosSentRef.current = null;
-      callbacksRef.current.onActiveNodeScreenPosition(null);
     }
 
     const prev = lastCullTransformRef.current;
@@ -1170,6 +1183,51 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
 
     if (activeTouchesRef.current.size === 1) {
+      // Freehand Tablet / Apple Pencil / Finger Canvas Drawing Intercept (`drawingMode === true`)
+      const shouldDrawWithPointer =
+        drawingMode &&
+        !spacePressed &&
+        (!stylusOnly || e.pointerType === 'pen' || e.pointerType === 'mouse');
+
+      if (shouldDrawWithPointer) {
+        const wPt = viewportRef.current.screenToWorld(sx, sy);
+        if (inkTool === 'eraser') {
+          activeEraserPointerRef.current = e.pointerId;
+          const rWorld = 18 / Math.max(0.25, viewportRef.current.getTransform().scale);
+          if (inkStrokes && onDeleteInkStroke) {
+            for (const st of inkStrokes) {
+              if (hitTestInkStroke(st, wPt.x, wPt.y, rWorld)) {
+                onDeleteInkStroke(st.id);
+                break;
+              }
+            }
+          }
+          return;
+        }
+        const effWidth =
+          inkTool === 'highlighter' ? Math.max(14, inkWidth * 3.8) : inkWidth;
+        const effOpacity = inkTool === 'highlighter' ? 0.34 : 0.96;
+        const pressure = e.pressure > 0 ? e.pressure : 0.5;
+        activeInkRef.current = {
+          pointerId: e.pointerId,
+          tool: inkTool,
+          color: inkColor,
+          width: effWidth,
+          opacity: effOpacity,
+          points: [[wPt.x, wPt.y, pressure]],
+        };
+        if (liveInkPathRef.current) {
+          liveInkPathRef.current.setAttribute('stroke', inkColor);
+          liveInkPathRef.current.setAttribute('stroke-width', String(effWidth));
+          liveInkPathRef.current.setAttribute('stroke-opacity', String(effOpacity));
+          liveInkPathRef.current.setAttribute(
+            'd',
+            buildInkSvgPath(inkTool, activeInkRef.current.points, effWidth)
+          );
+        }
+        return;
+      }
+
       panStateRef.current = {
         pointerId: e.pointerId,
         lastX: sx,
@@ -1216,6 +1274,66 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
         y: sy,
         pointerType: e.pointerType,
       });
+    }
+
+    // 0. 120Hz Zero-React-Render Freehand Canvas Drawing & Swipe-to-Erase!
+    if (activeEraserPointerRef.current === e.pointerId) {
+      const rWorld = 18 / Math.max(0.25, viewportRef.current.getTransform().scale);
+      if (inkStrokes && onDeleteInkStroke) {
+        for (const st of inkStrokes) {
+          if (hitTestInkStroke(st, worldPt.x, worldPt.y, rWorld)) {
+            onDeleteInkStroke(st.id);
+          }
+        }
+      }
+      return;
+    }
+
+    if (activeInkRef.current && activeInkRef.current.pointerId === e.pointerId) {
+      const stroke = activeInkRef.current;
+      const samples = coalesced.length > 0 ? coalesced : [e.nativeEvent];
+      for (const sample of samples) {
+        const pt = viewportRef.current.screenToWorld(
+          sample.clientX - rect.left,
+          sample.clientY - rect.top
+        );
+        const prev = stroke.points[stroke.points.length - 1];
+        const minDist = stroke.tool === 'pen' || stroke.tool === 'highlighter' ? 1.8 : 0.5;
+        if (!prev || Math.hypot(pt.x - prev[0], pt.y - prev[1]) >= minDist) {
+          const pVal = sample.pressure > 0 ? sample.pressure : 0.5;
+          if (
+            stroke.tool === 'line' ||
+            stroke.tool === 'arrow' ||
+            stroke.tool === 'rect' ||
+            stroke.tool === 'ellipse'
+          ) {
+            if (stroke.points.length >= 2) {
+              stroke.points[1] = [pt.x, pt.y, pVal];
+            } else {
+              stroke.points.push([pt.x, pt.y, pVal]);
+            }
+          } else {
+            stroke.points.push([pt.x, pt.y, pVal]);
+          }
+        }
+      }
+      if (!inkRafPendingRef.current) {
+        inkRafPendingRef.current = true;
+        requestAnimationFrame(() => {
+          inkRafPendingRef.current = false;
+          if (activeInkRef.current && liveInkPathRef.current) {
+            liveInkPathRef.current.setAttribute(
+              'd',
+              buildInkSvgPath(
+                activeInkRef.current.tool,
+                activeInkRef.current.points,
+                activeInkRef.current.width
+              )
+            );
+          }
+        });
+      }
+      return;
     }
 
     // 1. Branch `+` Handle Spring Drag
@@ -1438,6 +1556,30 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
     if (activeTouchesRef.current.size === 0) {
       setInteractingAttr(false);
+    }
+
+    if (activeEraserPointerRef.current === e.pointerId) {
+      activeEraserPointerRef.current = null;
+      return;
+    }
+
+    if (activeInkRef.current && activeInkRef.current.pointerId === e.pointerId) {
+      const finished = activeInkRef.current;
+      activeInkRef.current = null;
+      if (liveInkPathRef.current) {
+        liveInkPathRef.current.setAttribute('d', '');
+      }
+      if (finished.points.length > 0 && onAddInkStroke) {
+        onAddInkStroke({
+          id: `ink_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          tool: finished.tool,
+          color: finished.color,
+          width: finished.width,
+          opacity: finished.opacity,
+          points: finished.points,
+        });
+      }
+      return;
     }
 
     if (branchDragRef.current && branchDragRef.current.pointerId === e.pointerId) {
@@ -1721,18 +1863,33 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       onPointerCancel={handleStagePointerUp}
       style={{
         backgroundColor: darkMode ? '#0F141D' : '#FAF9F5',
-        backgroundImage: darkMode
-          ? 'radial-gradient(circle, rgba(148, 163, 184, 0.16) var(--dot-radius, 1.25px), transparent calc(var(--dot-radius, 1.25px) + 0.45px))'
-          : 'radial-gradient(circle, rgba(148, 163, 184, 0.34) var(--dot-radius, 1.25px), transparent calc(var(--dot-radius, 1.25px) + 0.45px))',
       }}
       className={`canvas-stage canvas-touch-lock relative h-full w-full overflow-hidden ${
         spacePressed
           ? 'cursor-grab active:cursor-grabbing'
+          : drawingMode
+          ? inkTool === 'eraser'
+            ? 'cursor-cell'
+            : 'cursor-crosshair'
           : linkingFromNodeId
           ? 'cursor-crosshair'
           : ''
       }`}
     >
+      {/* Layer 0: Isolated 120Hz Pure-GPU Dot Grid (translate3d only — ZERO full-screen texture re-rasterization!) */}
+      <div
+        ref={dotGridRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 left-0 will-change-transform"
+        style={{
+          width: 'calc(100% + 64px)',
+          height: 'calc(100% + 64px)',
+          backgroundSize: '28px 28px',
+          backgroundImage: darkMode
+            ? 'radial-gradient(circle, rgba(148, 163, 184, 0.16) 1.25px, transparent 1.7px)'
+            : 'radial-gradient(circle, rgba(148, 163, 184, 0.34) 1.25px, transparent 1.7px)',
+        }}
+      />
       {/* Floating Banner When User Is Drawing a CrossLink (`🔗 İlişki Çek`) */}
       {linkingFromNodeId && nodes[linkingFromNodeId] && (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-30 flex justify-center px-3">
@@ -1904,6 +2061,27 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                 </g>
               );
             })}
+
+          {/* 120Hz World-Space Freehand Ink & Highlighter Layer (Pans & Zooms in Perfect Lockstep!) */}
+          {(inkStrokes ?? []).map((stroke) => (
+            <path
+              key={stroke.id}
+              d={buildInkSvgPath(stroke.tool, stroke.points, stroke.width)}
+              fill="none"
+              stroke={stroke.color}
+              strokeWidth={stroke.width}
+              strokeOpacity={stroke.opacity}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+          <path
+            ref={liveInkPathRef}
+            d=""
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
 
         {/* Interactive Mid-Curve CrossLink Relationship Pills */}
@@ -2468,11 +2646,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                 </div>
               )}
 
-              {/* FLOATING CONTEXTUAL NODE QUICK-ACTION PILL (1-Tap Name, Icon, 🔥 Priority, Link & Task) */}
+              {/* FLOATING CONTEXTUAL NODE QUICK-ACTION PILL (Hidden on phones to prevent Photo-4 edge overflow & duplicate controls!) */}
               {isSelected &&
                 !isEditing &&
+                !drawingMode &&
                 !linkingFromNodeId &&
                 examMode === 'off' &&
+                !kbSnap.isPhone &&
                 !kbSnap.isKeyboardOpen && (
                   <div
                     data-testid="node-floating-actions"

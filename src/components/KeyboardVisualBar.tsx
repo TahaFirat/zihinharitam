@@ -95,7 +95,6 @@ const STYLE_TABS: Array<{ id: VisualStyleMode | 'all'; emoji: string; label: str
   { id: 'illustration', emoji: '✨', label: 'Çizim' },
   { id: '3d', emoji: '🧊', label: '3D' },
   { id: 'diagram', emoji: '📐', label: 'Şema' },
-  { id: 'photo', emoji: '📷', label: 'Foto' },
 ];
 
 const SIZE_PRESETS: Array<{ id: StickerSizePreset; label: string; hint: string }> = [
@@ -429,30 +428,30 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       width: '100vw',
       maxWidth: '100vw',
       maxHeight: `${
-        isSlimKeyboardMode
-          ? Math.min(138, Math.max(96, kb.viewportH - 56))
-          : Math.min(410, Math.max(220, kb.viewportH - 64))
+        kb.isKeyboardOpen
+          ? Math.min(182, Math.max(104, kb.viewportH - 72))
+          : Math.min(350, Math.max(210, kb.viewportH - 84))
       }px`,
-      transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+      transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
   } else {
-    // 100% Native iPad / Android Tablet / Landscape Centered Bottom Studio Dock (Zero mid-screen floating or right-edge clipping!)
+    // 100% Native iPad / Android Tablet / Landscape Centered Bottom Studio Dock (NEVER overflows upward when keyboard opens!)
     const cardWidth = Math.min(860, Math.max(320, kb.viewportW - 28));
     const leftPx = Math.max(14, Math.round((kb.viewportW - cardWidth) * 0.5));
     containerStyle = {
       position: 'fixed',
       left: `${leftPx}px`,
       bottom: kb.isKeyboardOpen
-        ? `${kb.keyboardHeight + 10}px`
-        : 'max(28px, calc(var(--safe-bottom) + 24px))',
+        ? `${kb.keyboardHeight + 8}px`
+        : 'max(24px, calc(var(--safe-bottom) + 20px))',
       width: `${cardWidth}px`,
       maxWidth: 'calc(100vw - 28px)',
       maxHeight: `${
-        isSlimKeyboardMode
-          ? Math.min(140, Math.max(98, kb.viewportH - 68))
-          : Math.min(420, Math.max(230, kb.viewportH - 88))
+        kb.isKeyboardOpen
+          ? Math.min(188, Math.max(106, kb.viewportH - 72))
+          : Math.min(360, Math.max(215, kb.viewportH - 96))
       }px`,
-      transition: 'bottom 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+      transition: 'bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
   }
 
@@ -746,25 +745,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           </div>
         )}
 
-        {/* Friendly Continuous Icon Guidance Banner when branch has no custom icon yet */}
-        {!isSlimKeyboardMode &&
-          !showNoteEditor &&
-          !isTightAboveKeyboard &&
-          !activeNode.sticker && (
-            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-sky-500/25 bg-sky-500/8 px-2.5 py-1 text-[11px] font-bold text-sky-800 dark:text-sky-200">
-              <span className="truncate">
-                🎨 Dalınızı görselleştirin: Aşağıdan <strong>Ücretsiz İkon</strong> seçin veya <strong>Galeriden Foto</strong> ekleyin!
-              </span>
-              <button
-                type="button"
-                onClick={() => onOpenGalleryDrawer(searchQuery)}
-                className="shrink-0 rounded-lg bg-sky-500 px-2 py-0.5 text-[10px] font-extrabold text-white"
-              >
-                Tüm İkonlar
-              </button>
-            </div>
-          )}
-
         {/* Proactive Sub-Branch Quick Chips on newly created empty nodes */}
         {!isSlimKeyboardMode &&
           !showNoteEditor &&
@@ -892,7 +872,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                 }`}
               >
                 <Gift className="h-3 w-3" />
-                <span>Ücretsiz ({Math.max(12, freeTotalCount)})</span>
+                <span>Ücretsiz ({freeTotalCount})</span>
               </button>
               <button
                 type="button"

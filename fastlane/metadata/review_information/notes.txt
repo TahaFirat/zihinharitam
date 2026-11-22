@@ -1,35 +1,31 @@
 Dear Apple App Review Team,
 
-Thank you for reviewing ZihinHaritam (MindSticker)! We attached Version 1.0.2 (Build 18) with sub-3ms instant offline icon search, dedicated inline icon search bar, 120Hz smooth canvas rendering, verified Support/Privacy/EULA links (https://tahafirat.github.io/zihinharitam/), and complete Guideline 2.1 & 3.1.2 details below:
+Thank you for reviewing ZihinHaritam (MindSticker) Version 1.0.3 (Build 19)!
 
-1. Physical Device Testing & Scope (Version 1.0.2 — Build 18):
-- Tested across iPhone & iPad viewports verifying smooth 60/120Hz touch panning/pinching, centered responsive bottom Studio Dock, dedicated inline icon search bar ("İkon ara..."), S/M/L/XL sticker sizing, glowing priority tags ("Önemli / Sınavda Çıkar"), 1-tap Undo toast, and native StoreKit 2 flows.
-- Confirmations:
-  * Account login/deletion: NONE (no sign-in required; all mind maps stored locally on-device in IndexedDB).
-  * User-generated content: NONE (no public feed, social sharing, or chat).
-  * Paid content (Guideline 3.1.2 compliant): 3 localized StoreKit 2 options — Monthly Pro (com.tahafirat.zihinharitam.pro_monthly: TRY 499.99/mo, USD $9.99/mo), Yearly Pro (com.tahafirat.zihinharitam.pro_yearly: TRY 2,999.99/yr, USD $59.99/yr), and Non-Consumable Lifetime Pro (com.tahafirat.zihinharitam.lifetime_pro: TRY 4,999.99, USD $99.99) + prominent "Satın Alımları Geri Yükle" (Restore Purchases via AppStore.sync()), EULA & Privacy Policy links.
+IMPORTANT SUBSCRIPTION REVIEW NOTE:
+Please review and approve our two auto-renewable subscriptions in Subscription Group "ZihinHaritam Pro" together with Version 1.0.3:
+- Monthly Pro: com.tahafirat.zihinharitam.pro_monthly (TRY 499.99/mo, USD $9.99/mo)
+- Yearly Pro: com.tahafirat.zihinharitam.pro_yearly (TRY 2,999.99/yr, USD $59.99/yr)
+(Our Non-Consumable Lifetime Pro product com.tahafirat.zihinharitam.lifetime_pro was already approved in 1.0.2.)
 
-2. Purpose, Audience, Value & Portfolio Distinction:
-- Audience & Value: Visual dual-coding mind mapping & Active Recall study studio for students, exam candidates, and educators. Combines tapered Bezier mind maps, 43,487 instant (<3ms) offline vector icons + 540,000+ online icons, textbook diagram cropping into die-cut stickers, Apple Pencil sketching, Exam Recall mode, and 300 DPI PDF/SVG export.
-- Portfolio Distinction (4.3): Sole visual mind-mapping & diagramming app on our account—shares zero UI, database, or scope with any game or quiz app.
+1. What's New & Verified in Version 1.0.3 (Build 19):
+- 120Hz Silky Canvas Engine: Isolated GPU dot-grid translation and deferred non-critical React updates so panning/pinching on iPhone & iPad runs smoothly with zero stutter.
+- Direct Canvas Freehand Drawing Mode ("Çiz" button in top HUD): Full Pen, Highlighter, Arrow, Box, Circle, Eraser, color/width pickers, and Stylus-Only Palm Rejection ("Sadece Kalem") exported cleanly into PNG/SVG/PDF.
+- Intent-Aware Icon Search: Upgraded with Unicode CLDR Turkish concept lexicon (3,482 concepts), removed unrelated external photo scrapers, and cleanly separated monochrome Free icons (13,604) from vibrant 3D/Color Pro icons (29,883).
+- Native Offer Code Redemption (Guideline 3.1.1 Compliant): On iOS, tapping "Hediye Kodu" opens Apple's native StoreKit 2 `AppStore.presentOfferCodeRedeemSheet(in:)` sheet exclusively (zero custom promo text fields or external unlock mechanisms on iOS).
+- Safe-Area & Keyboard Polish: Fixed top/bottom safe-area spacing on notched iPhones and prevented tablet keyboard dock overflow.
 
-3. Quick Feature Testing Guide (Zero Login / Zero Files Needed):
-- Cold launch opens Home Workspace with 6 preloaded academic templates (including Cardiology, System Design, Constitutional Law, Ottoman Land System).
-- Quick UI Guide (TR -> EN):
-  * Templates / "+ Boş Görsel Harita" (+ Blank Map): 3 free active maps (up to 60 nodes/map, 3,600+ free icons).
-  * Tap any node / "+ Yeni Dal": Type any concept in the node title or the dedicated "İkon ara..." search box ("kedi", "araba", "kalp", "mahkeme", "roket") for instant <3ms icons; tap "3D & Özel İkon" for custom stickers or Camera ("Nottan Kes") with built-in sample diagram.
-  * "Önemli" flame button: Cycles high-visibility "ÖNEMLİ" / "SINAVDA ÇIKAR" / "TEKRAR ET" study badges.
-  * Graduation Cap (Top HUD): Active Recall Exam Mode; tap hidden nodes to reveal.
-  * Share (Top-Right): Export PNG, SVG, 300 DPI A4/A3 PDF. Gear: Settings, .zihin backup, Legal docs, Restore Purchases.
-  * Test StoreKit 2 IAP: Tap "Pro" pill in top HUD, any "PRO" sticker, or 4th map to test Sandbox purchase & Restore.
+2. Confirmations & Compliance:
+- Account login / deletion: NONE (no login required; all data stored locally on-device in IndexedDB).
+- User-generated content: NONE (no public feed, social sharing, or chat).
+- Paid content (Guideline 3.1.1 & 3.1.2): Native StoreKit 2 (StoreKitPlugin.swift) exclusively — Monthly Pro, Yearly Pro, Lifetime Pro, prominent "Satın Alımları Geri Yükle" (`AppStore.sync()`), native Offer Code sheet, EULA & Privacy Policy links (`https://tahafirat.github.io/zihinharitam/`).
+- Privacy: ZERO tracking SDKs, ZERO ads (`NSPrivacyTracking = false`).
 
-4. External Services & Privacy:
-- Native StoreKit 2 (StoreKitPlugin.swift) only; ZERO third-party payment SDKs, ZERO ads, ZERO tracking SDKs (NSPrivacyTracking = false).
-- Local Engine: IndexedDB (Dexie.js), Web Worker Inverted Index (43,487 offline icons), jsPDF. Optional user-triggered open-license icon/image lookup sends only non-personal concept keywords.
-
-5. Regional & Third-Party Compliance:
-- Available across all 175 App Store regions with localized StoreKit 2 pricing.
-- Sample Cardiology/Law/History templates are educational outlines only (not medical/legal advice). All bundled icons use permissive open licenses (MIT, Apache-2.0, CC0, CC-BY): https://tahafirat.github.io/zihinharitam/terms.html
+3. Quick Feature Testing Guide (Zero Login Needed):
+- Home Workspace: 2 free active maps (13,600+ monochrome free icons); tapping a 3rd map or any PRO 3D icon opens the StoreKit 2 Paywall.
+- Canvas Freehand Drawing: Open any map and tap the Pen ("Çiz") button in the top bar to draw directly around branches, toggle Palm Rejection, or erase strokes.
+- Icon Search: Tap any node and search e.g. "Komutan", "Petek", "Kalp", "Roket" for instant <3ms relevant monochrome Free + 3D Pro icons.
+- Exam Mode (Graduation Cap) & 300 DPI Export (Share button) work completely offline.
 
 Best regards,
 Taha Firat

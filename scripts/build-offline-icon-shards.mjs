@@ -58,6 +58,7 @@ function computeInputsHash() {
     'scripts/build-offline-icon-shards.mjs',
     'src/core/visuals/taxonomyData.js',
     'src/core/visuals/taxonomyBankExtra.js',
+    'src/core/visuals/cldrTrLexicon.js',
   ]) {
     const full = path.join(ROOT_DIR, rel);
     if (fs.existsSync(full)) {
@@ -311,38 +312,19 @@ function buildShards() {
         Math.floor(manifestItems.length / ICONS_PER_SHARD)
       );
 
-      // V4 Freemium Tier Assignment:
-      // ~1,520 general starter colorful icons (`tier: 'free'`), 23,600+ specialist/academic/medical/system-design/duotone (`tier: 'pro'`)
-      const isSpecialistPack =
-        cfg.prefix === 'healthicons' ||
-        cfg.prefix === 'medical-icon' ||
-        cfg.prefix === 'carbon' ||
-        cfg.prefix === 'devicon' ||
-        cfg.prefix === 'skill-icons' ||
-        cfg.prefix === 'logos' ||
-        cfg.prefix === 'vscode-icons' ||
-        cfg.prefix === 'simple-icons' ||
-        cfg.prefix === 'ph' ||
-        cfg.prefix === 'game-icons' ||
-        cfg.prefix === 'tabler';
-
-      const isStarterCandidate =
-        !isSpecialistPack &&
-        (isMultiColor || cfg.prefix === 'lucide' || cfg.prefix === 'mdi') &&
-        (cfg.prefix === 'flat-color-icons' ||
-          cfg.prefix === 'streamline-emojis' ||
-          cfg.prefix === 'meteocons' ||
-          cfg.prefix === 'circle-flags' ||
-          (cfg.prefix === 'fluent-emoji-flat' && keptInPack % 2 === 0) ||
-          (cfg.prefix === 'fluent-color' && keptInPack % 2 === 0) ||
-          (cfg.prefix === 'streamline-color' && keptInPack % 3 === 0) ||
-          (cfg.prefix === 'twemoji' && keptInPack % 3 === 0) ||
-          (cfg.prefix === 'lucide' && keptInPack % 3 === 0) ||
-          (cfg.prefix === 'mdi' && keptInPack % 6 === 0) ||
-          (cfg.prefix === 'openmoji' && domain === 'general' && keptInPack % 8 === 0));
+      // V8 Freemium Quality Tier Assignment:
+      // - FREE (`tier: 'free'`): Plain, minimalist 1-color monochrome outline icons (`lucide`, `tabler`, `mdi`, `fa6-solid`)
+      //   so Free users always get simple, relevant icons without vibrant 3D/color art!
+      // - PRO (`tier: 'pro'`): ALL vibrant 3D, glossy, multi-color, hand-drawn, emoji, brand & bespoke academic atlas packs!
+      const isSimpleMonochromeFreePack =
+        !isMultiColor &&
+        (cfg.prefix === 'lucide' ||
+          cfg.prefix === 'tabler' ||
+          cfg.prefix === 'mdi' ||
+          cfg.prefix === 'fa6-solid');
 
       let tier = 'pro';
-      if (isStarterCandidate && freeTierCounter < TARGET_FREE_STARTER_CAP) {
+      if (isSimpleMonochromeFreePack) {
         tier = 'free';
         freeTierCounter++;
       }

@@ -8,6 +8,7 @@ import {
   type RestoreResult,
   type StoreProductInfo,
 } from './BillingService';
+import { verifyAndConsumeFriendPromoCode } from './PromoCodeManager';
 
 export interface UsageCounters {
   noteCropsUsed: number;
@@ -187,19 +188,15 @@ class EntitlementStore {
    */
   public isStickerFree(
     item: VisualSearchResult,
-    indexInSearch: number,
+    _indexInSearch: number,
     _surface: 'keyboard_bar' | 'gallery' | 'command_palette' = 'keyboard_bar'
   ): boolean {
     if (this.snapshot.isLifetimePro) return true;
     if (item.source === 'user_photo' || item.source === 'sketch') return true;
     if (item.tier === 'free') return true;
+    if (item.tier === 'pro') return false;
     if (isSpecialistProVisual(item)) return false;
-
-    if (indexInSearch >= APP_RELEASE_CONFIG.quotas.freeSearchCarouselSlots) {
-      return false;
-    }
-
-    return true;
+    return false;
   }
 
   public canUseNoteCrop(): boolean {
@@ -308,6 +305,58 @@ class EntitlementStore {
         isLifetimePro: this.snapshot.isLifetimePro,
         errorMessage:
           err instanceof Error ? err.message : 'Geri yükleme başarısız.',
+      };
+    }
+  }
+
+  public async presentIosOfferCodeSheet(): Promise<{
+    presented: boolean;
+    isLifetimePro: boolean;
+    errorMessage?: string;
+  }> {
+    this.update({ isBusy: true });
+    try {
+      const res = await BillingService.presentIosOfferCodeRedeemSheet();
+      this.update({
+        isLifetimePro: res.isLifetimePro || this.snapshot.isLifetimePro,
+        isBusy: false,
+      });
+      return res;
+    } catch (err) {
+      this.update({ isBusy: false });
+      return {
+        presented: false,
+        isLifetimePro: this.snapshot.isLifetimePro,
+        errorMessage:
+          err instanceof Error ? err.message : 'Teklif kodu penceresi açılamadı.',
+      };
+    }
+  }
+
+  public async redeemFriendPromoCode(rawCode: string): Promise<{
+    redeemed: boolean;
+    slotNumber?: number;
+    errorMessage?: string;
+  }> {
+    this.update({ isBusy: true });
+    try {
+      const check = await verifyAndConsumeFriendPromoCode(rawCode);
+      if (!check.valid || !check.hash || !check.slotNumber) {
+        this.update({ isBusy: false });
+        return {
+          redeemed: false,
+          errorMessage: check.errorMessage || 'Geçersiz hediye kodu.',
+        };
+      }
+      await BillingService.unlockViaFriendPromoCode(check.hash, check.slotNumber);
+      this.update({ isLifetimePro: true, isBusy: false });
+      return { redeemed: true, slotNumber: check.slotNumber };
+    } catch (err) {
+      this.update({ isBusy: false });
+      return {
+        redeemed: false,
+        errorMessage:
+          err instanceof Error ? err.message : 'Hediye kodu doğrulanamadı.',
       };
     }
   }

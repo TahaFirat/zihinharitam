@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Check,
   Crown,
+  Gift,
   Infinity as InfinityIcon,
   LockOpen,
   Palette,
@@ -11,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { APP_RELEASE_CONFIG, type ProPlanTier } from '../config/appReleaseConfig';
+import { BillingService } from '../core/monetization/BillingService';
 import {
   EntitlementManager,
   useEntitlements,
@@ -34,10 +36,10 @@ const TRIGGER_HEADERS: Record<
   { badge: string; title: string; subtitle: string }
 > = {
   map_limit: {
-    badge: '3 / 3 Ücretsiz Harita Tamamlandı',
-    title: '4. Haritanı Oluşturmak İçin ZihinHaritam Pro’ya Geç',
+    badge: '2 / 2 Ücretsiz Harita Tamamlandı',
+    title: '3. Haritanı Oluşturmak İçin ZihinHaritam Pro’ya Geç',
     subtitle:
-      'Mevcut 3 haritan her zaman açık kalır. Sınırsız harita, 540.000+ ikon ve sınav modu için sana en uygun planı seç.',
+      'Mevcut 2 haritan her zaman açık kalır. Sınırsız harita, 43.000+ renkli 3D ikon ve sınav modu için sana en uygun planı seç.',
   },
   node_limit: {
     badge: '60 Düğüm Sınırına Ulaşıldı',
@@ -107,10 +109,13 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
 }) => {
   const { plans, isBusy, isLifetimePro } = useEntitlements();
   const [selectedTier, setSelectedTier] = useState<ProPlanTier>('yearly');
+  const [showPromoBox, setShowPromoBox] = useState(false);
+  const [promoDraft, setPromoDraft] = useState('');
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'info' | 'error';
     text: string;
   } | null>(null);
+  const isNativeIos = BillingService.isNativeIos();
 
   if (!isOpen) return null;
 
@@ -194,6 +199,58 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const handleRedeemCodeClick = async () => {
+    setFeedback(null);
+    void hapticLight();
+    if (isNativeIos) {
+      // Apple Guideline 3.1.1 compliant: Use official native StoreKit 2 Offer Code sheet on iOS
+      const res = await EntitlementManager.presentIosOfferCodeSheet();
+      if (res.isLifetimePro) {
+        void hapticSuccess();
+        setFeedback({
+          type: 'success',
+          text: 'Hediye kodunuz onaylandı! ZihinHaritam Pro tüm cihazlarınızda açıldı.',
+        });
+        const stickerToApply = previewSticker;
+        setTimeout(() => {
+          setFeedback(null);
+          onUnlocked?.(stickerToApply);
+          onClose();
+        }, 420);
+      } else if (res.errorMessage) {
+        setFeedback({ type: 'info', text: res.errorMessage });
+      }
+      return;
+    }
+    setShowPromoBox((v) => !v);
+  };
+
+  const handleSubmitFriendPromo = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setFeedback(null);
+    const res = await EntitlementManager.redeemFriendPromoCode(promoDraft);
+    if (res.redeemed) {
+      void hapticSuccess();
+      setFeedback({
+        type: 'success',
+        text: `Hediye kodu (#${res.slotNumber}/30) onaylandı! ZihinHaritam Pro açıldı.`,
+      });
+      setPromoDraft('');
+      setShowPromoBox(false);
+      const stickerToApply = previewSticker;
+      setTimeout(() => {
+        setFeedback(null);
+        onUnlocked?.(stickerToApply);
+        onClose();
+      }, 450);
+    } else {
+      setFeedback({
+        type: 'error',
+        text: res.errorMessage || 'Hediye kodu geçersiz.',
+      });
+    }
+  };
+
   const ctaLabel =
     selectedTier === 'monthly'
       ? `Aylık Pro’yu Başlat — ${plans.monthly.displayPrice} / ay`
@@ -203,10 +260,10 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-2 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-2.5 sm:p-4"
       style={{
-        paddingTop: 'max(12px, var(--safe-top))',
-        paddingBottom: 'max(20px, calc(var(--safe-bottom) + 14px))',
+        paddingTop: 'max(54px, calc(var(--safe-top) + 14px))',
+        paddingBottom: 'max(28px, calc(var(--safe-bottom) + 18px))',
       }}
       onClick={onClose}
       role="dialog"
@@ -215,7 +272,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
       data-testid="lifetime-paywall-modal"
     >
       <div
-        className="relative w-full max-w-[475px] max-h-[93dvh] overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:p-5"
+        className="relative max-h-full w-full max-w-[475px] overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:p-5"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
@@ -314,7 +371,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <Palette className="h-3.5 w-3.5" />
             </div>
             <span className="font-bold">
-              43.000+ Çevrimdışı & 540.000+ Online İkon + 3D Stüdyo
+              30.000+ Renkli 3D, El Çizimi & Akademik Atlas İkonu + 3D Stüdyo
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -512,8 +569,35 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
             : `Tek seferlik ödeme (${activePlan.displayPrice}) • Otomatik yenilenen abonelik değildir, tüm cihazlarınızda ömür boyu geçerlidir.`}
         </div>
 
+        {/* Optional Friend Gift Code Input (Android / Web; iOS uses Apple native Offer Code Sheet!) */}
+        {!isNativeIos && showPromoBox && !isLifetimePro && (
+          <form
+            onSubmit={(e) => void handleSubmitFriendPromo(e)}
+            className="mt-2.5 flex items-center gap-1.5 rounded-2xl border border-emerald-500/35 bg-emerald-500/8 p-2"
+            data-testid="paywall-promo-form"
+          >
+            <input
+              type="text"
+              value={promoDraft}
+              onChange={(e) => setPromoDraft(e.target.value.toUpperCase())}
+              placeholder="Hediye kodu (örn. ZHPRO-01-XXXXXX)"
+              data-testid="paywall-promo-input"
+              className="allow-text-input min-w-0 flex-1 rounded-xl border bg-white/90 px-2.5 py-1.5 font-mono text-xs font-extrabold uppercase outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-900/90"
+              style={{ borderColor: 'var(--hud-border)' }}
+            />
+            <button
+              type="submit"
+              disabled={isBusy || promoDraft.trim().length < 6}
+              data-testid="paywall-promo-submit-btn"
+              className="min-h-[36px] shrink-0 rounded-xl bg-emerald-600 px-3 text-xs font-extrabold text-white shadow-xs active:scale-95 disabled:opacity-50"
+            >
+              Onayla
+            </button>
+          </form>
+        )}
+
         {/* Mandatory App Store Guideline 3.1.1 & 3.1.2 Footer Links */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-slate-500/15 pt-2 text-[11px] font-semibold">
+        <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-t border-slate-500/15 pt-2 pb-1 text-[11px] font-semibold">
           <button
             type="button"
             disabled={isBusy}
@@ -522,6 +606,17 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
             className="min-h-[32px] px-1 text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
           >
             Satın Alımları Geri Yükle
+          </button>
+          <span className="opacity-30">•</span>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => void handleRedeemCodeClick()}
+            data-testid="paywall-redeem-code-btn"
+            className="inline-flex min-h-[32px] items-center gap-1 px-1 text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+          >
+            <Gift className="h-3 w-3" />
+            <span>Hediye Kodu</span>
           </button>
           <span className="opacity-30">•</span>
           <button

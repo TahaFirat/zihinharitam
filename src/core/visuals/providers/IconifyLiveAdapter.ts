@@ -3,6 +3,7 @@ import type {
   VisualSearchResult,
   VisualStyleMode,
 } from '../../../types/mindmap';
+import { EN_CONCEPT_INTENT_MAP } from '../taxonomyData.js';
 
 const ICONIFY_API = 'https://api.iconify.design';
 
@@ -91,9 +92,8 @@ const NOISY_LIVE_WORDS = new Set([
 ]);
 
 /**
- * Fast, free, no-key Turkish -> English translation fallback (MyMemory API)
- * so ANY Turkish word not in the 3,900+ offline dictionary still finds exact
- * icons across Iconify's 546,996+ global vector icon database!
+ * Ultra-fast, zero-key Turkish -> English translation racing Google Translate public gtx endpoint
+ * against MyMemory (`<180ms` typical!) so ANY rare Turkish concept immediately resolves cleanly!
  */
 export async function translateTurkishToEnglishLive(
   rawQuery: string,
@@ -105,26 +105,73 @@ export async function translateTurkishToEnglishLive(
     return translationCache.get(clean) || null;
   }
 
-  try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-      clean
-    )}&langpair=tr|en`;
-    const res = await fetch(url, { signal });
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      responseData?: { translatedText?: string };
-    };
-    const translated = (json?.responseData?.translatedText || '')
+  const sanitizeTrResult = (text: string): string | null => {
+    const translated = (text || '')
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+    if (!translated || translated === clean || translated.length > 44) return null;
+    return translated;
+  };
 
-    if (!translated || translated === clean || translated.length > 48) {
+  const tryGoogleGtx = async (): Promise<string | null> => {
+    try {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q=${encodeURIComponent(
+        clean
+      )}`;
+      const res = await fetch(url, { signal });
+      if (!res.ok) return null;
+      const json = (await res.json()) as unknown[];
+      const segments = Array.isArray(json?.[0]) ? (json[0] as unknown[][]) : [];
+      const joined = segments.map((s) => String(s?.[0] || '')).join(' ');
+      return sanitizeTrResult(joined);
+    } catch {
       return null;
     }
-    translationCache.set(clean, translated);
-    return translated;
+  };
+
+  const tryMyMemory = async (): Promise<string | null> => {
+    try {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+        clean
+      )}&langpair=tr|en`;
+      const res = await fetch(url, { signal });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        responseData?: { translatedText?: string };
+      };
+      return sanitizeTrResult(json?.responseData?.translatedText || '');
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const firstValid = await new Promise<string | null>((resolve) => {
+      let pending = 2;
+      let resolved = false;
+      const settle = (val: string | null) => {
+        if (resolved) return;
+        if (val) {
+          resolved = true;
+          resolve(val);
+          return;
+        }
+        pending--;
+        if (pending <= 0) {
+          resolved = true;
+          resolve(null);
+        }
+      };
+      void tryGoogleGtx().then(settle);
+      void tryMyMemory().then(settle);
+    });
+
+    if (firstValid) {
+      translationCache.set(clean, firstValid);
+    }
+    return firstValid;
   } catch {
     return null;
   }
@@ -225,6 +272,21 @@ export async function searchIconifyLive(
     ]);
     if (liveTranslatedEn && !candidateQueries.includes(liveTranslatedEn)) {
       candidateQueries.unshift(liveTranslatedEn);
+    }
+  }
+
+  // Expand translated/English abstract nouns via `EN_CONCEPT_INTENT_MAP` (e.g. `commander` -> `military-medal`, `shield`, `sword`)
+  const intentMap = EN_CONCEPT_INTENT_MAP as Record<string, string[]>;
+  for (const q of [...candidateQueries]) {
+    const firstWord = q.split(/\s+/)[0];
+    const proxies = intentMap[q] || intentMap[firstWord];
+    if (proxies) {
+      for (const px of proxies.slice(0, 2)) {
+        const cleanPx = px.replace(/-/g, ' ');
+        if (!candidateQueries.includes(cleanPx)) {
+          candidateQueries.push(cleanPx);
+        }
+      }
     }
   }
 
@@ -355,13 +417,8 @@ export async function searchIconifyLive(
         : `Iconify Vektör (${prefix})`,
       isVectorSvg: true,
       iconifyId: fullId,
-      // Give generous free icons from live search too (every colorful/general non-3D icon or first hits free!)
-      tier:
-        prefix === 'withicons-soft3d' ||
-        prefix === 'fluent-color' ||
-        prefix === 'streamline-color'
-          ? 'pro'
-          : 'free',
+      // V8 Quality Tiering: Simple 1-color monochrome outline icons are FREE; ALL colorful/3D/illustrated sets are PRO!
+      tier: isColor ? 'pro' : 'free',
     });
   }
 

@@ -27,10 +27,8 @@ import {
   normalizeTrToken,
 } from './SemanticTaxonomyTR';
 import type { MapContextAnalysis } from './TopicContextIntelligence';
-import { searchArasaacPictograms } from './providers/ArasaacPictogramAdapter';
 import { searchBuiltInAtlasV3 } from './providers/BuiltInMultiColorAtlas';
 import { searchIconifyLive } from './providers/IconifyLiveAdapter';
-import { searchWikimediaAtlas } from './providers/WikimediaAtlasAdapter';
 
 export interface FederatedGalleryResponse {
   results: VisualSearchResult[];
@@ -101,7 +99,7 @@ export class VisualSearchOrchestrator {
       results.push(item);
     };
 
-    atlasMatches.forEach(({ entry, score }, idx) => {
+    atlasMatches.forEach(({ entry, score }) => {
       pushUnique({
         id: `atlas_${entry.id}`,
         title: entry.titleTr,
@@ -118,9 +116,8 @@ export class VisualSearchOrchestrator {
             ? 'SystemDesign Mimarisi'
             : 'Dahili Renkli Atlas',
         isVectorSvg: true,
-        // Generous Free balance: ~65% of built-in colorful atlas icons are FREE so every topic has rich free visuals,
-        // while select specialist & composite studio icons showcase Pro!
-        tier: idx % 3 === 2 ? 'pro' : 'free',
+        // Bespoke multi-color Academic Atlas illustrations are premium PRO visuals!
+        tier: 'pro',
       });
     });
 
@@ -252,12 +249,12 @@ export class VisualSearchOrchestrator {
       expanded.blockedTokens.map((b) => normalizeTrToken(b))
     );
 
-    // Optional Cross-Lingual Wiki Bridge (bounded at 380ms, cancelable)
+    // Optional Cross-Lingual Wiki Bridge ONLY when offline dictionary had no match (text translation only — zero random Wikipedia photos!)
     const wikiBridge =
-      clean.length >= 2
+      !expanded.hasLexiconMatch && clean.length >= 3
         ? await Promise.race([
             resolveViaTurkishWikipedia(clean, signal),
-            new Promise<null>((r) => setTimeout(() => r(null), 380)),
+            new Promise<null>((r) => setTimeout(() => r(null), 320)),
           ])
         : null;
 
@@ -268,7 +265,6 @@ export class VisualSearchOrchestrator {
       ...(wikiBridge?.enTitle ? [wikiBridge.enTitle.toLowerCase()] : []),
       ...primaryEnList.slice(0, 4),
     ];
-    const trTerms = [clean, ...expanded.expandedTrTokens.slice(0, 4)];
     const primaryEn = enTerms[0] || clean;
 
     const settled = await Promise.race([
@@ -278,16 +274,9 @@ export class VisualSearchOrchestrator {
           blockedTokens: expanded.blockedTokens,
         }),
         AIStickerDirector.searchSharedPool(clean, 4),
-        searchArasaacPictograms(trTerms, enTerms, signal),
-        searchWikimediaAtlas(
-          enTerms,
-          wikiBridge?.thumbnailUrl,
-          wikiBridge?.trTitle,
-          signal
-        ),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
-        setTimeout(() => r([]), 1150)
+        setTimeout(() => r([]), 1100)
       ),
     ]);
 
@@ -348,16 +337,16 @@ export class VisualSearchOrchestrator {
       }
     }
 
-    // Zero-Miss Safety Net: if a rare/unusual query still has < 6 icons, seamlessly append
-    // relevant discipline conceptual visuals so the user NEVER hits an empty dead-end!
-    if (combined.length < 6 && !signal?.aborted) {
-      const seedFallback = await OfflineVisualSearchClient.searchShards(
-        DISCIPLINE_DEFAULT_OFFLINE_SEEDS[mapContext.discipline] || 'fikir hedef kitap',
-        mapContext.discipline,
+    // Strict Relevance Guarantee: NEVER dump unrelated discipline seed icons (e.g. Red Hearts for "Komutan"!)
+    // If a genuinely unknown/abstract phrase has 0 hits, fall back ONLY to universal neutral thinking icons (`fikir hedef yildiz`) at low score!
+    if (combined.length === 0 && !signal?.aborted) {
+      const neutralFallback = await OfflineVisualSearchClient.searchShards(
+        'hedef yildiz fikir pusula bayrak',
+        'humanities_social',
         branchColor,
-        24
+        12
       );
-      for (const fb of seedFallback.results) {
+      for (const fb of neutralFallback.results) {
         pushUnique({ ...fb, score: Math.min(fb.score, 0.35) });
       }
     }

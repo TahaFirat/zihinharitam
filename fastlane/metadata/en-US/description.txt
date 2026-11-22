@@ -1,15 +1,16 @@
-MindSticker (ZihinHaritam) transforms dense lecture notes, engineering architectures, and exam outlines into vibrant, sticker-powered visual mind maps on iPhone and iPad.
+MindSticker (ZihinHaritam) transforms dense lecture notes, engineering architectures, and exam outlines into vibrant, sticker-powered visual mind maps with direct freehand Apple Pencil annotation on iPhone and iPad.
 
 KEY HIGHLIGHTS
-• 43,000+ Offline & 540,000+ Live Icons: Type any concept and immediately pick from curated Medical, System Design, Law, Electronics, Architecture, Science, and everyday stickers—works offline and online.
-• 60/120 FPS Organic Infinite Canvas & Apple Pencil: Smooth tapered Bezier branches, palm-rejected quick sketches, and architectural cross-links.
-• Crop Textbook & Slide Diagrams: Snap any diagram from your notebook or lecture slides and turn it into a clean die-cut vinyl sticker on your branch.
+• Intent-Aware 43,000+ Offline & 540,000+ Live Icons: Understands your topic in milliseconds and ranks only relevant crisp icons—zero unrelated photos or noise.
+• Direct Canvas Freehand Drawing & Apple Pencil: Annotate directly over and around mind map branches with Pen, Highlighter, Arrow, Box, Circle, Eraser, and Stylus-Only Palm Rejection.
+• 120 FPS Silky Infinite Canvas: Zero-jank hardware-accelerated panning, pinching, tapered Bezier branches, and smart auto-layout.
+• Crop Textbook & Slide Diagrams: Snap any diagram from your notebook or lecture slides into a clean die-cut sticker.
 • Active Recall Exam Mode: Hide branch titles or visuals and tap to reveal—ideal for medical boards, law exams, and university finals.
-• Print-Ready 300 DPI Export: Export crystal-clear A4/A3 PDF posters, scalable vector SVGs, or high-res PNGs for GoodNotes, Notability, or printing.
-• Local-First Privacy: No account or login required, zero tracking SDKs.
+• Print-Ready 300 DPI Export: Export mind maps together with all hand-drawn annotations as 300 DPI A4/A3 PDF posters, SVGs, or crisp PNGs.
+• Local-First Privacy: No account required, zero tracking SDKs.
 
 FREE TIER & FLEXIBLE PRO PLANS
-• Create up to 3 active mind maps (up to 60 nodes per map) with 3,600+ starter icons for free forever.
-• Upgrade with Monthly Pro ($9.99/mo), Yearly Pro ($59.99/yr — save 50%), or One-Time Lifetime Pro ($99.99) to unlock unlimited maps, 43,000+ offline and 540,000+ online specialist icons, unlimited note cropping, full exam mode, and 300 DPI PDF/SVG exports.
+• Create up to 2 active mind maps (up to 60 nodes per map) with 13,600+ clean monochrome starter icons free forever.
+• Upgrade with Monthly Pro ($9.99/mo), Yearly Pro ($59.99/yr — save 50%), or One-Time Lifetime Pro ($99.99) to unlock unlimited maps, 29,800+ vibrant 3D & color Pro icons, full exam mode, and 300 DPI PDF/SVG exports.
 • Privacy Policy: https://tahafirat.github.io/zihinharitam/privacy.html
 • Terms of Use (EULA): https://tahafirat.github.io/zihinharitam/terms.html

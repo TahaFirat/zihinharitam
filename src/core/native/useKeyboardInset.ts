@@ -21,6 +21,8 @@ const subscribers = new Set<Subscriber>();
 let nativeKeyboardHeight = 0;
 let currentStudioBarHeight = 0;
 let initialized = false;
+let baselineFullHeightPortrait = 0;
+let baselineFullHeightLandscape = 0;
 
 function readTouchCapability(): boolean {
   if (typeof window === 'undefined') return false;
@@ -34,21 +36,42 @@ function readTouchCapability(): boolean {
 function computeSnapshot(): ViewportKeyboardState {
   const winW = typeof window !== 'undefined' ? window.innerWidth : 1280;
   const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const isLandscape = winW > winH;
   const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+
+  // Track baseline full height per orientation so we NEVER double-count keyboard height on Android tablets (`adjustResize`)
+  // or iPad Split/Floating keyboards where the OS already shrunk `window.innerHeight`!
+  if (isLandscape) {
+    if (winH > baselineFullHeightLandscape) baselineFullHeightLandscape = winH;
+  } else {
+    if (winH > baselineFullHeightPortrait) baselineFullHeightPortrait = winH;
+  }
+  const baseWinH = isLandscape
+    ? Math.max(winH, baselineFullHeightLandscape)
+    : Math.max(winH, baselineFullHeightPortrait);
 
   const vvHeight = vv ? Math.round(vv.height) : winH;
   const vvOffsetTop = vv ? Math.round(vv.offsetTop) : 0;
   const vvBottomY = vv ? Math.min(winH, vvOffsetTop + vvHeight) : winH;
   const vvKbHeight = Math.max(0, winH - vvBottomY);
+  const osResizedBy = Math.max(0, baseWinH - winH);
 
-  const effectiveKbHeight = Math.max(nativeKeyboardHeight, vvKbHeight);
+  const effectiveKbHeight = Math.max(nativeKeyboardHeight, vvKbHeight, osResizedBy);
   const isKeyboardOpen = effectiveKbHeight > 120;
-  const keyboardOffsetBottom = effectiveKbHeight > 40 ? effectiveKbHeight : 0;
+
+  // CSS `bottom` offset must subtract any height the OS ALREADY took away from `window.innerHeight`!
+  const remainingUnresizedKb = Math.max(
+    vvKbHeight,
+    Math.max(0, nativeKeyboardHeight - osResizedBy)
+  );
+  const keyboardOffsetBottom =
+    isKeyboardOpen && remainingUnresizedKb > 32
+      ? Math.min(Math.round(winH * 0.56), remainingUnresizedKb)
+      : 0;
+
   const visibleBottomY = Math.max(
     180,
-    keyboardOffsetBottom > 0
-      ? Math.min(winH - nativeKeyboardHeight, vvBottomY)
-      : winH
+    Math.min(winH - keyboardOffsetBottom, vvBottomY)
   );
 
   const isPhone = winW < 768;
@@ -62,7 +85,7 @@ function computeSnapshot(): ViewportKeyboardState {
     isKeyboardOpen,
     isPhone,
     isTablet,
-    isLandscape: winW > winH,
+    isLandscape,
     isTouchDevice: readTouchCapability(),
     studioBarHeight: currentStudioBarHeight,
   };

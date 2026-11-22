@@ -1,4 +1,4 @@
-- PERFORMANS: Sıfır bekleme CPU/GPU motoru, önbellekli vektör dallar ve donanım hızlandırmalı 60/120 FPS akıcı tuval (ısınma ve kasma tamamen giderildi).
-- YENİ İKON MOTORU: 43.000+ çevrimdışı vektör ikon ve 540.000+ çevrimiçi ikon araması ile otomatik Türkçe-İngilizce eşleştirme.
-- TABLET VE TELEFON UYUMU: Android tablet görev çubuğu ve iPad alt alanı için tam güvenli kenar boşlukları ve büyütülmüş dokunmatik S/M/L/XL boyut kontrolleri.
-- YENİ: Dal altı uzun açıklamalar, görev kutuları, Hiyerarşik Liste (Anahat) görünümü, galeriden fotoğraf ekleme ve tek seferlik karşılama ekranı.
+- 120 FPS YAĞ GİBİ TUVAL: Kaydırma ve yakınlaştırmada sıfır kasma ve sıfır donma sağlayan donanım hızlandırmalı yeni grafik motoru.
+- SERBEST ÇİZİM MODU: Doğrudan harita üzerine Kalem, Fosforlu Kalem, Ok, Kutu, Daire, Silgi ve iPad Avuç İçi Reddi (Sadece Kalem) ile not alma.
+- YENİ AKILLI İKON ARAMA: 3.480+ Türkçe kavram sözlüğü ile yazdığınızı tam anlar, alakasız görselleri tamamen eler ve en doğru ikonları anında sıralar.
+- YENİ TASARIM & SATIN ALMA İYİLEŞTİRMESİ: Sadeleştirilmiş yeni ana sayfa, yenilenmiş profesyonel logo, tablet klavye taşma koruması, yerel TL fiyatlandırma ve Hediye Kodu desteği.

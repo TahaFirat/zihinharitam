@@ -27,7 +27,7 @@ const ROOT = path.resolve(__dirname, '..');
 const BUNDLE_ID = 'com.tahafirat.zihinharitam';
 const APP_SKU = 'ZIHINHARITAM2026V4';
 const IAP_PRODUCT_ID = 'com.tahafirat.zihinharitam.lifetime_pro';
-const TARGET_VERSION = process.env.MARKETING_VERSION || '1.0.2';
+const TARGET_VERSION = process.env.MARKETING_VERSION || '1.0.3';
 const DRY_RUN = process.argv.includes('--dry-run');
 const SUBMIT_FOR_REVIEW = process.argv.includes('--submit');
 const SKIP_SCREENSHOTS = process.argv.includes('--skip-screenshots');
@@ -1446,6 +1446,69 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
       // Already attached or already submitted
     }
 
+    // Ensure READY_TO_SUBMIT Auto-Renewable Subscriptions (pro_monthly & pro_yearly) are ALSO submitted for Apple Review!
+    const readySubscriptions = [];
+    try {
+      const grpResp = await client.request(
+        'GET',
+        `/v1/apps/${appId}/subscriptionGroups`
+      );
+      for (const grp of grpResp?.data || []) {
+        const subsResp = await client.request(
+          'GET',
+          `/v1/subscriptionGroups/${grp.id}/subscriptions`
+        );
+        for (const sub of subsResp?.data || []) {
+          const st = sub.attributes?.state;
+          const pid = sub.attributes?.productId;
+          console.log(`  -> Abonelik durumu (${pid}): ${st}`);
+          if (st === 'READY_TO_SUBMIT' || st === 'DEVELOPER_ACTION_NEEDED') {
+            readySubscriptions.push({ id: sub.id, productId: pid, state: st });
+          }
+        }
+      }
+    } catch (subListErr) {
+      console.log(`  -> Abonelik listesi bilgi: ${subListErr.message}`);
+    }
+
+    for (const sub of readySubscriptions) {
+      let submittedSub = false;
+      // Method A: Apple modern Review Submission Item (ASC API 4.x)
+      try {
+        await client.request('POST', '/v1/reviewSubmissionItems', {
+          data: {
+            type: 'reviewSubmissionItems',
+            relationships: {
+              reviewSubmission: { data: { type: 'reviewSubmissions', id: submissionId } },
+              subscription: { data: { type: 'subscriptions', id: sub.id } },
+            },
+          },
+        });
+        console.log(`  -> Abonelik (${sub.productId}) reviewSubmissionItems ile inceleme paketine eklendi!`);
+        submittedSub = true;
+      } catch (errA) {
+        console.log(`  -> Abonelik reviewSubmissionItems denemesi (${sub.productId}): ${errA.message}`);
+      }
+
+      // Method B: Classic subscriptionSubmissions endpoint (links first-time subscription to review queue)
+      if (!submittedSub) {
+        try {
+          await client.request('POST', '/v1/subscriptionSubmissions', {
+            data: {
+              type: 'subscriptionSubmissions',
+              relationships: {
+                subscription: { data: { type: 'subscriptions', id: sub.id } },
+              },
+            },
+          });
+          console.log(`  -> Abonelik (${sub.productId}) subscriptionSubmissions ile Apple incelemesine eklendi!`);
+          submittedSub = true;
+        } catch (errB) {
+          console.log(`  -> Abonelik subscriptionSubmissions denemesi (${sub.productId}): ${errB.message}`);
+        }
+      }
+    }
+
     await client.request('PATCH', `/v1/reviewSubmissions/${submissionId}`, {
       data: {
         type: 'reviewSubmissions',
@@ -1454,6 +1517,20 @@ async function attachBuildAndOptionallySubmit(client, appId, versionId) {
       },
     });
     console.log(`\n🎉 TEBRİKLER! ZihinHaritam (${TARGET_VERSION}) resmen Apple App Review incelemesine gönderildi!`);
+
+    // Post-submit verification of subscription review states
+    if (readySubscriptions.length > 0) {
+      for (const sub of readySubscriptions) {
+        try {
+          const check = await client.request('GET', `/v1/subscriptions/${sub.id}`);
+          console.log(
+            `  -> İnceleme sonrası abonelik durumu (${sub.productId}): ${check?.data?.attributes?.state}`
+          );
+        } catch {
+          // Non-fatal
+        }
+      }
+    }
   }
 }
 

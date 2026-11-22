@@ -1,0 +1,5 @@
+• Silky-smooth 120 FPS canvas engine eliminating pan/zoom freezes and lag
+• Freehand tablet & phone drawing mode directly on mind maps (Pen, Highlighter, Arrow, Box, Circle, Eraser, Palm Rejection)
+• Intent-aware icon search with 3,480+ multilingual concepts (unrelated external photos completely removed)
+• Streamlined home workspace, redesigned brand logo, and keyboard safe-area layout
+• Friend gift promo code support

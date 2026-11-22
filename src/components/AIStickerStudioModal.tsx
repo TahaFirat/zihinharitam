@@ -219,7 +219,10 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-xs sm:items-center sm:p-4"
-      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
+      style={{
+        paddingTop: 'max(54px, calc(var(--safe-top) + 12px))',
+        paddingBottom: `${kb.keyboardHeight}px`,
+      }}
       onClick={onClose}
       data-testid="ai-sticker-studio-modal"
     >
@@ -229,7 +232,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          maxHeight: `${Math.max(300, kb.viewportH - 16)}px`,
+          maxHeight: `${Math.max(280, kb.viewportH - 68)}px`,
           paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
       >
