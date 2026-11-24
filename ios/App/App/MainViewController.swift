@@ -11,8 +11,20 @@ class MainViewController: CAPBridgeViewController {
         view.backgroundColor = warmPaper
         webView?.isOpaque = false
         webView?.backgroundColor = warmPaper
-        webView?.scrollView.backgroundColor = warmPaper
-        webView?.scrollView.bounces = false
+
+        // Permanently lock WKWebView UIScrollView zoom & offset so iOS NEVER auto-zooms
+        // or leaves the viewport stuck zoomed/shifted when focusing text inputs or search bars!
+        if let scrollView = webView?.scrollView {
+            scrollView.backgroundColor = warmPaper
+            scrollView.bounces = false
+            scrollView.bouncesZoom = false
+            scrollView.isScrollEnabled = false
+            scrollView.minimumZoomScale = 1.0
+            scrollView.maximumZoomScale = 1.0
+            scrollView.zoomScale = 1.0
+            scrollView.contentInsetAdjustmentBehavior = .never
+            scrollView.delegate = self
+        }
 
         // Native Apple Pencil 2nd Gen Double-Tap & Apple Pencil Pro Squeeze -> Pen/Eraser Toggle
         if #available(iOS 12.1, *), let wv = webView {
@@ -41,6 +53,24 @@ class MainViewController: CAPBridgeViewController {
                 "window.dispatchEvent(new CustomEvent('zh:stylus-eraser-toggle', { detail: { source: 'apple_pencil', gesture: '\(gesture)' } }));",
                 completionHandler: nil
             )
+        }
+    }
+}
+
+extension MainViewController: UIScrollViewDelegate {
+    public func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return nil
+    }
+
+    public func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        if scrollView.zoomScale != 1.0 {
+            scrollView.setZoomScale(1.0, animated: false)
+        }
+    }
+
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if scrollView.contentOffset != .zero {
+            scrollView.contentOffset = .zero
         }
     }
 }

@@ -89,9 +89,15 @@ svg {
   user-select: text;
 }
 
-@media (pointer: coarse) {
+/* iOS / iPadOS Anti-Auto-Zoom Lock:
+   Safari & WKWebView auto-zoom the entire screen (and get stuck zoomed!) whenever ANY focused
+   input/textarea has computed font-size < 16px. Enforce >= 16px on all touch & tablet viewports! */
+@media (pointer: coarse), (hover: none), (max-width: 1280px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  textarea,
+  select,
   .allow-text-input {
-    font-size: max(16px, 1em);
+    font-size: 16px !important;
   }
 }
 

@@ -50,6 +50,7 @@ import {
 } from '../core/theme/StudioThemes';
 import { useI18n } from '../core/i18n/i18n';
 import { hapticLight, hapticMedium, hapticSuccess } from '../core/native/NativeBridge';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface FlowchartWorkspaceProps {
   doc: MindMapDocument;
@@ -227,6 +228,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
     port: FlowchartPort;
   } | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
+  const kb = useKeyboardInset();
   const [titleDraft, setTitleDraft] = useState(doc.title);
   const [mermaidModalOpen, setMermaidModalOpen] = useState(false);
   const [mermaidDraft, setMermaidDraft] = useState('');
@@ -612,6 +614,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
     const d = dragRef.current;
     if (d && d.pointerId === e.pointerId) {
       if (d.kind === 'pan' && !d.moved) {
+        void dismissNativeKeyboard();
         setSelectedNodeId(null);
         setSelectedEdgeId(null);
         setConnectingFrom(null);
@@ -708,7 +711,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
                   onChangeDoc((prev) => ({ ...prev, title: clean }));
                   setEditingTitle(false);
                 }}
-                className="allow-text-input w-36 rounded-lg border px-2 py-1 text-xs font-extrabold outline-none focus:ring-2 focus:ring-sky-500 sm:w-52"
+                className="allow-text-input w-28 rounded-lg border px-2 py-1 text-base font-extrabold outline-none focus:ring-2 focus:ring-sky-500 sm:w-52"
                 style={{ borderColor: 'var(--hud-border)', backgroundColor: 'var(--canvas-bg)' }}
               />
             </form>
@@ -716,7 +719,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
             <button
               type="button"
               onClick={() => setEditingTitle(true)}
-              className="max-w-[140px] truncate rounded-lg px-1.5 py-1 text-left text-xs font-extrabold hover:bg-slate-500/10 sm:max-w-[220px] sm:text-[13px]"
+              className="max-w-[96px] truncate rounded-lg px-1.5 py-1 text-left text-xs font-extrabold hover:bg-slate-500/10 sm:max-w-[200px] sm:text-[13px]"
             >
               {doc.title}
             </button>
@@ -1103,11 +1106,15 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
         </button>
       </div>
 
-      {/* Selected Node or Edge Contextual Inspector Sheet (compact, grounded right above bottom bar) */}
+      {/* Selected Node or Edge Contextual Inspector Sheet (lifts cleanly above virtual keyboard!) */}
       {selectedNode && (
         <div
-          className="fixed right-2.5 bottom-[82px] left-2.5 z-30 mx-auto max-w-[540px] rounded-2xl border p-3 shadow-xl backdrop-blur-md sm:bottom-[92px]"
-          style={{ backgroundColor: 'var(--hud-bg)', borderColor: 'var(--hud-border)' }}
+          className="fixed right-2.5 left-2.5 z-30 mx-auto max-w-[540px] rounded-2xl border p-3 shadow-xl backdrop-blur-md transition-[bottom] duration-150"
+          style={{
+            backgroundColor: 'var(--hud-bg)',
+            borderColor: 'var(--hud-border)',
+            bottom: kb.isKeyboardOpen ? `${kb.keyboardHeight + 8}px` : '82px',
+          }}
           data-testid="fc-node-inspector"
         >
           <div className="flex items-center gap-2">
@@ -1123,7 +1130,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
               }}
               placeholder={t('Blok başlığı...', 'Block title...')}
               data-testid="fc-node-title-input"
-              className="allow-text-input min-w-0 flex-1 rounded-xl border px-2.5 py-1.5 text-xs font-extrabold outline-none focus:ring-2 focus:ring-sky-500"
+              className="allow-text-input min-w-0 flex-1 rounded-xl border px-2.5 py-1.5 text-base font-extrabold outline-none focus:ring-2 focus:ring-sky-500"
               style={{ backgroundColor: 'var(--canvas-bg)', borderColor: 'var(--hud-border)' }}
             />
             {selectedNode.shape !== 'decision' && (
@@ -1138,16 +1145,19 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
                   }));
                 }}
                 placeholder={t('Alt not...', 'Subtitle...')}
-                className="allow-text-input hidden w-36 rounded-xl border px-2.5 py-1.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:block"
+                className="allow-text-input hidden w-36 rounded-xl border px-2.5 py-1.5 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:block"
                 style={{ backgroundColor: 'var(--canvas-bg)', borderColor: 'var(--hud-border)' }}
               />
             )}
             <button
               type="button"
-              onClick={() => setSelectedNodeId(null)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl hover:bg-slate-500/10"
+              onClick={() => {
+                void dismissNativeKeyboard();
+                setSelectedNodeId(null);
+              }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl hover:bg-slate-500/10"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4.5 w-4.5" />
             </button>
           </div>
 
@@ -1283,8 +1293,12 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
       {/* Selected Edge Inspector */}
       {selectedEdge && (
         <div
-          className="fixed right-2.5 bottom-[82px] left-2.5 z-30 mx-auto max-w-[520px] rounded-2xl border p-3 shadow-xl backdrop-blur-md sm:bottom-[92px]"
-          style={{ backgroundColor: 'var(--hud-bg)', borderColor: 'var(--hud-border)' }}
+          className="fixed right-2.5 left-2.5 z-30 mx-auto max-w-[520px] rounded-2xl border p-3 shadow-xl backdrop-blur-md transition-[bottom] duration-150"
+          style={{
+            backgroundColor: 'var(--hud-bg)',
+            borderColor: 'var(--hud-border)',
+            bottom: kb.isKeyboardOpen ? `${kb.keyboardHeight + 8}px` : '82px',
+          }}
           data-testid="fc-edge-inspector"
         >
           <div className="flex items-center gap-2">
@@ -1299,7 +1313,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
                 }));
               }}
               placeholder={t('Ok etiketi (örn. Evet, Hayır, Hata)...', 'Arrow label (e.g. Yes, No)...')}
-              className="allow-text-input min-w-0 flex-1 rounded-xl border px-2.5 py-1.5 text-xs font-extrabold outline-none focus:ring-2 focus:ring-sky-500"
+              className="allow-text-input min-w-0 flex-1 rounded-xl border px-2.5 py-1.5 text-base font-extrabold outline-none focus:ring-2 focus:ring-sky-500"
               style={{ backgroundColor: 'var(--canvas-bg)', borderColor: 'var(--hud-border)' }}
             />
             <button
@@ -1385,48 +1399,57 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
       {/* Mermaid Live Import Modal */}
       {mermaidModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
-          onClick={() => setMermaidModalOpen(false)}
+          className="fixed top-0 right-0 left-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+          style={{
+            bottom: `${kb.keyboardHeight}px`,
+            paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
+          }}
+          onClick={() => {
+            void dismissNativeKeyboard();
+            setMermaidModalOpen(false);
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             data-testid="fc-mermaid-modal"
-            className="w-full max-w-lg rounded-3xl border p-5 shadow-2xl"
+            className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border p-5 shadow-2xl"
             style={{ backgroundColor: 'var(--canvas-bg)', borderColor: 'var(--hud-border)' }}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex shrink-0 items-center justify-between">
               <div className="flex items-center gap-2">
                 <Code2 className="h-5 w-5 text-violet-500" />
                 <h3 className="text-sm font-extrabold sm:text-base">
-                  {t('Mermaid Kodundan Akış Diyagramı Kur', 'Import Mermaid Flowchart')}
+                  {t('Mermaid İçe Aktar', 'Import Mermaid')}
                 </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setMermaidModalOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10"
+                onClick={() => {
+                  void dismissNativeKeyboard();
+                  setMermaidModalOpen(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="mt-1 text-xs opacity-70">
-              {t(
-                'ChatGPT, GitHub veya Notion’daki herhangi bir Mermaid akış kodunu yapıştır; anında düzenlenebilir görsel bloklara dönüşsün.',
-                'Paste any Mermaid flowchart syntax from ChatGPT, GitHub, or Notion to generate an editable visual flowchart.'
-              )}
-            </p>
-            <textarea
-              rows={7}
-              value={mermaidDraft}
-              onChange={(e) => setMermaidDraft(e.target.value)}
-              data-testid="fc-mermaid-textarea"
-              className="allow-text-input mt-3 w-full rounded-2xl border bg-white/80 p-3 font-mono text-xs leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-violet-500 dark:bg-slate-900/80"
-              style={{ borderColor: 'var(--hud-border)' }}
-            />
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+              <textarea
+                rows={kb.isKeyboardOpen ? 4 : 7}
+                value={mermaidDraft}
+                onChange={(e) => setMermaidDraft(e.target.value)}
+                data-testid="fc-mermaid-textarea"
+                className="allow-text-input w-full rounded-2xl border bg-white/80 p-3 font-mono text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-violet-500 dark:bg-slate-900/80"
+                style={{ borderColor: 'var(--hud-border)' }}
+              />
+            </div>
+            <div className="mt-4 flex shrink-0 justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setMermaidModalOpen(false)}
+                onClick={() => {
+                  void dismissNativeKeyboard();
+                  setMermaidModalOpen(false);
+                }}
                 className="min-h-[40px] rounded-xl px-4 text-xs font-bold opacity-75 hover:bg-slate-500/10"
               >
                 {t('Vazgeç', 'Cancel')}
@@ -1437,6 +1460,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
                 onClick={() => {
                   const parsed = parseMermaidToFlowchart(mermaidDraft);
                   if (parsed.nodes.length > 0) {
+                    void dismissNativeKeyboard();
                     updateFlowchart(() => parsed);
                     setMermaidModalOpen(false);
                     setSelectedNodeId(null);
@@ -1454,7 +1478,8 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
         </div>
       )}
 
-      {/* Grounded Bottom Shape Palette (Phone Flush Bottom Sheet / Tablet Dock) */}
+      {/* Grounded Bottom Shape Palette (Hidden while keyboard is open so inspector never overlaps!) */}
+      {!kb.isKeyboardOpen && (
       <div
         className="fixed right-0 bottom-0 left-0 z-20 flex justify-center sm:right-4 sm:bottom-3 sm:left-4"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
@@ -1494,6 +1519,7 @@ export const FlowchartWorkspace: React.FC<FlowchartWorkspaceProps> = ({
           })}
         </div>
       </div>
+      )}
     </div>
   );
 };

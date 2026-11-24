@@ -34,6 +34,7 @@ import {
   setHapticsEnabled,
   shareOrDownloadFile,
 } from '../core/native/NativeBridge';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 import { LocalStore, type MapRecoverySnapshot } from '../core/sync/LocalStore';
 import type {
   MindMapDocument,
@@ -73,6 +74,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   initialLegalDoc = null,
 }) => {
   const { t, pref: langPref, setLanguagePref } = useI18n();
+  const kb = useKeyboardInset();
   const { isLifetimePro, localizedPrice, isBusy } = useEntitlements();
   const [hapticsOn, setHapticsOn] = useState<boolean>(() => getHapticsEnabled());
   const [snapshots, setSnapshots] = useState<MapRecoverySnapshot[]>([]);
@@ -169,25 +171,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
-      onClick={onClose}
+      className="fixed top-0 right-0 left-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      style={{
+        bottom: `${kb.keyboardHeight}px`,
+        paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
+      }}
+      onClick={() => {
+        void dismissNativeKeyboard();
+        onClose();
+      }}
       role="dialog"
       aria-modal="true"
       data-testid="settings-modal"
     >
       <div
-        className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
           color: 'var(--text-primary)',
-          paddingBottom: 'max(22px, calc(var(--safe-bottom) + 14px))',
+          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between border-b px-5 py-3.5"
+          className="flex shrink-0 items-center justify-between border-b px-5 py-3.5"
           style={{ borderColor: 'var(--hud-border)' }}
         >
           <div>
@@ -198,10 +207,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ? 'Kullanım Koşulları (EULA)'
                 : activeLegalView === 'support'
                 ? 'İletişim & Destek Merkezi'
-                : 'Ayarlar, Yedekleme & Lisans'}
+                : 'Ayarlar'}
             </h2>
             <p className="text-xs opacity-65">
-              {APP_RELEASE_CONFIG.appName} v{APP_RELEASE_CONFIG.version} • %100 Çevrimdışı Öncelikli Mimari
+              {APP_RELEASE_CONFIG.appName} v{APP_RELEASE_CONFIG.version}
             </p>
           </div>
 
@@ -369,7 +378,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={(e) => setPromoDraft(e.target.value.toUpperCase())}
                     placeholder="Hediye kodu (örn. ZHPRO-01-XXXXXX)"
                     data-testid="settings-promo-input"
-                    className="allow-text-input min-w-0 flex-1 rounded-xl border bg-white/90 px-2.5 py-1.5 font-mono text-xs font-extrabold uppercase outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-900/90"
+                    className="allow-text-input min-w-0 flex-1 rounded-xl border bg-white/90 px-2.5 py-1.5 font-mono text-base font-extrabold uppercase outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-900/90"
                     style={{ borderColor: 'var(--hud-border)' }}
                   />
                   <button

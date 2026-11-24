@@ -14,7 +14,7 @@ import {
 import type { MindNode, NodePriorityTag } from '../types/mindmap';
 import { computeTreeMeta } from '../core/canvas/RadialAutoLayout';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
-import { useKeyboardInset } from '../core/native/useKeyboardInset';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface OutlineModalProps {
   isOpen: boolean;
@@ -99,6 +99,11 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleCloseClean = () => {
+    void dismissNativeKeyboard();
+    onClose();
+  };
+
   const toggleNoteOpen = (id: string) => {
     setExpandedNoteIds((prev) => {
       const next = new Set(prev);
@@ -110,27 +115,26 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
-      style={{ paddingBottom: `${kb.keyboardHeight}px` }}
-      onClick={onClose}
+      className="fixed top-0 right-0 left-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      style={{
+        bottom: `${kb.keyboardHeight}px`,
+        paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
+      }}
+      onClick={handleCloseClean}
       data-testid="outline-modal"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        className="flex h-full max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:h-[86%] sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          height: kb.isKeyboardOpen
-            ? `${Math.max(260, kb.viewportH - 18)}px`
-            : '86dvh',
-          maxHeight: `${Math.max(260, kb.viewportH - 16)}px`,
-          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
+          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(16px, calc(var(--safe-bottom) + 12px))',
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between gap-2 border-b px-4 py-3 sm:px-6"
+          className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3 sm:px-6"
           style={{ borderColor: 'var(--hud-border)' }}
         >
           <div className="flex min-w-0 items-center gap-2.5">
@@ -140,25 +144,22 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-sm font-extrabold sm:text-base">
-                  Hiyerarşik Anahat & Ders Notları ({flatRows.length} Dal)
+                  Anahat ({flatRows.length})
                 </h2>
                 {taskStats.total > 0 && (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-300">
-                    ✓ {taskStats.done}/{taskStats.total} Görev
+                    ✓ {taskStats.done}/{taskStats.total}
                   </span>
                 )}
               </div>
-              <p className="truncate text-[11px] opacity-65">
-                Tüm ağacı liste halinde düzenleyin, uzun açıklamalar yazın ve ikon atayın (%100 Ücretsiz)
-              </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseClean}
             aria-label="Kapat"
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
+            className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
           >
             <X className="h-5 w-5" />
           </button>
@@ -166,7 +167,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
 
         {/* Search & Task Filter Bar */}
         <div
-          className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-6"
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-6"
           style={{ borderColor: 'var(--hud-border)' }}
         >
           <div className="relative min-w-[180px] flex-1">
@@ -175,10 +176,20 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
               type="text"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Başlık veya uzun açıklamalarda ara..."
-              className="allow-text-input min-h-[38px] w-full rounded-xl border bg-transparent py-1.5 pr-3 pl-8 text-base font-semibold outline-none focus:ring-2 focus:ring-indigo-500 sm:text-xs"
+              placeholder="Başlık veya notlarda ara..."
+              className="allow-text-input min-h-[40px] w-full rounded-xl border bg-transparent py-1.5 pr-9 pl-8 text-base font-semibold outline-none focus:ring-2 focus:ring-indigo-500"
               style={{ borderColor: 'var(--hud-border)' }}
             />
+            {filterText && (
+              <button
+                type="button"
+                aria-label="Temizle"
+                onClick={() => setFilterText('')}
+                className="absolute top-1/2 right-2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-500/12 opacity-75 hover:opacity-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           <button
@@ -283,7 +294,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
                     value={node.title}
                     onChange={(e) => onUpdateNodeTitle(node.id, e.target.value)}
                     placeholder={isRoot ? 'Ana Ağaç İsmi...' : 'Dal ismi...'}
-                    className={`allow-text-input min-w-0 flex-1 bg-transparent text-base font-extrabold outline-none sm:text-sm ${
+                    className={`allow-text-input min-w-0 flex-1 bg-transparent text-base font-extrabold outline-none ${
                       isDone ? 'line-through opacity-60' : ''
                     }`}
                   />
@@ -325,8 +336,9 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      onJumpToNode(node);
+                      void dismissNativeKeyboard();
                       onClose();
+                      window.setTimeout(() => onJumpToNode(node), 45);
                     }}
                     title="Haritada Bu Dala Odaklan"
                     className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
@@ -342,7 +354,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
                       value={node.note ?? ''}
                       onChange={(e) => onUpdateNodeNote(node.id, e.target.value)}
                       placeholder="Bu dal için uzun açıklama veya ders notu yazın..."
-                      className="allow-text-input w-full rounded-xl border bg-white/60 px-2.5 py-1.5 text-base leading-relaxed font-medium outline-none focus:ring-2 focus:ring-sky-500 sm:text-xs dark:bg-slate-900/50"
+                      className="allow-text-input w-full rounded-xl border bg-white/60 px-2.5 py-1.5 text-base leading-relaxed font-medium outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-900/50"
                       style={{ borderColor: 'var(--hud-border)' }}
                     />
                   </div>

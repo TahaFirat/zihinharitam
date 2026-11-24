@@ -49,6 +49,7 @@ import {
 } from '../types/mindmap';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
 import { useI18n } from '../core/i18n/i18n';
+import { dismissNativeKeyboard } from '../core/native/useKeyboardInset';
 
 export type WorkspaceTopTab = 'map' | 'draw' | 'study';
 
@@ -200,6 +201,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
 
   const commitTitle = () => {
     setEditingTitle(false);
+    void dismissNativeKeyboard();
     const trimmed = draftTitle.trim();
     if (trimmed && trimmed !== mapTitle) {
       onRenameMap(trimmed);
@@ -263,7 +265,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                 }
               }}
               autoFocus
-              className="allow-text-input w-28 rounded-xl bg-sky-500/10 px-2.5 py-1 text-base font-extrabold outline-none ring-2 ring-sky-500 sm:w-44 sm:text-sm"
+              className="allow-text-input w-28 rounded-xl bg-sky-500/10 px-2.5 py-1 text-base font-extrabold outline-none ring-2 ring-sky-500 sm:w-44"
             />
           ) : (
             <button
@@ -369,6 +371,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
 
           <button
             type="button"
+            data-testid="hud-search-btn"
             onClick={onOpenCommandPalette}
             title="Hızlı Dal & İkon Arama"
             className="flex h-10 w-9 items-center justify-center rounded-xl hover:bg-sky-500/12 hover:text-sky-600 active:scale-95 sm:w-auto sm:gap-1.5 sm:px-3 dark:hover:text-sky-300"
@@ -480,7 +483,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
                 >
                   <Sparkles className="h-4 w-4 text-amber-500" />
-                  <span>Haritayı Otomatik Düzenle</span>
+                  <span>Otomatik Düzenle</span>
                 </button>
 
                 <button
@@ -546,7 +549,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   ) : (
                     <Moon className="h-4 w-4 text-indigo-500" />
                   )}
-                  <span>{darkMode ? 'Açık Defter Teması' : 'Karanlık Çalışma Teması'}</span>
+                  <span>{darkMode ? 'Açık Tema' : 'Koyu Tema'}</span>
                 </button>
 
                 <div className="my-1.5 h-px bg-slate-400/20" />
@@ -647,7 +650,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold text-sky-700 hover:bg-sky-500/12 dark:text-sky-300"
                 >
                   <HelpCircle className="h-4 w-4" />
-                  <span>Uygulama Rehberi & Tanıtım</span>
+                  <span>Rehber</span>
                 </button>
 
                 <button
@@ -660,7 +663,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
                 >
                   <Settings className="h-4 w-4" />
-                  <span>Ayarlar, Yedek & Lisans</span>
+                  <span>Ayarlar</span>
                 </button>
 
                 {!isLifetimePro && (
@@ -847,15 +850,6 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             >
               <Wand2 className="h-4 w-4" />
               <span>Akıllı Dal</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onAutoLayout}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold whitespace-nowrap hover:bg-slate-500/10 active:scale-95"
-            >
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              <span>Düzenle</span>
             </button>
           </div>
         </div>

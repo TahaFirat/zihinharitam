@@ -179,20 +179,16 @@ export const QuickSketchPopover: React.FC<QuickSketchPopoverProps> = ({
           className="flex items-center justify-between border-b px-4 py-3"
           style={{ borderColor: 'var(--hud-border)' }}
         >
-          <div>
-            <h3 className="text-sm font-extrabold">
-              ✏️ Kalem / Parmakla Karala & Çıkartmaya Dönüştür
-            </h3>
-            <p className="text-[11px] opacity-65">
-              Apple Pencil / Stylus basınç duyarlı hızlı çizim alanı
-            </p>
-          </div>
+          <h3 className="text-sm font-extrabold">
+            Hızlı Çizim
+          </h3>
           <button
             type="button"
+            aria-label="Kapat"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
+            className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -285,7 +281,7 @@ export const QuickSketchPopover: React.FC<QuickSketchPopoverProps> = ({
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-2.5 text-xs font-extrabold text-white shadow-sm transition-transform active:scale-95"
           >
             <Sparkles className="h-4 w-4" />
-            AI Çıkartma Stüdyosunu Aç
+            3D Stüdyo
           </button>
 
           <button

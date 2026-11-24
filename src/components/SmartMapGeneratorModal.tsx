@@ -15,7 +15,7 @@ import {
 } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
-import { useKeyboardInset } from '../core/native/useKeyboardInset';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface SmartMapGeneratorModalProps {
   isOpen: boolean;
@@ -478,6 +478,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleCloseClean = () => {
+    void dismissNativeKeyboard();
+    onClose();
+  };
+
   const handleCreateSmartMap = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isGenerating) return;
@@ -486,6 +491,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       const input = outlineText.trim() || QUICK_SAMPLE_NOTES[0].text;
       const generatedDoc = await buildSmartMapFromOutlineText(input, deptHint);
       void hapticSuccess();
+      void dismissNativeKeyboard();
       onGenerateCompleteMap(generatedDoc);
       onClose();
     } finally {
@@ -495,45 +501,40 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed top-0 right-0 left-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       style={{
-        paddingTop: 'max(54px, calc(var(--safe-top) + 12px))',
-        paddingBottom: `${kb.keyboardHeight}px`,
+        bottom: `${kb.keyboardHeight}px`,
+        paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
       }}
-      onClick={onClose}
+      onClick={handleCloseClean}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          maxHeight: `${Math.max(280, kb.viewportH - 68)}px`,
-          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
+          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(16px, calc(var(--safe-bottom) + 12px))',
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between border-b px-4 py-3.5 sm:px-6"
+          className="flex shrink-0 items-center justify-between border-b px-4 py-3 sm:px-6"
           style={{ borderColor: 'var(--hud-border)' }}
         >
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-              <Wand2 className="h-5 w-5" />
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+              <Wand2 className="h-4.5 w-4.5" />
             </div>
-            <div>
-              <h2 className="text-sm font-extrabold sm:text-base">
-                Akıllı Harita & Proaktif Dal Sentezleyici
-              </h2>
-              <p className="text-[11px] opacity-65">
-                Tek bir konu başlığından veya ders notundan tam çıkartmalı harita üretin
-              </p>
-            </div>
+            <h2 className="truncate text-sm font-extrabold sm:text-base">
+              Akıllı Harita
+            </h2>
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
+            aria-label="Kapat"
+            onClick={handleCloseClean}
+            className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
           >
             <X className="h-5 w-5" />
           </button>
@@ -541,38 +542,38 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
         {/* Mode Switch Tabs */}
         <div
-          className="flex gap-1.5 border-b px-4 py-2.5 sm:px-6"
+          className="flex shrink-0 gap-1.5 border-b px-4 py-2 sm:px-6"
           style={{ borderColor: 'var(--hud-border)' }}
         >
           <button
             type="button"
             onClick={() => setTab('text_to_map')}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
+            className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
               tab === 'text_to_map'
                 ? 'bg-sky-500 text-white shadow-xs'
                 : 'hover:bg-slate-500/10'
             }`}
           >
             <FileText className="h-3.5 w-3.5" />
-            <span>Metinden / Konudan Harita Üret</span>
+            <span>Metinden Harita</span>
           </button>
           {activeNode && (
             <button
               type="button"
               onClick={() => setTab('proactive_branches')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
+              className={`inline-flex min-h-[38px] min-w-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
                 tab === 'proactive_branches'
                   ? 'bg-violet-600 text-white shadow-xs'
                   : 'hover:bg-slate-500/10'
               }`}
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>“{activeNode.title || 'Seçili Dal'}” İçin Alt Dallar Öner</span>
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Alt Dal Öner</span>
             </button>
           )}
         </div>
 
-        <div className="overflow-y-auto p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {tab === 'text_to_map' ? (
             <form onSubmit={handleCreateSmartMap} className="space-y-3.5">
               <div>
@@ -606,7 +607,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   value={outlineText}
                   onChange={(e) => setOutlineText(e.target.value)}
                   placeholder={`Tek bir konu yazabilir (örn: "Dağıtık Sistem Mimarisi" veya "Mitral Kapak Darlığı")\nveya maddeli not yapıştırabilirsiniz:\n\nMerkezi Konu\n- Ana Dal 1 [Teknik Rozet]\n  - Alt Kavram A\n  - Alt Kavram B`}
-                  className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
+                  className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                   style={{ borderColor: 'var(--hud-border)' }}
                 />
               </div>

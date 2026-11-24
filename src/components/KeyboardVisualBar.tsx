@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Keyboard,
   Eraser,
   ImagePlus,
   FileText,
@@ -206,7 +205,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const carouselRef = useRef<HTMLDivElement>(null);
   const voiceRecRef = useRef<SpeechRecLike | null>(null);
   const requestSeqRef = useRef(0);
-  const swipeStartYRef = useRef<number | null>(null);
   const dockDragRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -401,10 +399,15 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     activeNode.nodeStyle ?? defaultNodeStyle ?? 'card';
   const effectiveStickerSize: StickerSizePreset = activeNode.stickerSize ?? 'md';
 
+  // Slim mode activates ONLY when typing directly inside the branch Title input on touch devices.
+  // NEVER unmount the Icon Search input or Note textarea when the user taps into them!
+  const isTitleInputFocused =
+    typeof document !== 'undefined' && document.activeElement === titleInputRef.current;
   const isSlimKeyboardMode =
     kb.isKeyboardOpen &&
     (kb.isPhone || kb.isTablet) &&
     dockTab === 'icons' &&
+    isTitleInputFocused &&
     !isSearchingCustomIcon;
 
   const toggleVoiceDictation = () => {
@@ -620,7 +623,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         maxWidth: '100vw',
         maxHeight: `${
           kb.isKeyboardOpen
-            ? Math.min(182, Math.max(106, kb.viewportH - 72))
+            ? Math.min(256, Math.max(150, kb.viewportH - 64))
             : Math.min(358, Math.max(220, kb.viewportH - 86))
         }px`,
         transform: 'translate3d(0px, 0px, 0)',
@@ -638,7 +641,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         maxWidth: 'calc(100vw - 28px)',
         maxHeight: `${
           kb.isKeyboardOpen
-            ? Math.min(186, Math.max(108, kb.viewportH - 72))
+            ? Math.min(264, Math.max(154, kb.viewportH - 64))
             : Math.min(352, Math.max(220, kb.viewportH - 96))
         }px`,
         transform: `translate3d(${dockOffset.x}px, ${dockOffset.y}px, 0)`,
@@ -661,24 +664,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       style={containerStyle}
       data-testid="keyboard-visual-bar"
       onPointerDown={(e) => e.stopPropagation()}
-      onTouchStart={(e) => {
-        if (kb.isTouchDevice && e.touches.length === 1) {
-          swipeStartYRef.current = e.touches[0].clientY;
-        }
-      }}
-      onTouchEnd={(e) => {
-        if (
-          kb.isTouchDevice &&
-          swipeStartYRef.current !== null &&
-          e.changedTouches.length === 1
-        ) {
-          const dy = swipeStartYRef.current - e.changedTouches[0].clientY;
-          swipeStartYRef.current = null;
-          if (dy > 58 && dockTab === 'icons' && !isSheetMinimized) {
-            onOpenGalleryDrawer(searchQuery);
-          }
-        }
-      }}
       className="animate-studio-dock z-40 box-border select-none"
     >
       <div
@@ -777,7 +762,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               placeholder={
                 isRootNode ? 'Harita başlığını yazın...' : 'Dal başlığını yazın...'
               }
-              className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-extrabold outline-none sm:text-sm"
+              className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-extrabold outline-none"
               style={{ color: 'var(--node-text)' }}
               data-testid="studio-title-input"
             />
@@ -847,27 +832,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             </button>
           )}
 
-          {kb.isTouchDevice && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => {
-                void hapticLight();
-                if (kb.isKeyboardOpen) {
-                  void dismissNativeKeyboard();
-                } else {
-                  onRequestEditTitle();
-                  setTimeout(() => titleInputRef.current?.focus(), 30);
-                }
-              }}
-              title={kb.isKeyboardOpen ? 'Klavyeyi Gizle' : 'Klavyeyi Aç'}
-              className="flex h-11 w-10 shrink-0 items-center justify-center rounded-2xl border hover:bg-slate-500/10 active:scale-95"
-              style={{ borderColor: 'var(--hud-border)' }}
-            >
-              <Keyboard className="h-4.5 w-4.5" />
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => {
@@ -884,8 +848,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
 
         {!isSheetMinimized && (
         <>
-        {/* 3 BIG, CRYSTAL-CLEAR BRANCH DOCK TABS (Hidden while typing on touch devices so keyboard stays uncluttered) */}
-        {!isSlimKeyboardMode && (
+        {/* 3 BIG, CRYSTAL-CLEAR BRANCH DOCK TABS (Hidden only while keyboard is open so dock stays spacious) */}
+        {!kb.isKeyboardOpen && (
           <div className="mb-2 flex items-center gap-1.5 rounded-2xl bg-slate-500/10 p-1">
             <button
               type="button"
@@ -916,7 +880,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               }`}
             >
               <FileText className="h-4 w-4 text-violet-500" />
-              <span>Not & Önem</span>
+              <span>Not</span>
             </button>
             <button
               type="button"
@@ -930,53 +894,53 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               }`}
             >
               <SlidersHorizontal className="h-4 w-4 text-amber-500" />
-              <span>Boyut & Stil</span>
+              <span>Stil</span>
             </button>
           </div>
         )}
 
         {/* TAB 1: GAMIFIED ICONS CAROUSEL + SEARCH + PHOTO + 3D STUDIO */}
-        {(dockTab === 'icons' || isSlimKeyboardMode) && (
+        {dockTab === 'icons' && (
           <div className="space-y-2">
-            {!isSlimKeyboardMode && (
-              <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                <div
-                  className="flex min-h-[38px] w-[140px] shrink-0 items-center gap-1.5 rounded-xl border bg-white/85 px-2.5 shadow-2xs focus-within:w-[176px] focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 sm:w-[164px] dark:bg-slate-900/85"
-                  style={{ borderColor: customIconQuery ? '#0EA5E9' : 'var(--hud-border)' }}
-                >
-                  <Search className="h-4 w-4 shrink-0 text-sky-500" />
-                  <input
-                    ref={iconSearchInputRef}
-                    type="text"
-                    data-testid="bar-dedicated-icon-search"
-                    value={customIconQuery}
-                    onFocus={() => setIsSearchingCustomIcon(true)}
-                    onBlur={() => setIsSearchingCustomIcon(false)}
-                    onChange={(e) => setCustomIconQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === 'Escape') {
-                        setCustomIconQuery('');
-                        iconSearchInputRef.current?.blur();
-                      } else if (e.key === 'Enter') {
-                        iconSearchInputRef.current?.blur();
-                      }
-                    }}
-                    placeholder="İkon ara..."
-                    className="allow-text-input min-w-0 flex-1 bg-transparent text-xs font-extrabold outline-none"
-                    style={{ color: 'var(--node-text)' }}
-                  />
-                  {customIconQuery && (
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => setCustomIconQuery('')}
-                      className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-500/15"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
+            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <div
+                className="flex min-h-[40px] w-[168px] shrink-0 items-center gap-1.5 rounded-xl border bg-white/90 px-2.5 shadow-2xs focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 sm:w-[192px] dark:bg-slate-900/90"
+                style={{ borderColor: customIconQuery ? '#0EA5E9' : 'var(--hud-border)' }}
+              >
+                <Search className="h-4 w-4 shrink-0 text-sky-500" />
+                <input
+                  ref={iconSearchInputRef}
+                  type="text"
+                  data-testid="bar-dedicated-icon-search"
+                  value={customIconQuery}
+                  onFocus={() => setIsSearchingCustomIcon(true)}
+                  onBlur={() => setIsSearchingCustomIcon(false)}
+                  onChange={(e) => setCustomIconQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Escape') {
+                      setCustomIconQuery('');
+                      iconSearchInputRef.current?.blur();
+                    } else if (e.key === 'Enter') {
+                      iconSearchInputRef.current?.blur();
+                    }
+                  }}
+                  placeholder="İkon ara..."
+                  className="allow-text-input min-w-0 flex-1 bg-transparent text-base font-bold outline-none"
+                  style={{ color: 'var(--node-text)' }}
+                />
+                {customIconQuery && (
+                  <button
+                    type="button"
+                    aria-label="Aramayı temizle"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => setCustomIconQuery('')}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-500/15"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
 
                 {/* Clean Tier Filter */}
                 <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-emerald-500/25 bg-emerald-500/8 p-0.5">
@@ -1059,7 +1023,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   <span>Galeri</span>
                 </button>
               </div>
-            )}
 
             {/* Live Gamified Sticker Carousel */}
             <div className="relative flex items-center">
@@ -1161,6 +1124,32 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   );
                 })}
 
+                {carouselEntries.length === 0 && !loadingRemote && (
+                  <div className="flex min-h-[56px] flex-1 items-center justify-between gap-2 rounded-2xl border border-dashed px-3 py-2 text-xs font-bold opacity-80">
+                    <span>“{searchQuery || 'İkon'}” için sonuç yok</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {tierFilter !== 'all' && (
+                        <button
+                          type="button"
+                          onPointerDown={(e) => e.preventDefault()}
+                          onClick={() => setTierFilter('all')}
+                          className="rounded-xl border px-2.5 py-1 text-[11px] font-extrabold"
+                        >
+                          Tümünü Göster
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onPointerDown={(e) => e.preventDefault()}
+                        onClick={() => onOpenAIStudio(searchQuery)}
+                        className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 py-1 text-[11px] font-extrabold text-white"
+                      >
+                        3D Üret
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {loadingRemote && (
                   <div className="flex h-[66px] w-14 shrink-0 items-center justify-center rounded-2xl border border-dashed text-sky-500">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1184,7 +1173,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         )}
 
         {/* TAB 2: LONG NOTE, PRIORITY, CHECKLIST, CROSS-LINK & SMART SUB-BRANCHES */}
-        {!isSlimKeyboardMode && dockTab === 'note' && (
+        {dockTab === 'note' && (
           <div className="space-y-2.5">
             <textarea
               ref={noteInputRef}
@@ -1193,7 +1182,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               value={activeNode.note ?? ''}
               onChange={(e) => onUpdateNodeNote(activeNode.id, e.target.value)}
               placeholder="Bu dal için detaylı ders notu, tanım veya örnek yazın..."
-              className="allow-text-input max-h-24 w-full resize-y rounded-2xl border bg-white/80 px-3 py-2 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-xs dark:bg-slate-900/80"
+              className="allow-text-input max-h-24 w-full resize-y rounded-2xl border bg-white/80 px-3 py-2 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-900/80"
               style={{ borderColor: 'var(--hud-border)', color: 'var(--node-text)' }}
             />
 
@@ -1206,7 +1195,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   value={activeNode.linkUrl ?? ''}
                   onChange={(e) => onUpdateNodeLink(activeNode.id, e.target.value)}
                   placeholder="Kaynak linki (https://youtube.com/..., PDF, makale)..."
-                  className="allow-text-input min-h-[36px] min-w-0 flex-1 rounded-xl border bg-white/75 px-3 text-xs font-semibold outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-900/75"
+                  className="allow-text-input min-h-[38px] min-w-0 flex-1 rounded-xl border bg-white/75 px-3 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-900/75"
                   style={{ borderColor: 'var(--hud-border)', color: 'var(--node-text)' }}
                 />
               </div>
@@ -1220,7 +1209,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   value={activeNode.techBadge ?? ''}
                   onChange={(e) => onUpdateTechBadge(activeNode.id, e.target.value)}
                   placeholder="Kısa teknik rozet (Örn: Formül, Tarih, Madde)..."
-                  className="allow-text-input min-h-[38px] min-w-0 flex-1 rounded-xl border bg-transparent px-3 text-xs font-bold outline-none focus:ring-2 focus:ring-sky-500"
+                  className="allow-text-input min-h-[38px] min-w-0 flex-1 rounded-xl border bg-transparent px-3 text-base font-bold outline-none focus:ring-2 focus:ring-sky-500"
                   style={{ borderColor: 'var(--hud-border)' }}
                 />
               </div>
@@ -1331,7 +1320,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         )}
 
         {/* TAB 3: BIG S/M/L/XL SIZE + CARD/ORGANIC + COLOR SWATCHES + REMOVE ICON */}
-        {!isSlimKeyboardMode && dockTab === 'style' && (
+        {dockTab === 'style' && (
           <div className="flex flex-wrap items-center justify-between gap-2.5 py-0.5">
             {/* BIG S/M/L/XL Size Buttons */}
             <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">

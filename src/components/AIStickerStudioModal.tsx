@@ -28,7 +28,7 @@ import {
   VisualSearchOrchestrator,
 } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
-import { useKeyboardInset } from '../core/native/useKeyboardInset';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface AIStickerStudioModalProps {
   isOpen: boolean;
@@ -180,6 +180,11 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
 
   const anyLoading = slots.some((s) => s.status === 'loading');
 
+  const handleCloseClean = () => {
+    void dismissNativeKeyboard();
+    onClose();
+  };
+
   const handleSelectAICandidate = async (slot: AICandidateSlot) => {
     if (!slot.previewUrl) return;
     setApplyingSlot(`slot_${slot.slotIndex}`);
@@ -194,6 +199,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
       );
       onApplySticker(sticker);
       void hapticSuccess();
+      void dismissNativeKeyboard();
       onClose();
     } finally {
       setApplyingSlot(null);
@@ -210,6 +216,7 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
       );
       onApplySticker(sticker);
       void hapticSuccess();
+      void dismissNativeKeyboard();
       onClose();
     } finally {
       setApplyingSlot(null);
@@ -218,60 +225,48 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed top-0 right-0 left-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       style={{
-        paddingTop: 'max(54px, calc(var(--safe-top) + 12px))',
-        paddingBottom: `${kb.keyboardHeight}px`,
+        bottom: `${kb.keyboardHeight}px`,
+        paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
       }}
-      onClick={onClose}
+      onClick={handleCloseClean}
       data-testid="ai-sticker-studio-modal"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          maxHeight: `${Math.max(280, kb.viewportH - 68)}px`,
-          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(22px, calc(var(--safe-bottom) + 14px))',
+          paddingBottom: kb.isKeyboardOpen ? '6px' : 'max(16px, calc(var(--safe-bottom) + 12px))',
         }}
       >
-        {/* Header (Zero API key required — 100% Free Built-In Engine) */}
+        {/* Clean Minimal Studio Header */}
         <div
-          className="flex items-center justify-between border-b px-4 py-3 sm:px-6"
+          className="flex shrink-0 items-center justify-between border-b px-4 py-3 sm:px-5"
           style={{ borderColor: 'var(--hud-border)' }}
         >
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-xs">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <h2 className="truncate text-base font-extrabold">
-                3D Çıkartma & 540.000+ İkon Stüdyosu
-              </h2>
-              <span className="hidden rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-600 sm:inline-block dark:text-emerald-400">
-                %100 ÜCRETSİZ & ANINDA
-              </span>
-            </div>
-            <p className="mt-0.5 truncate text-[11px] opacity-70">
-              {mapContext.emoji} Bağlam: <strong>{mapContext.label}</strong> • Seçili Başlık:{' '}
-              <span className="font-semibold text-sky-600 dark:text-sky-400">
-                {conceptText.trim() || 'Akademik Kavram'}
-              </span>
-            </p>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-xs">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <h2 className="truncate text-sm font-extrabold sm:text-base">
+              3D İkon Stüdyosu
+            </h2>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseClean}
             aria-label="Kapat"
-            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10"
+            className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="space-y-3.5 overflow-y-auto p-4 sm:p-5">
+        <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain p-4 sm:p-5">
           {/* Concept Input + Regenerate 4 Variations */}
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
@@ -283,58 +278,73 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
                   setConceptText(e.target.value);
                   setVariationRound(0);
                 }}
-                placeholder="Kavram veya ikon ara (örn. Kalp, Sunucu, Osmanlı Tımar, DNA...)"
-                className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-3.5 pl-9 text-base font-bold outline-none focus:ring-2 focus:ring-violet-500 sm:text-sm"
+                placeholder="Kavram yaz (Kalp, Sunucu, DNA...)"
+                className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-9 pl-9 text-base font-bold outline-none focus:ring-2 focus:ring-violet-500"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
+              {conceptText && (
+                <button
+                  type="button"
+                  aria-label="Temizle"
+                  onClick={() => setConceptText('')}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-500/12 opacity-75 hover:opacity-100"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                void hapticLight();
-                setVariationRound((r) => r + 1);
-                setSeedBase((prev) => prev + Math.floor(Math.random() * 500) + 17);
-              }}
-              disabled={anyLoading}
-              className="inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-xs font-extrabold text-white shadow-xs transition-transform active:scale-95 disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${anyLoading ? 'animate-spin' : ''}`} />
-              <span>Yeni 3D Tasarımlar</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                triggerGalleryPhotoPicker(branchColor, (sticker) => {
-                  onApplySticker(sticker);
-                  void hapticSuccess();
-                  onClose();
-                })
-              }
-              className="inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-3.5 py-2 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
-            >
-              <ImagePlus className="h-3.5 w-3.5" />
-              <span>Galeriden Foto Ekle</span>
-            </button>
-          </div>
-
-          {/* Quick Academic Topic Chips */}
-          <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
-            {QUICK_CONCEPT_CHIPS.map((chip) => (
+            <div className="flex items-center gap-2">
               <button
-                key={chip.query}
                 type="button"
                 onClick={() => {
                   void hapticLight();
-                  setConceptText(chip.query);
+                  setVariationRound((r) => r + 1);
+                  setSeedBase((prev) => prev + Math.floor(Math.random() * 500) + 17);
                 }}
-                className="shrink-0 rounded-xl border bg-slate-500/5 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap transition hover:border-violet-500/40 hover:bg-violet-500/10 active:scale-95"
-                style={{ borderColor: 'var(--hud-border)' }}
+                disabled={anyLoading}
+                className="inline-flex min-h-[42px] flex-1 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3.5 py-2 text-xs font-extrabold text-white shadow-xs transition-transform active:scale-95 disabled:opacity-60 sm:flex-initial"
               >
-                {chip.label}
+                <RefreshCw className={`h-3.5 w-3.5 ${anyLoading ? 'animate-spin' : ''}`} />
+                <span>Yenile</span>
               </button>
-            ))}
+
+              <button
+                type="button"
+                onClick={() =>
+                  triggerGalleryPhotoPicker(branchColor, (sticker) => {
+                    onApplySticker(sticker);
+                    void hapticSuccess();
+                    void dismissNativeKeyboard();
+                    onClose();
+                  })
+                }
+                className="inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-3.5 py-2 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                <span>Foto</span>
+              </button>
+            </div>
           </div>
+
+          {/* Quick Academic Topic Chips (Hidden while typing so 3D previews remain visible!) */}
+          {!kb.isKeyboardOpen && (
+            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {QUICK_CONCEPT_CHIPS.map((chip) => (
+                <button
+                  key={chip.query}
+                  type="button"
+                  onClick={() => {
+                    void hapticLight();
+                    setConceptText(chip.query);
+                  }}
+                  className="shrink-0 rounded-xl border bg-slate-500/5 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap transition hover:border-violet-500/40 hover:bg-violet-500/10 active:scale-95"
+                  style={{ borderColor: 'var(--hud-border)' }}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 4 Art Style Selector Pills */}
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -366,9 +376,8 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
 
           {/* 4-Candidate Instant Custom Die-Cut Sticker Grid */}
           <div>
-            <div className="mb-1.5 flex items-center justify-between text-[11px] font-extrabold tracking-wider uppercase opacity-70">
-              <span>Özel Tasarım Die-Cut Çıkartmalar (4 Stil Varyasyonu)</span>
-              <span className="text-violet-600 dark:text-violet-400">Tek Dokunuşla Ekle</span>
+            <div className="mb-1.5 flex items-center justify-between text-[11px] font-extrabold tracking-wider uppercase opacity-65">
+              <span>Özel 3D Tasarımlar</span>
             </div>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
               {slots.map((slot) => {
@@ -432,9 +441,9 @@ export const AIStickerStudioModal: React.FC<AIStickerStudioModalProps> = ({
           {/* Expanded 32+ Multi-Color Concept Icons Section with Category Filter Tabs */}
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider uppercase opacity-70">
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider uppercase opacity-65">
                 <Layers className="h-3.5 w-3.5 text-sky-500" />
-                <span>Zengin İkon & İllüstrasyon Kütüphanesi ({filteredIcons.length}+ Hazır İkon)</span>
+                <span>Hazır İkonlar ({filteredIcons.length})</span>
               </div>
 
               <div className="flex items-center gap-1 rounded-xl bg-slate-500/10 p-0.5 text-[10.5px] font-extrabold">

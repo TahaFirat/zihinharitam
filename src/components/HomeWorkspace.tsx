@@ -25,6 +25,7 @@ import { generateMapThumbnailDataUrl } from '../core/canvas/ThumbnailGenerator';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
 import { useI18n } from '../core/i18n/i18n';
 import { hapticLight, shareOrDownloadFile } from '../core/native/NativeBridge';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 import { normalizeTrToken } from '../core/visuals/SemanticTaxonomyTR';
 import { ACADEMIC_TEMPLATES } from '../data/academicTemplates';
 import { FLOWCHART_TEMPLATES } from '../data/flowchartTemplates';
@@ -111,6 +112,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onTriggerPaywall,
 }) => {
   const { t, isEn } = useI18n();
+  const kb = useKeyboardInset();
   const { isLifetimePro, localizedPrice } = useEntitlements();
   const [searchQuery, setSearchQuery] = useState('');
   const [folderFilter, setFolderFilter] = useState<WorkspaceFolderFilter>('all');
@@ -296,10 +298,11 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-45" />
               <input
                 type="text"
+                data-testid="home-search-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Harita adı veya içindeki konuyu ara..."
-                className="allow-text-input min-h-[44px] w-full rounded-2xl border bg-slate-500/5 py-2 pr-8 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
+                placeholder="Harita veya konu ara..."
+                className="allow-text-input min-h-[44px] w-full rounded-2xl border bg-slate-500/5 py-2 pr-9 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
               {searchQuery && (
@@ -330,10 +333,10 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 type="button"
                 onClick={() => onTriggerPaywall('header_pill')}
                 data-testid="home-pro-pill"
-                className="inline-flex min-h-[42px] items-center gap-1.5 rounded-2xl border border-amber-500/40 bg-amber-500/12 px-3 py-1.5 text-xs font-extrabold text-amber-700 transition hover:bg-amber-500/20 active:scale-95 dark:text-amber-300"
+                className="inline-flex min-h-[42px] items-center gap-1.5 rounded-2xl border border-amber-500/40 bg-amber-500/12 px-2.5 py-1.5 text-xs font-extrabold text-amber-700 transition hover:bg-amber-500/20 active:scale-95 sm:px-3 dark:text-amber-300"
               >
                 <Crown className="h-3.5 w-3.5 text-amber-500" />
-                <span>Kilidi Aç • {localizedPrice}</span>
+                <span>Pro • {localizedPrice}</span>
               </button>
             )}
 
@@ -775,7 +778,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                                   setRenamingId(null);
                                 }}
                                 autoFocus
-                                className="allow-text-input w-full rounded-lg border px-2 py-1 text-sm font-extrabold outline-none focus:ring-2 focus:ring-sky-500"
+                                className="allow-text-input w-full rounded-lg border px-2 py-1 text-base font-extrabold outline-none focus:ring-2 focus:ring-sky-500"
                                 style={{ borderColor: 'var(--hud-border)' }}
                               />
                             </form>
@@ -976,14 +979,24 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       {/* Clean New Blank Map Dialog */}
       {newMapPromptOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
-          onClick={() => setNewMapPromptOpen(false)}
+          className="fixed top-0 right-0 left-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
+          style={{
+            bottom: `${kb.keyboardHeight}px`,
+            paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
+          }}
+          onClick={() => {
+            void dismissNativeKeyboard();
+            setNewMapPromptOpen(false);
+          }}
         >
           <form
-            onSubmit={handleConfirmBlankMap}
+            onSubmit={(e) => {
+              void dismissNativeKeyboard();
+              handleConfirmBlankMap(e);
+            }}
             onClick={(e) => e.stopPropagation()}
             data-testid="new-map-dialog"
-            className="w-full max-w-md rounded-3xl border p-5 shadow-2xl"
+            className="max-h-full w-full max-w-md overflow-y-auto rounded-3xl border p-5 shadow-2xl"
             style={{
               backgroundColor: 'var(--canvas-bg)',
               borderColor: 'var(--hud-border)',
@@ -997,10 +1010,13 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               </h3>
               <button
                 type="button"
-                onClick={() => setNewMapPromptOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10"
+                onClick={() => {
+                  void dismissNativeKeyboard();
+                  setNewMapPromptOpen(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -1018,19 +1034,19 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   ? t('Örn: Ödeme Süreci, Klinik Tanı Algoritması...', 'e.g. Checkout Flow, Triage Algorithm...')
                   : t('Örn: Kardiyoloji Semiyolojisi, Mikroservis Mimarisi...', 'e.g. Cardiology Notes, System Design...')
               }
-              autoFocus
+              autoFocus={!kb.isTouchDevice}
               data-testid="new-map-title-input"
-              className="allow-text-input mt-1.5 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-base font-bold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
+              className="allow-text-input mt-1.5 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-base font-bold outline-none focus:ring-2 focus:ring-sky-500"
               style={{ borderColor: 'var(--hud-border)' }}
             />
 
             <label className="mt-3 block text-xs font-bold opacity-75">
-              Alan / Ders Bağlamı (Çıkartma zekasını optimize eder)
+              Alan / Ders Bağlamı
             </label>
             <select
               value={newMapDept}
               onChange={(e) => setNewMapDept(e.target.value as AcademicDepartment)}
-              className="mt-1.5 min-h-[42px] w-full rounded-xl border px-3 py-2 text-xs font-bold outline-none"
+              className="mt-1.5 min-h-[42px] w-full rounded-xl border px-3 py-2 text-base font-bold outline-none sm:text-xs"
               style={{
                 backgroundColor: 'var(--canvas-bg)',
                 borderColor: 'var(--hud-border)',
@@ -1046,7 +1062,10 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setNewMapPromptOpen(false)}
+                onClick={() => {
+                  void dismissNativeKeyboard();
+                  setNewMapPromptOpen(false);
+                }}
                 className="min-h-[42px] rounded-xl px-4 text-xs font-bold opacity-75 hover:bg-slate-500/10"
               >
                 Vazgeç
@@ -1066,20 +1085,28 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       {/* Create Custom Folder Dialog */}
       {newFolderModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-xs"
-          onClick={() => setNewFolderModalOpen(false)}
+          className="fixed top-0 right-0 left-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-xs"
+          style={{
+            bottom: `${kb.keyboardHeight}px`,
+            paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
+          }}
+          onClick={() => {
+            void dismissNativeKeyboard();
+            setNewFolderModalOpen(false);
+          }}
         >
           <form
             onSubmit={(e) => {
               e.preventDefault();
               const clean = newFolderName.trim();
               if (!clean) return;
+              void dismissNativeKeyboard();
               onCreateCustomFolder(clean, newFolderEmoji, newFolderColor);
               setNewFolderModalOpen(false);
             }}
             onClick={(e) => e.stopPropagation()}
             data-testid="custom-folder-modal"
-            className="w-full max-w-sm rounded-3xl border p-5 shadow-2xl"
+            className="max-h-full w-full max-w-sm overflow-y-auto rounded-3xl border p-5 shadow-2xl"
             style={{
               backgroundColor: 'var(--canvas-bg)',
               borderColor: 'var(--hud-border)',
@@ -1089,20 +1116,23 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               <h3 className="text-base font-extrabold">{t('Yeni Özel Klasör', 'New Custom Folder')}</h3>
               <button
                 type="button"
-                onClick={() => setNewFolderModalOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10"
+                onClick={() => {
+                  void dismissNativeKeyboard();
+                  setNewFolderModalOpen(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
             <input
               type="text"
-              autoFocus
+              autoFocus={!kb.isTouchDevice}
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               placeholder={t('Örn: Anatomi, AYT Tarih, Projeler...', 'e.g. Anatomy, History, Projects...')}
               data-testid="custom-folder-name-input"
-              className="allow-text-input mt-3 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500"
+              className="allow-text-input mt-3 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-base font-bold outline-none focus:ring-2 focus:ring-sky-500"
               style={{ borderColor: 'var(--hud-border)' }}
             />
             <div className="mt-3 flex flex-wrap gap-1.5">

@@ -925,16 +925,18 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   useEffect(() => {
     if (!radarJumpRequest) return;
     const cur = viewportRef.current.getTransform();
-    viewportRef.current.centerWorldPoint(
-      radarJumpRequest.x,
-      radarJumpRequest.y,
-      stageSize.w,
-      stageSize.h,
-      cur.scale,
-      280
-    );
+    const snap = getViewportKeyboardSnapshot();
+    const availW = snap.viewportW || stageSize.w || window.innerWidth;
+    const availH = snap.visibleBottomY || stageSize.h || window.innerHeight;
+    const barH = selectedNodeId || editingNodeId ? snap.studioBarHeight || 220 : 0;
+    const topSafe = 76;
+    const bottomEdge = Math.max(topSafe + 100, availH - barH - 24);
+    const targetCenterY = Math.round((topSafe + bottomEdge) * 0.5);
+    const endX = availW * 0.5 - radarJumpRequest.x * cur.scale;
+    const endY = targetCenterY - radarJumpRequest.y * cur.scale;
+    viewportRef.current.animateTo({ x: endX, y: endY, scale: cur.scale }, 260);
     requestRender();
-  }, [radarJumpRequest, stageSize.w, stageSize.h, requestRender]);
+  }, [radarJumpRequest, stageSize.w, stageSize.h, requestRender, selectedNodeId, editingNodeId]);
 
   useEffect(() => {
     if (!zoomRequest) return;
@@ -964,19 +966,14 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
 
       const curT = viewportRef.current.getTransform();
       const curScale = curT.scale;
-      const desiredScale =
-        editingNodeId && curScale < 0.78
-          ? 0.92
-          : curScale < 0.62
-          ? 0.82
-          : curScale > 1.65
-          ? 1.32
-          : curScale;
+      // Preserve the user's exact zoom scale when typing or selecting a node!
+      // NEVER unexpectedly zoom the canvas up (which made the screen appear permanently enlarged after typing).
+      const desiredScale = curScale;
 
       if (snap.isPhone || snap.isKeyboardOpen) {
-        // On small phones or while virtual keyboard is open, place active node cleanly in unobstructed upper area
+        // Place active node smoothly in unobstructed upper area above dock/keyboard without hijacking zoom
         const topSafe = 76;
-        const bottomEdge = Math.max(topSafe + 90, availH - barH - 42);
+        const bottomEdge = Math.max(topSafe + 90, availH - barH - 36);
         const usableCenterY = Math.round((topSafe + bottomEdge) * 0.5);
         const endX = availW * 0.5 - node.x * desiredScale;
         const endY = usableCenterY - node.y * desiredScale;
@@ -997,15 +994,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
         const minSafeX = 96;
         const maxSafeX = availW - 96;
         const minSafeY = 90;
-        const maxSafeY = Math.max(minSafeY + 110, availH - barH - 56);
-        const scaleNeedsAdjust = Math.abs(curScale - desiredScale) > 0.02;
+        const maxSafeY = Math.max(minSafeY + 110, availH - barH - 48);
 
         if (
           sp.x < minSafeX ||
           sp.x > maxSafeX ||
           sp.y < minSafeY ||
-          sp.y > maxSafeY ||
-          scaleNeedsAdjust
+          sp.y > maxSafeY
         ) {
           const targetScreenX = Math.min(maxSafeX, Math.max(minSafeX, sp.x));
           const targetScreenY =
@@ -2260,7 +2255,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     };
   };
 
-  const isSemanticFarZoom = currentScale < 0.44;
+  const isSemanticFarZoom = currentScale < 0.24;
 
   return (
     <div
@@ -2950,7 +2945,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     </span>
                   )}
 
-                  {isEditing && !kbSnap.isTouchDevice ? (
+                  {isEditing &&
+                  !kbSnap.isTouchDevice &&
+                  !(
+                    typeof document !== 'undefined' &&
+                    document.activeElement?.closest('[data-testid="keyboard-visual-bar"]')
+                  ) ? (
                     <input
                       type="text"
                       value={node.title}
@@ -2979,7 +2979,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       }}
                       placeholder="Dal adını yazın..."
                       className={`allow-text-input max-w-full min-w-[136px] bg-transparent text-center font-extrabold outline-none ${
-                        isRoot ? 'text-base sm:text-lg' : 'text-base sm:text-sm'
+                        isRoot ? 'text-base sm:text-lg' : 'text-base'
                       }`}
                       style={{
                         color: 'var(--node-text)',

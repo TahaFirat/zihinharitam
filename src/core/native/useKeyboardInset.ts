@@ -50,9 +50,10 @@ function computeSnapshot(): ViewportKeyboardState {
     ? Math.max(winH, baselineFullHeightLandscape)
     : Math.max(winH, baselineFullHeightPortrait);
 
-  const vvHeight = vv ? Math.round(vv.height) : winH;
+  const vvScale = vv && vv.scale > 0 ? vv.scale : 1;
+  const vvHeight = vv ? Math.round(vv.height * (vvScale > 1.01 ? vvScale : 1)) : winH;
   const vvOffsetTop = vv ? Math.round(vv.offsetTop) : 0;
-  const vvBottomY = vv ? Math.min(winH, vvOffsetTop + vvHeight) : winH;
+  const vvBottomY = vv ? Math.min(winH, Math.max(220, vvOffsetTop + vvHeight)) : winH;
   const vvKbHeight = Math.max(0, winH - vvBottomY);
   const osResizedBy = Math.max(0, baseWinH - winH);
 
@@ -70,7 +71,7 @@ function computeSnapshot(): ViewportKeyboardState {
       : 0;
 
   const visibleBottomY = Math.max(
-    180,
+    220,
     Math.min(winH - keyboardOffsetBottom, vvBottomY)
   );
 
@@ -78,7 +79,7 @@ function computeSnapshot(): ViewportKeyboardState {
   const isTablet = winW >= 768 && winW < 1200;
 
   return {
-    viewportW: vv ? Math.round(vv.width) : winW,
+    viewportW: winW,
     viewportH: visibleBottomY,
     visibleBottomY,
     keyboardHeight: keyboardOffsetBottom,
@@ -104,18 +105,40 @@ function notifyAll(): void {
   subscribers.forEach((cb) => cb(cachedSnapshot));
 }
 
+function resetScrollOrigin(): void {
+  if (typeof window === 'undefined') return;
+  if (window.scrollY !== 0 || window.scrollX !== 0) {
+    window.scrollTo(0, 0);
+  }
+  if (typeof document !== 'undefined') {
+    if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+    if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+  }
+}
+
 function ensureListenersStarted(): void {
   if (initialized || typeof window === 'undefined') return;
   initialized = true;
 
   const handleViewportChange = () => {
-    if (window.scrollY !== 0 || window.scrollX !== 0) {
-      window.scrollTo(0, 0);
-    }
+    resetScrollOrigin();
     notifyAll();
   };
 
+  const handleFocusOut = () => {
+    resetScrollOrigin();
+    window.setTimeout(() => {
+      resetScrollOrigin();
+      notifyAll();
+    }, 80);
+    window.setTimeout(() => {
+      resetScrollOrigin();
+      notifyAll();
+    }, 260);
+  };
+
   window.addEventListener('resize', handleViewportChange, { passive: true });
+  window.addEventListener('focusout', handleFocusOut, { passive: true });
   window.visualViewport?.addEventListener('resize', handleViewportChange, {
     passive: true,
   });
@@ -144,7 +167,12 @@ function ensureListenersStarted(): void {
       }),
       Keyboard.addListener('keyboardDidHide', () => {
         nativeKeyboardHeight = 0;
+        resetScrollOrigin();
         notifyAll();
+        window.setTimeout(() => {
+          resetScrollOrigin();
+          notifyAll();
+        }, 120);
       }),
     ])
       .then((list) => {

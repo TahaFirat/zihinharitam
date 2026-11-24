@@ -3,10 +3,8 @@ import {
   X,
   Search,
   Sparkles,
-  Palette,
   Loader2,
   Layers,
-  Zap,
   Gift,
   Crown,
   ImagePlus,
@@ -23,7 +21,6 @@ import {
   EntitlementManager,
   useEntitlements,
 } from '../core/monetization/EntitlementManager';
-import { CORNER_MICRO_BADGES } from '../core/visuals/CompositeStickerComposer';
 import { retintRawSvgMarkupToBranch } from '../core/visuals/DuotoneStickerColorizer';
 import { triggerGalleryPhotoPicker } from '../core/visuals/PhotoStickerImporter';
 import { buildDuotoneVectorStickerDataUri } from '../core/visuals/PureVectorStickerizer';
@@ -33,7 +30,7 @@ import {
   VisualSearchOrchestrator,
 } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
-import { useKeyboardInset } from '../core/native/useKeyboardInset';
+import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface StickerGalleryDrawerProps {
   isOpen: boolean;
@@ -57,39 +54,31 @@ const CATEGORY_TABS: Array<{ id: GalleryCategoryFilter; label: string; emoji: st
   { id: 'diagram', label: 'Şema & Diyagram', emoji: '📐' },
 ];
 
-const SIZE_OPTIONS: Array<{ id: StickerSizePreset; label: string }> = [
-  { id: 'sm', label: 'S' },
-  { id: 'md', label: 'M' },
-  { id: 'lg', label: 'L' },
-  { id: 'xl', label: 'XL' },
-];
-
 export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
   isOpen,
   initialQuery,
   branchColor,
-  currentStickerSize = 'md',
-  onChangeStickerSize,
+  currentStickerSize: _currentStickerSize = 'md',
+  onChangeStickerSize: _onChangeStickerSize,
   mapContext,
   onClose,
   onApplySticker,
   onRequestProStickerUnlock,
   onOpenAIStudio,
 }) => {
+  void _currentStickerSize;
+  void _onChangeStickerSize;
   const { isLifetimePro } = useEntitlements();
   const kb = useKeyboardInset();
   const [query, setQuery] = useState(() => sanitizeNodeSearchQuery(initialQuery));
   const [category, setCategory] = useState<GalleryCategoryFilter>('all');
   const [tierFilter, setTierFilter] = useState<IconTierFilter>('all');
   const [displayLimit, setDisplayLimit] = useState(60);
-  const [matchBranchColor, setMatchBranchColor] = useState(true);
-  const [selectedCornerBadge, setSelectedCornerBadge] = useState<string | null>(null);
 
   const [allResults, setAllResults] = useState<VisualSearchResult[]>([]);
   const [metaphorChips, setMetaphorChips] = useState<MetaphorChip[]>([]);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set());
   const [loadingOnline, setLoadingOnline] = useState(false);
-  const [offlineMs, setOfflineMs] = useState<number | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
 
   const seqRef = useRef(0);
@@ -134,9 +123,6 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
       if (cancelled || seq !== seqRef.current || controller.signal.aborted) return;
       setAllResults(offRes.results);
       setMetaphorChips(offRes.metaphorChips);
-      if (typeof offRes.elapsedMs === 'number') {
-        setOfflineMs(Math.max(1, Math.round(offRes.elapsedMs)));
-      }
     });
 
     let onlineTimer: number | undefined;
@@ -209,12 +195,18 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
 
   if (!isOpen) return null;
 
+  const handleCloseClean = () => {
+    void dismissNativeKeyboard();
+    onClose();
+  };
+
   const handleSelectItem = async (
     item: VisualSearchResult,
     isFree: boolean
   ) => {
     if (!isFree) {
       void hapticLight();
+      void dismissNativeKeyboard();
       onRequestProStickerUnlock(item);
       return;
     }
@@ -223,11 +215,12 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
     void hapticLight();
     try {
       const sticker = await VisualSearchOrchestrator.materializeStickerSelection(item, {
-        retintToBranchColor: matchBranchColor ? branchColor : '#334155',
-        cornerBadgeEmoji: selectedCornerBadge,
+        retintToBranchColor: branchColor,
+        cornerBadgeEmoji: null,
       });
       onApplySticker(sticker);
       void hapticSuccess();
+      void dismissNativeKeyboard();
       onClose();
     } finally {
       setApplyingId(null);
@@ -236,59 +229,40 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed top-0 right-0 left-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       style={{
-        paddingTop: 'max(54px, calc(var(--safe-top) + 12px))',
-        paddingBottom: `${kb.keyboardHeight}px`,
+        bottom: `${kb.keyboardHeight}px`,
+        paddingTop: 'max(14px, calc(var(--safe-top) + 10px))',
       }}
-      onClick={onClose}
+      onClick={handleCloseClean}
       data-testid="sticker-gallery-drawer"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl"
+        className="flex h-full max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:h-[86%] sm:rounded-3xl"
         style={{
           backgroundColor: 'var(--canvas-bg)',
           borderColor: 'var(--hud-border)',
-          height: kb.isKeyboardOpen
-            ? `${Math.max(250, kb.viewportH - 64)}px`
-            : kb.isPhone
-            ? 'calc(100dvh - max(58px, var(--safe-top) + 14px))'
-            : '86dvh',
-          maxHeight: `${Math.max(250, kb.viewportH - 64)}px`,
           paddingBottom: kb.isKeyboardOpen
-            ? '6px'
-            : 'max(20px, calc(var(--safe-bottom) + 14px))',
+            ? '4px'
+            : 'max(14px, calc(var(--safe-bottom) + 10px))',
         }}
       >
-        {/* Header Bar */}
+        {/* Clean Minimal Header Bar */}
         <div
-          className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-6"
+          className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-5"
           style={{ borderColor: 'var(--hud-border)' }}
         >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-500">
-              <Layers className="h-5 w-5" />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-500">
+              <Layers className="h-4.5 w-4.5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-sm font-extrabold sm:text-base">
-                  540.000+ İkon & 3D Görsel Kütüphanesi ({visibleEntries.length} Eşleşme)
-                </h2>
-                {offlineMs !== null && (
-                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-300">
-                    <Zap className="h-3 w-3" />
-                    {offlineMs}ms Offline
-                  </span>
-                )}
-              </div>
-              <p className="truncate text-[11px] opacity-65">
-                {mapContext.emoji} Bağlam: <strong>{mapContext.label}</strong> • Fluent 3D, OpenMoji, Bilimsel Atlas & Cihaz Galerisi
-              </p>
-            </div>
+            <h2 className="truncate text-sm font-extrabold sm:text-base">
+              İkon Seç
+            </h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               data-testid="gallery-import-photo-btn"
@@ -299,37 +273,39 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                   onClose();
                 })
               }
-              className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-3 py-1.5 text-xs font-extrabold text-indigo-700 hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-2.5 text-xs font-extrabold text-indigo-700 hover:bg-indigo-500/25 active:scale-95 dark:text-indigo-300"
             >
               <ImagePlus className="h-3.5 w-3.5" />
-              <span>Galeriden Foto Seç</span>
+              <span>Foto</span>
             </button>
 
             <button
               type="button"
               onClick={() => {
+                void dismissNativeKeyboard();
                 onClose();
                 onOpenAIStudio(query);
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-extrabold text-white shadow-xs active:scale-95"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 text-xs font-extrabold text-white shadow-xs active:scale-95"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              <span>3D Özel Üret</span>
+              <span>3D Üret</span>
             </button>
 
             <button
               type="button"
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-slate-500/10"
+              aria-label="Kapat"
+              onClick={handleCloseClean}
+              className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        {/* Search + Free/Pro Filter + Size Selector + Category Tabs */}
+        {/* Compact Search + Tier Filter (Secondary chips auto-collapse while keyboard is open so icons stay huge & visible!) */}
         <div
-          className="space-y-2.5 border-b px-4 py-3 sm:px-6"
+          className="shrink-0 space-y-2 border-b px-4 py-2.5 sm:px-5"
           style={{ borderColor: 'var(--hud-border)' }}
         >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -337,18 +313,20 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-45" />
               <input
                 type="text"
+                data-testid="gallery-search-input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Herhangi bir kavram arayın (örn. kalp, roket, mahkeme, sunucu, araba, ağaç)..."
+                placeholder="İkon ara (kalp, roket, kitap, sunucu...)"
                 autoFocus={!kb.isTouchDevice}
-                className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-8 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
+                className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-9 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
               {query && (
                 <button
                   type="button"
+                  aria-label="Aramayı temizle"
                   onClick={() => setQuery('')}
-                  className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-md p-0.5 opacity-60 hover:opacity-100"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-500/12 opacity-75 hover:opacity-100"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -380,7 +358,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 }`}
               >
                 <Gift className="h-3.5 w-3.5" />
-                <span>Sadece Ücretsizler ({freeCountInCat})</span>
+                <span>Ücretsiz ({freeCountInCat})</span>
               </button>
               <button
                 type="button"
@@ -393,16 +371,13 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 }`}
               >
                 <Crown className="h-3.5 w-3.5" />
-                <span>Pro 3D & Atlas</span>
+                <span>Pro</span>
               </button>
             </div>
           </div>
 
-          {metaphorChips.length > 0 && (
+          {!kb.isKeyboardOpen && metaphorChips.length > 0 && (
             <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto">
-              <span className="shrink-0 text-[11px] font-bold opacity-55">
-                İlgili Konular:
-              </span>
               {metaphorChips.map((chip) => (
                 <button
                   key={chip.queryEn}
@@ -418,8 +393,8 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             </div>
           )}
 
-          <div className="no-scrollbar flex items-center justify-between gap-2 overflow-x-auto">
-            <div className="flex shrink-0 items-center gap-1">
+          {!kb.isKeyboardOpen && (
+            <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
               {CATEGORY_TABS.map((tab) => {
                 const active = category === tab.id;
                 return (
@@ -427,7 +402,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                     key={tab.id}
                     type="button"
                     onClick={() => setCategory(tab.id)}
-                    className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-extrabold whitespace-nowrap ${
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-extrabold whitespace-nowrap ${
                       active
                         ? 'bg-sky-500 text-white shadow-xs'
                         : 'opacity-75 hover:bg-slate-500/10 hover:opacity-100'
@@ -439,75 +414,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 );
               })}
             </div>
-
-            <div className="flex shrink-0 items-center gap-2 pl-2">
-              {onChangeStickerSize && (
-                <div className="inline-flex items-center gap-0.5 rounded-xl bg-slate-500/10 p-0.5">
-                  <span className="px-1.5 text-[10.5px] font-extrabold opacity-65">
-                    Boyut:
-                  </span>
-                  {SIZE_OPTIONS.map((sz) => (
-                    <button
-                      key={sz.id}
-                      type="button"
-                      onClick={() => {
-                        void hapticLight();
-                        onChangeStickerSize(sz.id);
-                      }}
-                      className={`rounded-lg px-2 py-1 text-[11px] font-extrabold ${
-                        currentStickerSize === sz.id
-                          ? 'bg-sky-500 text-white shadow-2xs'
-                          : 'opacity-70 hover:opacity-100'
-                      }`}
-                    >
-                      {sz.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setMatchBranchColor((v) => !v)}
-                className={`inline-flex shrink-0 items-center gap-1 rounded-xl border px-2.5 py-1 text-[11px] font-extrabold ${
-                  matchBranchColor
-                    ? 'border-sky-500 bg-sky-500/15 text-sky-600 dark:text-sky-300'
-                    : 'hover:bg-slate-500/10'
-                }`}
-                style={{ borderColor: matchBranchColor ? undefined : 'var(--hud-border)' }}
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full border border-white"
-                  style={{ backgroundColor: branchColor }}
-                />
-                <Palette className="h-3 w-3" />
-                <span>Dal Rengi</span>
-              </button>
-
-              <div className="hidden items-center gap-1 lg:flex">
-                <span className="text-[11px] font-bold opacity-60">Rozet:</span>
-                {CORNER_MICRO_BADGES.slice(0, 4).map((bdg) => (
-                  <button
-                    key={bdg.emoji}
-                    type="button"
-                    title={bdg.labelTr}
-                    onClick={() =>
-                      setSelectedCornerBadge((prev) =>
-                        prev === bdg.emoji ? null : bdg.emoji
-                      )
-                    }
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${
-                      selectedCornerBadge === bdg.emoji
-                        ? 'scale-115 bg-sky-500/20 ring-2 ring-sky-500'
-                        : 'hover:bg-slate-500/10'
-                    }`}
-                  >
-                    {bdg.emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* High-Density Responsive Sticker Grid */}
@@ -519,7 +426,12 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             </div>
           )}
 
-          {visibleEntries.length === 0 ? (
+          {visibleEntries.length === 0 && loadingOnline ? (
+            <div className="flex h-40 items-center justify-center gap-2 text-xs font-bold opacity-70">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
+              <span>İkonlar aranıyor...</span>
+            </div>
+          ) : visibleEntries.length === 0 ? (
             <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-3xl border border-dashed p-6 text-center">
               <p className="text-sm font-bold opacity-75">
                 “{query}” için bu filtrede doğrudan eşleşen hazır ikon bulunamadı.
@@ -567,7 +479,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 {visibleEntries.slice(0, displayLimit).map(({ item, isFree }) => {
                 let displaySrc = item.previewUrl;
                 if (item.isDuotoneColorizable && item.rawSvgMarkup) {
-                  const targetColor = matchBranchColor ? branchColor : '#334155';
+                  const targetColor = branchColor;
                   displaySrc = item.rawViewBox
                     ? buildDuotoneVectorStickerDataUri(
                         item.rawViewBox,
@@ -629,11 +541,6 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                             : ''
                         }`}
                       />
-                      {selectedCornerBadge && (
-                        <span className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-full border bg-white text-xs shadow-sm">
-                          {selectedCornerBadge}
-                        </span>
-                      )}
                     </div>
                     <span className="mt-1.5 line-clamp-1 w-full text-[10.5px] font-bold opacity-80">
                       {item.title}

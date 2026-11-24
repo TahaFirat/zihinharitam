@@ -351,6 +351,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
         {/* Close Button (44x44 HIG touch target) */}
         <button
           type="button"
+          data-testid="paywall-close-btn"
           onClick={onClose}
           aria-label="Kapat"
           className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full opacity-70 transition hover:bg-slate-500/10 hover:opacity-100"
@@ -681,7 +682,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               onChange={(e) => setPromoDraft(e.target.value.toUpperCase())}
               placeholder="Hediye kodu (örn. ZHPRO-01-XXXXXX)"
               data-testid="paywall-promo-input"
-              className="allow-text-input min-w-0 flex-1 rounded-xl border bg-white/90 px-2.5 py-1.5 font-mono text-xs font-extrabold uppercase outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-900/90"
+              className="allow-text-input min-w-0 flex-1 rounded-xl border bg-white/90 px-2.5 py-1.5 font-mono text-base font-extrabold uppercase outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-900/90"
               style={{ borderColor: 'var(--hud-border)' }}
             />
             <button
