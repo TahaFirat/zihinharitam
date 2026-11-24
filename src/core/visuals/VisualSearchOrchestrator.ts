@@ -326,9 +326,7 @@ export class VisualSearchOrchestrator {
     // Only anchor offline hits above live translated 540K+ gamified icons when our offline Turkish dictionary
     // actually recognized the word (`expanded.hasLexiconMatch`) with strong primary confidence!
     const offlineHasStrongPrimary =
-      Boolean(expanded.hasLexiconMatch) &&
-      offlineWave.results.length >= 10 &&
-      (offlineWave.results[0]?.score ?? 0) >= 0.92;
+      Boolean(expanded.hasLexiconMatch) && offlineWave.results.length >= 3;
 
     if (!offlineHasStrongPrimary) {
       // Uncommon/new Turkish word -> put live Google-Translated gamified 540K+ icons FIRST!
