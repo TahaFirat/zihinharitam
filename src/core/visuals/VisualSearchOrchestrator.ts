@@ -278,7 +278,7 @@ export class VisualSearchOrchestrator {
         AIStickerDirector.searchSharedPool(clean, 4),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
-        setTimeout(() => r([]), 1100)
+        setTimeout(() => r([]), 1850)
       ),
     ]);
 
@@ -326,7 +326,7 @@ export class VisualSearchOrchestrator {
     // Only anchor offline hits above live translated 540K+ gamified icons when our offline Turkish dictionary
     // actually recognized the word (`expanded.hasLexiconMatch`) with strong primary confidence!
     const offlineHasStrongPrimary =
-      Boolean(expanded.hasLexiconMatch) && offlineWave.results.length >= 3;
+      Boolean(expanded.hasLexiconMatch) && offlineWave.results.length >= 6;
 
     if (!offlineHasStrongPrimary) {
       // Uncommon/new Turkish word -> put live Google-Translated gamified 540K+ icons FIRST!

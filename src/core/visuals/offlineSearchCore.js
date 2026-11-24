@@ -41,10 +41,12 @@ function canonicalConceptKey(name) {
 
 const NOISY_COMPOUND_WORDS = new Set([
   'mouth', 'kissing', 'grinning', 'crying', 'weary', 'zany', 'winking',
-  'pouting', 'angry', 'frowning', ' grimacing', 'drooling', 'vomiting',
+  'pouting', 'angry', 'frowning', 'grimacing', 'drooling', 'vomiting',
   'zombie', 'vampire', 'halloween', 'christmas', 'santa', 'claus',
   'pirate', 'jolly', 'casino', 'poker', 'slot', 'bikini', 'poo', 'poop',
   'toilet', 'biking', 'surfing', 'juggling', 'cartwheeling', 'wrestling',
+  'curling', 'mirror', 'confetti', 'disco', 'ballot', 'closet', 'buffalo',
+  'singer', 'bouncing', 'rice', 'yarn', 'hole',
 ]);
 
 export function tokenizeSearchField(text) {
@@ -207,6 +209,7 @@ export class OfflineBM25Engine {
 
     // Build exact phrase set & atomic primary/secondary word sets
     const primaryExactPhrases = new Set([normQuery]);
+    const topLeadPhrase = primaryRaw[0] ? primaryRaw[0].replace(/-/g, ' ').trim() : '';
     const primaryWords = new Set();
     const secondaryWords = new Set();
 
@@ -253,11 +256,11 @@ export class OfflineBM25Engine {
       }
     };
 
-    // 1. Primary English Tokens (Highest Authority: +540 in icon name, +175 in tags)
+    // 1. Primary English Tokens (Highest Authority: #1 primary concept leads strongly over secondary synonyms!)
     let rankIdx = 0;
     for (const pw of primaryWords) {
-      // Priority decay from #1 primary synonym (1.0x) to #6 synonym (0.80x) so exact #1 translation leads!
-      const rankDecay = Math.max(0.80, 1.0 - rankIdx * 0.04);
+      // Strong lead weight for #1 exact synonym (1.16x -> 0.72x) so exact primary icon always ranks #1!
+      const rankDecay = rankIdx === 0 ? 1.16 : Math.max(0.72, 1.0 - rankIdx * 0.06);
       rankIdx++;
 
       const nList = this.namePostings.get(pw);
@@ -369,9 +372,11 @@ export class OfflineBM25Engine {
       const hitNameWords = matchedNameCount.get(idx) || 0;
       const hitPrimWords = matchedPrimaryNameCount.get(idx) || 0;
 
-      // Tier 1: Exact Full Icon Name Match (`book`, `open book`, `car`, `lemon`, `heart organ`, `database`)
-      if (primaryExactPhrases.has(lowerName)) {
-        score += 1450;
+      // Tier 1: Exact Full Icon Name Match (`soccer ball`, `rock`, `table`, `fire`, `automobile`, `droplet`)
+      if (topLeadPhrase && lowerName === topLeadPhrase) {
+        score += 1780;
+      } else if (primaryExactPhrases.has(lowerName)) {
+        score += 1380;
       } else if (
         nameToks.length === 2 &&
         primaryWords.has(nameToks[0]) &&

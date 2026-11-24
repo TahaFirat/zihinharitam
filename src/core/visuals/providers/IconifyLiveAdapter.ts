@@ -89,6 +89,8 @@ const NOISY_LIVE_WORDS = new Set([
   'pouting', 'angry', 'frowning', 'drooling', 'vomiting', 'zombie',
   'vampire', 'halloween', 'christmas', 'santa', 'pirate', 'casino',
   'poker', 'bikini', 'poo', 'poop', 'toilet', 'biking', 'juggling',
+  'curling', 'mirror', 'confetti', 'disco', 'ballot', 'closet', 'buffalo',
+  'singer', 'bouncing', 'rice', 'yarn',
 ]);
 
 /**
@@ -268,7 +270,7 @@ export async function searchIconifyLive(
   if (needsLiveTrTranslation) {
     liveTranslatedEn = await Promise.race([
       translateTurkishToEnglishLive(clean, signal),
-      new Promise<null>((r) => setTimeout(() => r(null), 580)),
+      new Promise<null>((r) => setTimeout(() => r(null), 820)),
     ]);
     if (liveTranslatedEn && !candidateQueries.includes(liveTranslatedEn)) {
       candidateQueries.unshift(liveTranslatedEn);

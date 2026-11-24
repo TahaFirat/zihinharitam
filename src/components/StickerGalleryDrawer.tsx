@@ -248,7 +248,8 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             : 'max(14px, calc(var(--safe-bottom) + 10px))',
         }}
       >
-        {/* Clean Minimal Header Bar */}
+        {/* Clean Minimal Header Bar (Auto-collapses while keyboard is open so 3-4 icon rows stay visible above keyboard!) */}
+        {!kb.isKeyboardOpen && (
         <div
           className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-5"
           style={{ borderColor: 'var(--hud-border)' }}
@@ -302,13 +303,14 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             </button>
           </div>
         </div>
+        )}
 
         {/* Compact Search + Tier Filter (Secondary chips auto-collapse while keyboard is open so icons stay huge & visible!) */}
         <div
-          className="shrink-0 space-y-2 border-b px-4 py-2.5 sm:px-5"
+          className="shrink-0 space-y-2 border-b px-3.5 py-2 sm:px-5"
           style={{ borderColor: 'var(--hud-border)' }}
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1.5 sm:flex-row">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-45" />
               <input
@@ -316,7 +318,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 data-testid="gallery-search-input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="İkon ara (kalp, roket, kitap, sunucu...)"
+                placeholder="İkon ara (top, taş, kalp, roket...)"
                 autoFocus={!kb.isTouchDevice}
                 className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-9 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                 style={{ borderColor: 'var(--hud-border)' }}
@@ -333,8 +335,19 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
               )}
             </div>
 
-            {/* Free vs Pro Tier Filter Pills */}
-            <div className="flex shrink-0 items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-1">
+            {kb.isKeyboardOpen && (
+              <button
+                type="button"
+                aria-label="Kapat"
+                onClick={handleCloseClean}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-500/10 hover:bg-slate-500/20"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+
+            {/* Free vs Pro Tier Filter Pills (Hidden in single-row compact mode on phones while typing; shown on tablets or when keyboard closed!) */}
+            <div className={`${kb.isKeyboardOpen ? 'hidden sm:flex' : 'flex'} shrink-0 items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-1`}>
               <button
                 type="button"
                 data-testid="gallery-tier-all-btn"

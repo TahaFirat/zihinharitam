@@ -67,10 +67,25 @@ export const EN_CONCEPT_INTENT_MAP = {
   introduction: ['compass', 'open-book', 'sparkles', 'flag'],
   summary: ['clipboard', 'check-mark-button', 'books', 'star'],
   conclusion: ['flag', 'check-mark-button', 'trophy', 'target'],
-  stone: ['rock', 'boulder', 'pebble', 'mountain', 'brick'],
+  stone: ['rock', 'boulder', 'pebble', 'mountain', 'gem-stone'],
   rock: ['rock', 'boulder', 'mountain', 'pebble', 'cliff'],
   boulder: ['rock', 'boulder', 'mountain'],
   pebble: ['pebble', 'rock', 'gravel'],
+  football: ['soccer-ball', 'american-football', 'rugby-football', 'football', 'ball'],
+  soccer: ['soccer-ball', 'football', 'ball'],
+  ball: ['soccer-ball', 'basketball', 'volleyball', 'ball', 'tennis', 'baseball'],
+  basketball: ['basketball', 'ball'],
+  volleyball: ['volleyball', 'ball'],
+  tennis: ['tennis', 'ball'],
+  water: ['droplet', 'water-wave', 'potable-water', 'water'],
+  table: ['table', 'workspace-desk', 'desk', 'table-lamp'],
+  desk: ['workspace-desk', 'table', 'information-desk', 'desk'],
+  chair: ['chair', 'seat'],
+  fire: ['fire', 'flame'],
+  dinosaur: ['t-rex', 'sauropod', 'dinosaur-rex'],
+  sword: ['sword', 'crossed-swords', 'dagger'],
+  car: ['automobile', 'car', 'racing-car'],
+  flag: ['triangular-flag', 'flag', 'white-flag', 'chequered-flag'],
   sand: ['sand', 'desert', 'hourglass', 'beach'],
   coal: ['coal', 'charcoal', 'fire', 'mining'],
   mine: ['mining', 'pickaxe', 'gem-stone', 'rock'],
@@ -199,7 +214,7 @@ const CONSONANT_RESTORE = {
 
 const TURKISH_STOPWORDS = new Set([
   've', 'ile', 'veya', 'yahut', 'ama', 'fakat', 'ancak', 'lakin', 'ki', 'de', 'da',
-  'mi', 'mu', 'bu', 'su', 'o', 'bir', 'her', 'hem', 'ya', 'ne', 'gibi', 'gore',
+  'mi', 'mu', 'bu', 'o', 'bir', 'her', 'hem', 'ya', 'ne', 'gibi', 'gore',
   'icin', 'uzere', 'kadar', 'daha', 'en', 'cok', 'az', 'olan', 'olarak', 'ise',
   'ait', 'dair', 'iliskin', 'karsi', 'sonra', 'once', 'arasinda', 'uzerinde', 'altinda',
   'icinde', 'disinda', 'tarafindan', 'sistemi', 'sistemleri', 'yapisi', 'ozellikleri',
@@ -278,7 +293,11 @@ export function stemTurkishSafe(word) {
     if (PROTECTED_ROOTS.has(current)) break;
     let stripped = false;
     for (const suf of TURKISH_SUFFIXES) {
-      if (current.length - suf.length >= 3 && current.endsWith(suf)) {
+      // Short 1-2 char suffixes require minRootLen >= 4 so 4-letter roots NEVER collide (`kaya` != `kayisi`, `kara` != `kar`, `masa` != `mas`, `yazi` != `yaz`)!
+      const minRoot = suf.length <= 2 ? 4 : 3;
+      if (current.length - suf.length >= minRoot && current.endsWith(suf)) {
+        // Never strip profession-forming `-ci/-cu` during stemmer pass (`futbolcu` must stay distinct from `futbol`!)
+        if (suf === 'ci' || suf === 'cu') continue;
         const rawCandidate = current.slice(0, -suf.length);
         // Do not strip single trailing vowel if rawCandidate would mangle a protected root (e.g. `denge` -> `deng`)
         if ((suf === 'e' || suf === 'a' || suf === 'i' || suf === 'u') && PROTECTED_ROOTS.has(current)) {
@@ -373,7 +392,7 @@ export const RAW_TAXONOMY_CLUSTERS = [
   [
     'medicine_bio',
     'dna|gen|genetik|kalitim|kromozom|sarmal|nukleotid|adenin|timin|guanin|sitozin|genom|mutasyon|crispr|klonlama|kalitsal|alel|mendel|dna gen',
-    'dna|helix|chromosome|gene|genetics|cell|microscope|test-tube|biology|science|molecule|heredity',
+    'dna|microscope|cell|molecule|helix|test-tube|chromosome|gene|genetics|biology|science|heredity',
     'server|stair|ladder|chimney',
     'bio_dna_helix|bio_chromosome_gene|bio_rna_strand|med_dna_helix',
   ],
@@ -848,8 +867,8 @@ export const RAW_TAXONOMY_CLUSTERS = [
  * so everyday & academic single words resolve with 100% precision!
  */
 export const DIRECT_TR_EN_PAIRS = {
-  araba: ['car', 'automobile', 'vehicle'],
-  otomobil: ['car', 'vehicle'],
+  araba: ['automobile', 'car', 'racing-car'],
+  otomobil: ['automobile', 'car'],
   kamyon: ['truck', 'delivery'],
   otobus: ['bus', 'transit'],
   tren: ['train', 'railway'],
@@ -878,8 +897,8 @@ export const DIRECT_TR_EN_PAIRS = {
   yagmur: ['rain', 'cloud-rain', 'umbrella'],
   kar: ['snow', 'snowflake', 'winter'],
   ruzgar: ['wind', 'breeze', 'turbine'],
-  ates: ['fire', 'flame', 'hot'],
-  su: ['water', 'droplet', 'wave'],
+  ates: ['fire', 'flame'],
+  su: ['droplet', 'water-wave', 'potable-water', 'water'],
   toprak: ['soil', 'earth', 'seedling'],
   hava: ['air', 'wind', 'cloud'],
   hayvan: ['animal', 'paw', 'dog', 'cat'],
@@ -1051,11 +1070,160 @@ export const DIRECT_TR_EN_PAIRS = {
   ekonomi: ['chart-increasing', 'money-bag', 'bank', 'coin'],
   ayakkabi: ['running-shoe', 'hiking-boot', 'high-heeled-shoe', 'athletic-shoe'],
   sapka: ['billed-cap', 'top-hat', 'graduation-cap', 'womans-hat'],
-  masa: ['desk', 'table', 'chair', 'lamp'],
-  sandalye: ['chair', 'seat', 'couch-and-lamp'],
+  masa: ['table', 'workspace-desk', 'desk', 'table-lamp'],
+  sandalye: ['chair', 'seat'],
   yedek: ['backup', 'database', 'cloud', 'download'],
   yedekleme: ['backup', 'database', 'cloud', 'download'],
   bardak: ['glass', 'cup', 'glass-of-milk', 'tumbler-glass'],
+  top: ['soccer-ball', 'basketball', 'volleyball', 'ball', 'tennis', 'baseball', 'beach-ball'],
+  futbol: ['soccer-ball', 'football', 'stadium', 'ball'],
+  basketbol: ['basketball', 'ball'],
+  voleybol: ['volleyball', 'ball'],
+  tenis: ['tennis', 'ball'],
+  beyzbol: ['baseball', 'softball'],
+  kaleci: ['soccer-ball', 'gloves', 'goal-net'],
+  stadyum: ['stadium', 'soccer-ball'],
+  dinazor: ['t-rex', 'sauropod', 'dinosaur-rex'],
+  dinozor: ['t-rex', 'sauropod', 'dinosaur-rex'],
+  astronot: ['astronaut', 'rocket', 'planet'],
+  kilic: ['sword', 'crossed-swords', 'dagger'],
+  bayrak: ['triangular-flag', 'flag', 'white-flag', 'chequered-flag'],
+  kayisi: ['peach', 'tangerine'],
+  bavul: ['luggage', 'suitcase', 'backpack'],
+  cadir: ['tent', 'camping'],
+  kamp: ['camping', 'tent'],
+  fener: ['flashlight', 'lantern'],
+  mum: ['candle', 'flame'],
+  tencere: ['pot-of-food', 'cooking'],
+  tava: ['cooking', 'frying-pan'],
+  bicak: ['kitchen-knife', 'knife'],
+  catal: ['fork-and-knife', 'fork'],
+  kasik: ['spoon', 'bowl-with-spoon'],
+  tabak: ['plate', 'fork-and-knife-with-plate'],
+  fincan: ['hot-beverage', 'teacup', 'coffee'],
+  sise: ['bottle', 'baby-bottle'],
+  tisort: ['t-shirt', 'shirt'],
+  pantolon: ['jeans', 'pants'],
+  ceket: ['coat', 'jacket'],
+  eldiven: ['gloves'],
+  atki: ['scarf'],
+  corap: ['socks'],
+  davul: ['drum'],
+  keman: ['violin'],
+  gitar: ['guitar'],
+  piyano: ['musical-keyboard', 'piano'],
+  satranc: ['chess-pawn', 'chess'],
+  zar: ['game-die', 'dice'],
+  kupa: ['trophy', 'cup'],
+  madalya: ['1st-place-medal', 'military-medal', 'sports-medal'],
+  duduk: ['whistle'],
+  pil: ['battery', 'battery-charging'],
+  priz: ['electric-plug', 'plug'],
+  ampul: ['light-bulb'],
+  tornavida: ['screwdriver', 'wrench', 'tools'],
+  testere: ['carpentry-saw', 'saw'],
+  balta: ['axe'],
+  cetvel: ['straight-ruler', 'triangular-ruler'],
+  silgi: ['eraser'],
+  atac: ['paperclip'],
+  dosya: ['file-folder', 'open-file-folder', 'page-facing-up'],
+  klasor: ['file-folder', 'open-file-folder'],
+  zarf: ['envelope', 'e-mail'],
+  mektup: ['envelope', 'love-letter', 'scroll'],
+  paket: ['package', 'wrapped-gift'],
+  kutu: ['package', 'box'],
+  hediye: ['wrapped-gift', 'gift'],
+  balon: ['balloon'],
+  pasta: ['birthday-cake', 'shortcake'],
+  dondurma: ['ice-cream', 'soft-ice-cream'],
+  cikolata: ['chocolate-bar'],
+  seker: ['candy', 'lollipop'],
+  pilav: ['cooked-rice', 'curry-rice'],
+  makarna: ['spaghetti'],
+  corba: ['bowl-with-spoon', 'pot-of-food'],
+  salata: ['green-salad'],
+  pizza: ['pizza'],
+  hamburger: ['hamburger'],
+  patates: ['potato', 'french-fries'],
+  domates: ['tomato'],
+  salatalik: ['cucumber'],
+  havuc: ['carrot'],
+  sogan: ['onion'],
+  sarimsak: ['garlic'],
+  biber: ['hot-pepper', 'bell-pepper'],
+  patlican: ['eggplant'],
+  armut: ['pear'],
+  muz: ['banana'],
+  portakal: ['tangerine', 'orange'],
+  limon: ['lemon'],
+  kiraz: ['cherries'],
+  karpuz: ['watermelon'],
+  kavun: ['melon'],
+  cilek: ['strawberry'],
+  avokado: ['avocado'],
+  ananas: ['pineapple'],
+  kivi: ['kiwi-fruit'],
+  inek: ['cow', 'cow-face'],
+  koyun: ['ewe', 'ram'],
+  keci: ['goat'],
+  tavuk: ['chicken', 'rooster'],
+  ordek: ['duck'],
+  tavsan: ['rabbit', 'rabbit-face'],
+  sincap: ['chipmunk'],
+  kirpi: ['hedgehog'],
+  tilki: ['fox'],
+  kurt: ['wolf'],
+  ayi: ['bear', 'polar-bear'],
+  kaplan: ['tiger', 'tiger-face'],
+  fil: ['elephant'],
+  zurafa: ['giraffe'],
+  zebra: ['zebra'],
+  maymun: ['monkey', 'monkey-face'],
+  goril: ['gorilla'],
+  panda: ['panda'],
+  koala: ['koala'],
+  kanguru: ['kangaroo'],
+  deve: ['camel', 'two-hump-camel'],
+  penguen: ['penguin'],
+  baykus: ['owl'],
+  kartal: ['eagle'],
+  papagan: ['parrot'],
+  flamingo: ['flamingo'],
+  kugu: ['swan'],
+  guvercin: ['dove'],
+  ari: ['honeybee', 'bee'],
+  kelebek: ['butterfly'],
+  karinca: ['ant'],
+  orumcek: ['spider'],
+  salyangoz: ['snail'],
+  kurbaga: ['frog'],
+  kaplumbaga: ['turtle'],
+  yilan: ['snake'],
+  timsah: ['crocodile'],
+  kertenkele: ['lizard'],
+  balina: ['whale', 'spouting-whale'],
+  yunus: ['dolphin'],
+  kopekbaligi: ['shark'],
+  ahtapot: ['octopus'],
+  yengec: ['crab'],
+  istakoz: ['lobster'],
+  karides: ['shrimp'],
+  fok: ['seal'],
+  roket: ['rocket'],
+  helikopter: ['helicopter'],
+  teleskop: ['telescope'],
+  mikroskop: ['microscope'],
+  stetoskop: ['stethoscope'],
+  ambulans: ['ambulance'],
+  itfaiye: ['fire-engine'],
+  polis: ['police-car', 'shield'],
+  taksi: ['taxi'],
+  metro: ['metro', 'train'],
+  traktor: ['tractor'],
+  motor: ['motorcycle', 'motor-scooter'],
+  yelkenli: ['sailboat'],
+  capa: ['anchor'],
+  semsiye: ['umbrella', 'closed-umbrella'],
 };
 
 /**
@@ -1155,27 +1323,30 @@ export const HOMONYM_DISCIPLINE_RULES = {
   },
 };
 
-// Precompile fast lookup tables on first load (1-to-1 Exact Lexicon FIRST, Academic Domain Clusters SECOND!)
-const trPhraseMap = new Map();
+// Precompile fast lookup tables on first load (Exact 1-to-1 Map SEPARATE from Stemmed Fallback Map!)
+const trExactMap = new Map();
+const trStemMap = new Map();
+const trPhraseMap = trExactMap;
 const enToTrReverseMap = new Map();
 
 function registerClusterInLookup(clusterObj) {
   for (const tr of clusterObj.trTerms) {
-    const existing = trPhraseMap.get(tr) || [];
+    const existing = trExactMap.get(tr) || [];
     if (!existing.includes(clusterObj)) existing.push(clusterObj);
-    trPhraseMap.set(tr, existing);
+    trExactMap.set(tr, existing);
 
-    const stemmed = tr.split(' ').map(stemTurkishSafe).join(' ');
+    const stemmed = tr.split(' ').map((w) => stemTurkishSafe(w) || w).join(' ');
     if (stemmed && stemmed !== tr) {
-      const ex2 = trPhraseMap.get(stemmed) || [];
+      const ex2 = trStemMap.get(stemmed) || [];
       if (!ex2.includes(clusterObj)) ex2.push(clusterObj);
-      trPhraseMap.set(stemmed, ex2);
+      trStemMap.set(stemmed, ex2);
     }
   }
 
-  // Tight reverse tagging: attach ONLY the first 3 primary Turkish synonyms so unrelated siblings never cross-tag!
-  const maxTrReverse = clusterObj.isExactLexicon ? 3 : 2;
-  for (const en of clusterObj.enTokens) {
+  // Tight reverse tagging: ONLY exact/curated clusters attach Turkish tags (NEVER noisy CLDR fallbacks or huge multi-topic bags!)
+  if (clusterObj.isCldrFallback) return;
+  const maxTrReverse = clusterObj.isDirect1to1 ? 2 : clusterObj.isExactLexicon ? 2 : 1;
+  for (const en of clusterObj.enTokens.slice(0, clusterObj.isDirect1to1 ? 3 : 2)) {
     const cleanEn = en.replace(/[^a-z0-9-]/g, '');
     if (!cleanEn) continue;
     let entry = enToTrReverseMap.get(cleanEn);
@@ -1190,7 +1361,7 @@ function registerClusterInLookup(clusterObj) {
   }
 }
 
-// 1. Register strict 1-to-1 DIRECT_TR_EN_PAIRS & EXTRA_DOMAIN_LEXICON FIRST (`isExactLexicon: true`)
+// 1. Register strict 1-to-1 DIRECT_TR_EN_PAIRS FIRST (`isDirect1to1: true`, `isExactLexicon: true`)
 for (const [trWord, enArr] of Object.entries(DIRECT_TR_EN_PAIRS)) {
   const normTr = normalizeTrToken(trWord);
   if (!normTr) continue;
@@ -1200,6 +1371,7 @@ for (const [trWord, enArr] of Object.entries(DIRECT_TR_EN_PAIRS)) {
     enTokens: enArr.map((s) => s.trim().toLowerCase()).filter(Boolean),
     blockedTokens: [],
     packIds: [],
+    isDirect1to1: true,
     isExactLexicon: true,
   });
 }
@@ -1210,13 +1382,15 @@ for (const [domain, rows] of Object.entries(EXTRA_DOMAIN_LEXICON)) {
     if (!trPart || !enPart) continue;
     const trTerms = trPart.split(',').map((s) => normalizeTrToken(s)).filter(Boolean);
     const enTokens = enPart.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const isTightPair = trTerms.length <= 2 && enTokens.length <= 2;
     registerClusterInLookup({
       domain,
       trTerms,
       enTokens,
       blockedTokens: [],
       packIds: [],
-      isExactLexicon: true,
+      isDirect1to1: false,
+      isExactLexicon: isTightPair,
     });
   }
 }
@@ -1234,17 +1408,27 @@ for (const row of RAW_TAXONOMY_CLUSTERS) {
     enTokens,
     blockedTokens,
     packIds,
+    isDirect1to1: false,
     isExactLexicon: false,
   });
 }
 
-// 3. Register 3,482 Official Unicode CLDR v49 Turkish Concepts LAST (ONLY for words NOT already in our curated 1-to-1 / academic / homonym tables!)
+// 3. Register Official Unicode CLDR Turkish Concepts LAST as low-priority fallback ONLY (`isCldrFallback: true`, NEVER blocks live translation!)
+const CLDR_NOISY_SLUGS = new Set([
+  'curling-stone', 'mirror-ball', 'confetti-ball', 'mosquito', 'flag-in-hole',
+  'ballot-box-with-ballot', 'water-closet', 'water-buffalo', 'rice-ball', 'yarn',
+]);
+const CLDR_PERSON_TR_RE = /^(adam|kadin|kiz|oglan|erkek|bebek|cocuk|insan|kisi|doktor|polis|asci|pilot|astronot|ogretmen|sarkici|dansci|sporcu|kosucu|yuzucu|bisikletci|hakim|itfaiyeci|ciftci|tamirci|ressam|ogrenci|prens|prenses|kral|kralice|kahraman|super|ninja|melek|cad|vampir|zombi|palya|gelin|damat|aile|cift)/;
+
 for (const [trTerm, enSlugs] of Object.entries(CLDR_TR_TO_EN_CONCEPTS)) {
   const normKey = normalizeTrToken(trTerm);
-  if (!normKey || trPhraseMap.has(normKey) || HOMONYM_DISCIPLINE_RULES[normKey]) continue;
-  const stemKey = stemTurkishSafe(normKey);
-  if (stemKey && (trPhraseMap.has(stemKey) || HOMONYM_DISCIPLINE_RULES[stemKey])) continue;
-  const cleanSlugs = enSlugs.filter((s) => !s.includes('face') && s !== 'mosquito');
+  if (!normKey || trExactMap.has(normKey) || HOMONYM_DISCIPLINE_RULES[normKey]) continue;
+  const allowPerson = CLDR_PERSON_TR_RE.test(normKey);
+  const cleanSlugs = enSlugs.filter((s) => {
+    if (s.includes('face') || CLDR_NOISY_SLUGS.has(s)) return false;
+    if (!allowPerson && /^(man|woman|person)-/.test(s)) return false;
+    return true;
+  });
   if (cleanSlugs.length === 0) continue;
   registerClusterInLookup({
     domain: 'general',
@@ -1252,7 +1436,9 @@ for (const [trTerm, enSlugs] of Object.entries(CLDR_TR_TO_EN_CONCEPTS)) {
     enTokens: cleanSlugs,
     blockedTokens: [],
     packIds: [],
-    isExactLexicon: true,
+    isDirect1to1: false,
+    isExactLexicon: false,
+    isCldrFallback: true,
   });
 }
 
@@ -1351,58 +1537,77 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  // 2. Full phrase match & multi-word n-gram matches (Highest specificity FIRST!)
+  // 2. Full phrase match & multi-word n-gram matches (Exact Map FIRST, Stemmed Map ONLY when no Exact Direct hit!)
   const phraseClusters = [];
   const wordClusters = [];
-  const tryLookup = (key, targetArr) => {
-    if (!key || TURKISH_STOPWORDS.has(key)) return;
-    const hits = trPhraseMap.get(key);
-    if (hits) {
-      for (const c of hits) {
+  const tryLookup = (key, targetArr, includeStemmed = false) => {
+    if (!key || (words.length > 1 && TURKISH_STOPWORDS.has(key))) return;
+    const exactHits = trExactMap.get(key);
+    if (exactHits) {
+      for (const c of exactHits) {
         if (!phraseClusters.includes(c) && !wordClusters.includes(c)) {
           targetArr.push(c);
         }
       }
     }
+    if (includeStemmed && !targetArr.some((c) => c.isDirect1to1)) {
+      const stemHits = trStemMap.get(key);
+      if (stemHits) {
+        for (const c of stemHits) {
+          if (!phraseClusters.includes(c) && !wordClusters.includes(c)) {
+            targetArr.push(c);
+          }
+        }
+      }
+    }
   };
 
-  tryLookup(norm, phraseClusters);
-  tryLookup(stemmedPhrase, phraseClusters);
+  tryLookup(norm, phraseClusters, false);
+  if (!phraseClusters.some((c) => c.isDirect1to1)) {
+    tryLookup(stemmedPhrase, phraseClusters, true);
+  }
 
   for (let i = 0; i < words.length; i++) {
     if (i + 1 < words.length) {
-      tryLookup(`${words[i]} ${words[i + 1]}`, phraseClusters);
-      tryLookup(`${stemmedWords[i]} ${stemmedWords[i + 1]}`, phraseClusters);
+      tryLookup(`${words[i]} ${words[i + 1]}`, phraseClusters, false);
+      tryLookup(`${stemmedWords[i]} ${stemmedWords[i + 1]}`, phraseClusters, true);
     }
   }
 
-  // Only expand stemmed single-word fallback when full phrase did NOT already hit an exact lexicon match!
+  // Only expand stemmed single-word fallback when full phrase did NOT already hit a direct/exact lexicon match!
+  const hasDirectPhraseHit = phraseClusters.some((c) => c.isDirect1to1);
   const hasExactSinglePhraseHit =
-    words.length === 1 && phraseClusters.some((c) => c.isExactLexicon);
+    words.length === 1 && (hasDirectPhraseHit || phraseClusters.some((c) => c.isExactLexicon));
 
   if (!hasExactSinglePhraseHit) {
     for (let i = 0; i < words.length; i++) {
       if (phraseClusters.length > 0 && stemmedWords[i].length <= 3) continue;
-      tryLookup(words[i], wordClusters);
-      tryLookup(stemmedWords[i], wordClusters);
+      tryLookup(words[i], wordClusters, false);
+      if (!wordClusters.some((c) => c.isDirect1to1)) {
+        tryLookup(stemmedWords[i], wordClusters, true);
+      }
       // Single-pass Turkish plural/verb strip backup (`kediler -> kedi`, `kosmak -> kosma/kos`, `yuzmek -> yuzme`)
       const w = words[i];
-      if (w.length >= 5) {
+      if (w.length >= 5 && !wordClusters.some((c) => c.isDirect1to1)) {
         for (const s of ['lar', 'ler', 'mak', 'mek', 'lik', 'luk', 'dan', 'den', 'da', 'de', 'im', 'um', 'in', 'un']) {
           if (w.length - s.length >= 3 && w.endsWith(s)) {
             const cut = restoreTurkishSoftening(w.slice(0, -s.length));
-            tryLookup(cut, wordClusters);
-            if (cut.endsWith('g')) tryLookup(`${cut.slice(0, -1)}k`, wordClusters);
-            if (cut.endsWith('b')) tryLookup(`${cut.slice(0, -1)}p`, wordClusters);
+            tryLookup(cut, wordClusters, true);
+            if (cut.endsWith('g')) tryLookup(`${cut.slice(0, -1)}k`, wordClusters, true);
+            if (cut.endsWith('b')) tryLookup(`${cut.slice(0, -1)}p`, wordClusters, true);
           }
         }
       }
     }
   }
 
-  // If an exact 1-to-1 lexicon entry (`isExactLexicon`) matched for a single-word everyday query,
-  // still harvest `blockedTokens` / `packIds` from specialist clusters, but keep ONLY tight tokens as `primaryEn`!
+  // HARD TIER-1 ISOLATION: If a curated 1-to-1 entry (`isDirect1to1`) matched, NEVER let noisy multi-concept bags
+  // (`EXTRA_DOMAIN_LEXICON` / `RAW_TAXONOMY_CLUSTERS` / `CLDR`) contaminate `primaryEn`!
+  const hasDirect1to1Hit =
+    phraseClusters.some((c) => c.isDirect1to1) ||
+    wordClusters.some((c) => c.isDirect1to1);
   const hasExactLexiconHit =
+    hasDirect1to1Hit ||
     phraseClusters.some((c) => c.isExactLexicon) ||
     wordClusters.some((c) => c.isExactLexicon);
 
@@ -1410,7 +1615,7 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
 
   // 3. Safe >=5-char prefix match while user is mid-typing a Turkish word (e.g. `mikroorg`, `helikop`, `ekokardi`)
   if (matchedClusters.length === 0 && norm.length >= 5) {
-    for (const [key, clusters] of trPhraseMap.entries()) {
+    for (const [key, clusters] of trExactMap.entries()) {
       if (
         key.length >= 5 &&
         !key.includes(' ') &&
@@ -1432,7 +1637,13 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
 
   for (const c of phraseClusters) {
     domains.add(c.domain);
-    if (c.isExactLexicon) {
+    if (hasDirect1to1Hit) {
+      if (c.isDirect1to1) {
+        c.enTokens.forEach((e) => primaryEn.add(e));
+      } else if (!c.isCldrFallback) {
+        c.enTokens.slice(0, 2).forEach((e) => secondaryEn.add(e));
+      }
+    } else if (c.isExactLexicon) {
       c.enTokens.forEach((e) => primaryEn.add(e));
     } else {
       c.enTokens.slice(0, 5).forEach((e) => primaryEn.add(e));
@@ -1448,7 +1659,13 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     for (const b of c.blockedTokens) blocked.add(b);
     for (const p of c.packIds) atlasIds.add(p);
 
-    if (c.isExactLexicon) {
+    if (hasDirect1to1Hit) {
+      if (c.isDirect1to1) {
+        c.enTokens.forEach((e) => primaryEn.add(e));
+      } else if (!c.isCldrFallback) {
+        c.enTokens.slice(0, 2).forEach((e) => secondaryEn.add(e));
+      }
+    } else if (c.isExactLexicon) {
       c.enTokens.forEach((e) => primaryEn.add(e));
     } else if (!hasExactLexiconHit && phraseClusters.length === 0) {
       c.enTokens.slice(0, 4).forEach((e) => primaryEn.add(e));
@@ -1478,13 +1695,13 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     if (intentProxies) {
       matchedEnglishIntent = true;
       // A curated English intent entry ALWAYS beats accidental Turkish-cluster collisions
-      // (e.g. English "stone" must never resolve through a Turkish soil/plant cluster, "rock" never to singers).
+      // and puts its #1 visual symbol FIRST (`football` -> `soccer-ball`, `stone` -> `rock`)!
       if (words.length === 1) {
         primaryEn.clear();
         secondaryEn.clear();
       }
-      primaryEn.add(w);
       intentProxies.forEach((p) => primaryEn.add(p));
+      primaryEn.add(w);
       continue;
     }
     if (w.length >= 2 && !TURKISH_STOPWORDS.has(w)) {
@@ -1534,11 +1751,14 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   const primaryArr = Array.from(primaryEn);
   const secondaryArr = Array.from(secondaryEn);
 
+  const hasCuratedNonCldrMatch =
+    phraseClusters.some((c) => !c.isCldrFallback) ||
+    wordClusters.some((c) => !c.isCldrFallback);
+
   const hasLexiconMatch =
     isHomonym ||
     matchedEnglishIntent ||
-    phraseClusters.length > 0 ||
-    wordClusters.length > 0;
+    hasCuratedNonCldrMatch;
 
   return {
     normalizedQuery: norm,

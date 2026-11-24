@@ -399,16 +399,21 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     activeNode.nodeStyle ?? defaultNodeStyle ?? 'card';
   const effectiveStickerSize: StickerSizePreset = activeNode.stickerSize ?? 'md';
 
-  // Slim mode activates ONLY when typing directly inside the branch Title input on touch devices.
-  // NEVER unmount the Icon Search input or Note textarea when the user taps into them!
+  // Dedicated ultra-compact Icon Search mode while keyboard is open inside `İkon ara...`
+  // Collapses the drag handle & Branch Title row so Search Input + FULL Icon Strip stay 100% visible above keyboard on Phone & Tablet!
   const isTitleInputFocused =
     typeof document !== 'undefined' && document.activeElement === titleInputRef.current;
+  const isIconSearchFocused =
+    kb.isKeyboardOpen &&
+    dockTab === 'icons' &&
+    (isSearchingCustomIcon ||
+      (typeof document !== 'undefined' && document.activeElement === iconSearchInputRef.current));
   const isSlimKeyboardMode =
     kb.isKeyboardOpen &&
     (kb.isPhone || kb.isTablet) &&
     dockTab === 'icons' &&
     isTitleInputFocused &&
-    !isSearchingCustomIcon;
+    !isIconSearchFocused;
 
   const toggleVoiceDictation = () => {
     void hapticLight();
@@ -682,8 +687,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             : '12px',
         }}
       >
-        {/* Tactile Smooth Drag / Swipe Handle Bar (Drag freely on tablets, swipe down to minimize on mobile!) */}
-        {!isSlimKeyboardMode && (
+        {/* Tactile Smooth Drag / Swipe Handle Bar (Hidden while keyboard is open for Title or Icon Search!) */}
+        {!isSlimKeyboardMode && !isIconSearchFocused && (
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <div
               data-testid="studio-drag-handle"
@@ -700,7 +705,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   ? 'Aşağı kaydır: Küçült • Yukarı kaydır: Tam Galeri'
                   : 'Paneli sağa, sola veya yukarı sürükleyerek taşıyın (Çift tıkla: Ortala)'
               }
-              className="flex h-5 flex-1 cursor-grab items-center justify-center gap-1.5 rounded-full hover:bg-slate-500/8 active:cursor-grabbing"
+              className="flex h-6 flex-1 touch-none cursor-grab items-center justify-center gap-1.5 rounded-full select-none hover:bg-slate-500/8 active:cursor-grabbing"
             >
               <span className="h-1 w-11 rounded-full bg-slate-400/55" />
               {!useFullWidthBottomSheet && (
@@ -733,7 +738,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           </div>
         )}
 
-        {/* ROW 0: Clean Spacious Title Input + Voice Mic + +Alt Dal + Done */}
+        {/* ROW 0: Clean Spacious Title Input (Auto-hidden while actively searching icons with keyboard open so icons stay 100% visible!) */}
+        {!isIconSearchFocused && (
         <div className="mb-2 flex items-center gap-1.5">
           <div
             className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-2xl border bg-white/80 px-3 shadow-2xs focus-within:ring-2 focus-within:ring-sky-500 dark:bg-slate-900/80"
@@ -845,6 +851,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             <span className="hidden sm:inline">Tamam</span>
           </button>
         </div>
+        )}
 
         {!isSheetMinimized && (
         <>
@@ -904,7 +911,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           <div className="space-y-2">
             <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
               <div
-                className="flex min-h-[40px] w-[168px] shrink-0 items-center gap-1.5 rounded-xl border bg-white/90 px-2.5 shadow-2xs focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 sm:w-[192px] dark:bg-slate-900/90"
+                className={`flex min-h-[40px] items-center gap-1.5 rounded-xl border bg-white/90 px-2.5 shadow-2xs focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35 dark:bg-slate-900/90 ${
+                  isIconSearchFocused ? 'min-w-[140px] flex-1' : 'w-[168px] shrink-0 sm:w-[192px]'
+                }`}
                 style={{ borderColor: customIconQuery ? '#0EA5E9' : 'var(--hud-border)' }}
               >
                 <Search className="h-4 w-4 shrink-0 text-sky-500" />
@@ -1022,6 +1031,21 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   <Search className="h-4 w-4" />
                   <span>Galeri</span>
                 </button>
+
+                {isIconSearchFocused && (
+                  <button
+                    type="button"
+                    aria-label="Klavyeyi kapat"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      iconSearchInputRef.current?.blur();
+                      void dismissNativeKeyboard();
+                    }}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-xs active:scale-95"
+                  >
+                    <Check className="h-4.5 w-4.5" />
+                  </button>
+                )}
               </div>
 
             {/* Live Gamified Sticker Carousel */}

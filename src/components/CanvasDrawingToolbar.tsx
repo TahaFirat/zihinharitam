@@ -179,8 +179,8 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
 
   const isPhone = kb.viewportW < 768;
   const effectiveMode: DockMode =
-    isPhone && (dock.mode === 'left' || dock.mode === 'right' || dock.mode === 'float')
-      ? 'bottom'
+    isPhone && (dock.mode === 'left' || dock.mode === 'right')
+      ? 'float'
       : dock.mode;
   const isVerticalRail = !isPhone && !dock.collapsed && (effectiveMode === 'left' || effectiveMode === 'right');
 
@@ -205,6 +205,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
     activeTool === 'ellipse';
 
   const startToolbarDrag = (e: React.PointerEvent<HTMLElement>) => {
+    e.preventDefault();
     e.stopPropagation();
     const el = panelRef.current;
     if (!el) return;
@@ -231,12 +232,19 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
     const dr = dragRef.current;
     const el = panelRef.current;
     if (!dr || !el || dr.pointerId !== e.pointerId) return;
-    const dx = e.clientX - dr.startClientX;
-    const dy = e.clientY - dr.startClientY;
-    if (Math.hypot(dx, dy) > 4) {
+    e.preventDefault();
+    const rawDx = e.clientX - dr.startClientX;
+    const rawDy = e.clientY - dr.startClientY;
+    if (Math.hypot(rawDx, rawDy) > 4) {
       dr.moved = true;
     }
-    el.style.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy)}px, 0)`;
+    const minDx = 8 - dr.origLeft;
+    const maxDx = kb.viewportW - dr.width - 8 - dr.origLeft;
+    const minDy = 64 - dr.origTop;
+    const maxDy = kb.viewportH - dr.height - 8 - dr.origTop;
+    const clampedDx = Math.max(minDx, Math.min(maxDx, rawDx));
+    const clampedDy = Math.max(minDy, Math.min(maxDy, rawDy));
+    el.style.transform = `translate3d(${Math.round(clampedDx)}px, ${Math.round(clampedDy)}px, 0)`;
   };
 
   const endToolbarDrag = (e: React.PointerEvent<HTMLElement>, onTapFallback?: () => void) => {
@@ -267,70 +275,55 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
     const vh = kb.viewportH;
     const dropLeft = dr.origLeft + dx;
     const dropTop = dr.origTop + dy;
-    const centerX = dropLeft + dr.width * 0.5;
-    const centerY = dropTop + dr.height * 0.5;
+    const clampedX = Math.max(10, Math.min(vw - dr.width - 10, Math.round(dropLeft)));
+    const clampedY = Math.max(68, Math.min(vh - dr.height - 10, Math.round(dropTop)));
 
     void hapticLight();
 
-    // Magnetic Samsung Notes / Apple PencilKit Edge Snapping!
-    if (isPhone) {
-      setDock((prev) => ({
-        ...prev,
-        mode: centerY < vh * 0.38 ? 'top' : 'bottom',
-      }));
-      return;
-    }
-
-    if (dropTop < 118) {
-      setDock((prev) => ({ ...prev, mode: 'top' }));
-    } else if (dropTop + dr.height > vh - 86) {
-      setDock((prev) => ({ ...prev, mode: 'bottom' }));
-    } else if (centerX < 130) {
-      setDock((prev) => ({ ...prev, mode: 'left' }));
-    } else if (centerX > vw - 130) {
-      setDock((prev) => ({ ...prev, mode: 'right' }));
+    // Smooth Magnetic Edge Snapping ONLY near edges; otherwise stay EXACTLY where dropped (`float`)!
+    if (clampedY <= 92) {
+      setDock((prev) => ({ ...prev, mode: 'top', x: clampedX, y: clampedY }));
+    } else if (clampedY + dr.height >= vh - 36) {
+      setDock((prev) => ({ ...prev, mode: 'bottom', x: clampedX, y: clampedY }));
+    } else if (!isPhone && clampedX <= 42) {
+      setDock((prev) => ({ ...prev, mode: 'left', x: clampedX, y: clampedY }));
+    } else if (!isPhone && clampedX + dr.width >= vw - 42) {
+      setDock((prev) => ({ ...prev, mode: 'right', x: clampedX, y: clampedY }));
     } else {
-      const clampedX = Math.max(14, Math.min(vw - dr.width - 14, Math.round(dropLeft)));
-      const clampedY = Math.max(76, Math.min(vh - dr.height - 20, Math.round(dropTop)));
       setDock((prev) => ({ ...prev, mode: 'float', x: clampedX, y: clampedY }));
     }
   };
 
-  // Compute grounded, smooth positioning for each magnetic dock zone
+  // Compute grounded, zero-jump positioning for each dock zone
   let wrapperStyle: React.CSSProperties;
   let wrapperClass = 'pointer-events-none fixed z-40 flex flex-col select-none';
 
   if (effectiveMode === 'top') {
     wrapperClass += ' inset-x-0 top-0 items-center px-2.5';
     wrapperStyle = {
-      paddingTop: 'max(72px, calc(var(--safe-top) + 66px))',
-      transition: isDragging ? 'none' : 'all 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+      paddingTop: 'max(70px, calc(var(--safe-top) + 64px))',
     };
   } else if (effectiveMode === 'left') {
     wrapperClass += ' left-0 top-1/2 -translate-y-1/2 items-start pl-3';
-    wrapperStyle = {
-      transition: isDragging ? 'none' : 'all 220ms cubic-bezier(0.22, 1, 0.36, 1)',
-    };
+    wrapperStyle = {};
   } else if (effectiveMode === 'right') {
     wrapperClass += ' right-0 top-1/2 -translate-y-1/2 items-end pr-3';
-    wrapperStyle = {
-      transition: isDragging ? 'none' : 'all 220ms cubic-bezier(0.22, 1, 0.36, 1)',
-    };
+    wrapperStyle = {};
   } else if (effectiveMode === 'float') {
+    const floatW = dock.collapsed ? 220 : isPhone ? Math.min(400, kb.viewportW - 20) : Math.min(680, kb.viewportW - 28);
     wrapperStyle = {
-      left: `${Math.max(12, Math.min(kb.viewportW - 140, dock.x))}px`,
-      top: `${Math.max(74, Math.min(kb.viewportH - 120, dock.y))}px`,
-      maxWidth: 'calc(100vw - 24px)',
-      transition: isDragging ? 'none' : 'all 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+      left: `${Math.max(10, Math.min(kb.viewportW - floatW - 10, dock.x))}px`,
+      top: `${Math.max(68, Math.min(kb.viewportH - 132, dock.y))}px`,
+      width: dock.collapsed ? undefined : `${floatW}px`,
+      maxWidth: 'calc(100vw - 20px)',
     };
   } else {
-    // Grounded Native Bottom Dock: flush bottom-sheet on phones, grounded subtle float on tablets
+    // Grounded Native Bottom Dock: flush bottom-sheet on phones, fixed-width dock on tablets
     wrapperClass += isPhone
       ? ' inset-x-0 bottom-0 items-center'
       : ' inset-x-0 bottom-0 items-center px-3';
     wrapperStyle = {
       paddingBottom: isPhone ? '0px' : 'max(14px, calc(var(--safe-bottom) + 10px))',
-      transition: isDragging ? 'none' : 'all 220ms cubic-bezier(0.22, 1, 0.36, 1)',
     };
   }
 
@@ -338,6 +331,14 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
     INK_TOOLS.find((t) => t.id === activeTool)?.icon ||
     SHAPE_TOOLS.find((t) => t.id === activeTool)?.icon ||
     PenTool;
+  const activeToolLabel =
+    activeTool === 'eraser' || hardwareEraserActive
+      ? eraserMode === 'stroke'
+        ? 'Çizgi Sil'
+        : 'Alan Sil'
+      : INK_TOOLS.find((t) => t.id === activeTool)?.label ||
+        SHAPE_TOOLS.find((t) => t.id === activeTool)?.label ||
+        'Kalem';
 
   return (
     <>
@@ -401,11 +402,13 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
             dock.collapsed
               ? 'flex items-center gap-2 rounded-full px-3 py-2'
               : isPhone && effectiveMode === 'bottom'
-              ? 'flex w-full flex-col gap-2 rounded-t-[26px] border-x-0 border-b-0 px-3 pt-1.5'
+              ? 'flex w-full max-w-full min-w-0 flex-col gap-2 overflow-hidden rounded-t-[26px] border-x-0 border-b-0 px-3 pt-1.5'
               : isVerticalRail
-              ? 'flex max-h-[76dvh] flex-col items-center gap-2 overflow-y-auto rounded-[26px] p-2'
-              : 'flex max-w-full flex-col gap-2 rounded-[26px] px-3 py-2'
-          } ${isDragging ? 'scale-[1.015] shadow-sky-500/20' : ''}`}
+              ? 'flex max-h-[76dvh] w-[78px] flex-col items-center gap-2 overflow-y-auto rounded-[26px] p-2'
+              : isPhone
+              ? 'flex w-full max-w-[400px] min-w-0 flex-col gap-2 overflow-hidden rounded-[26px] px-3 py-2'
+              : 'flex w-[min(680px,calc(100vw-28px))] max-w-full min-w-0 flex-col gap-2 overflow-hidden rounded-[26px] px-3 py-2'
+          } ${isDragging ? 'shadow-sky-500/25 ring-2 ring-sky-500/40' : ''}`}
           style={{
             backgroundColor: 'var(--hud-bg)',
             borderColor: 'var(--hud-border)',
@@ -431,7 +434,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                 }
                 onPointerCancel={(e) => endToolbarDrag(e)}
                 title="Sürükleyerek taşı veya dokunarak aç"
-                className="flex cursor-grab items-center gap-2 active:cursor-grabbing"
+                className="flex touch-none cursor-grab items-center gap-2 select-none active:cursor-grabbing"
               >
                 <span
                   className="flex h-9 w-9 items-center justify-center rounded-full text-white shadow-sm"
@@ -474,7 +477,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                   onPointerCancel={(e) => endToolbarDrag(e)}
                   onDoubleClick={() => setDock((p) => ({ ...p, mode: 'bottom' }))}
                   title="Araç çubuğunu sürükleyerek taşıyın (Çift tıkla: Alt)"
-                  className="flex h-7 flex-1 cursor-grab items-center justify-center rounded-lg hover:bg-slate-500/10 active:cursor-grabbing"
+                  className="flex h-8 flex-1 touch-none cursor-grab items-center justify-center rounded-lg select-none hover:bg-slate-500/10 active:cursor-grabbing"
                 >
                   <GripHorizontal className="h-4 w-4 opacity-60" />
                 </div>
@@ -648,7 +651,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
           ) : (
             /* Horizontal Grounded / Floating Dock (Top, Bottom, or Free-Floating) */
             <>
-              {/* Smooth Tactile Drag Bar + Minimize Pill */}
+              {/* Smooth Tactile Drag Bar (touch-none + generous 32px grab target!) + Active Tool Pill + Minimize */}
               <div className="flex items-center justify-between gap-2 px-0.5">
                 <div
                   data-testid="ink-drag-handle"
@@ -657,11 +660,14 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                   onPointerUp={(e) => endToolbarDrag(e)}
                   onPointerCancel={(e) => endToolbarDrag(e)}
                   onDoubleClick={() => setDock((p) => ({ ...p, mode: 'bottom' }))}
-                  title="Samsung Notes gibi sürükleyerek kenara veya istediğiniz yere taşıyın"
-                  className="flex h-5 flex-1 cursor-grab items-center justify-center gap-1.5 rounded-full hover:bg-slate-500/10 active:cursor-grabbing"
+                  title="Sürükleyerek istediğiniz yere taşıyın (Çift tıkla: Alta al)"
+                  className="flex h-8 flex-1 touch-none cursor-grab items-center justify-center gap-2 rounded-xl select-none hover:bg-slate-500/10 active:cursor-grabbing"
                 >
-                  <span className="h-1 w-10 rounded-full bg-slate-400/55" />
-                  <GripVertical className="hidden h-3 w-3 opacity-45 sm:block" />
+                  <GripVertical className="h-3.5 w-3.5 opacity-45" />
+                  <span className="h-1 w-10 rounded-full bg-slate-400/60" />
+                  <span className="text-[10.5px] font-extrabold opacity-60">
+                    {activeToolLabel}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -671,88 +677,83 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                     setDock((p) => ({ ...p, collapsed: true }));
                   }}
                   title="Araç çubuğunu küçült"
-                  className="inline-flex h-6 items-center gap-1 rounded-full bg-slate-500/10 px-2 text-[10px] font-extrabold opacity-75 hover:opacity-100 active:scale-95"
+                  className="inline-flex h-7 items-center gap-1 rounded-full bg-slate-500/10 px-2.5 text-[10.5px] font-extrabold opacity-75 hover:opacity-100 active:scale-95"
                 >
                   <Minimize2 className="h-3 w-3" />
                   <span className="hidden sm:inline">Küçült</span>
                 </button>
               </div>
 
-              {/* Row 1: Pen, Highlighter, Laser, Lasso, Smart Eraser, Shapes + Done */}
-              <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto">
-                <div className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-slate-500/10 p-1">
-                  {INK_TOOLS.map((tool) => {
-                    const Icon = tool.icon;
-                    const active = activeTool === tool.id || (tool.id === 'eraser' && hardwareEraserActive);
-                    return (
-                      <button
-                        key={tool.id}
-                        type="button"
-                        data-testid={`ink-tool-${tool.id}`}
-                        onClick={() => {
-                          void hapticLight();
-                          if (tool.id === 'eraser' && activeTool === 'eraser') {
-                            onToggleEraserMode();
-                          } else {
-                            onChangeTool(tool.id);
+              {/* Row 1: Scrollable Tools Strip + Pinned Right Done Button (ZERO layout shift & NEVER clipped on narrow phones!) */}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+                  <div className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-slate-500/10 p-1">
+                    {INK_TOOLS.map((tool) => {
+                      const Icon = tool.icon;
+                      const active = activeTool === tool.id || (tool.id === 'eraser' && hardwareEraserActive);
+                      return (
+                        <button
+                          key={tool.id}
+                          type="button"
+                          data-testid={`ink-tool-${tool.id}`}
+                          onClick={() => {
+                            void hapticLight();
+                            if (tool.id === 'eraser' && activeTool === 'eraser') {
+                              onToggleEraserMode();
+                            } else {
+                              onChangeTool(tool.id);
+                            }
+                          }}
+                          title={
+                            tool.id === 'eraser'
+                              ? `Silgi (${eraserMode === 'stroke' ? 'Çizgi Sil' : 'Alan Sil'} — tekrar dokun değiştir)`
+                              : tool.label
                           }
-                        }}
-                        title={
-                          tool.id === 'eraser'
-                            ? 'Silgi (Tekrar dokun: Çizgi Sil / Alan Sil geçişi)'
-                            : tool.label
-                        }
-                        className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold whitespace-nowrap transition active:scale-95 sm:px-3 ${
-                          active
-                            ? tool.id === 'eraser'
-                              ? 'bg-rose-500 text-white shadow-xs'
-                              : tool.id === 'laser'
-                              ? 'bg-red-600 text-white shadow-xs'
-                              : tool.id === 'lasso'
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'bg-sky-500 text-white shadow-xs'
-                            : 'opacity-85 hover:bg-slate-500/10 hover:opacity-100'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className={active ? 'inline' : 'hidden sm:inline'}>
-                          {tool.id === 'eraser' && active
-                            ? eraserMode === 'stroke'
-                              ? 'Çizgi Sil'
-                              : 'Alan Sil'
-                            : tool.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                          className={`inline-flex h-10 min-w-[38px] items-center justify-center gap-1 rounded-xl px-2 text-xs font-extrabold whitespace-nowrap transition-colors active:scale-95 sm:px-2.5 ${
+                            active
+                              ? tool.id === 'eraser'
+                                ? 'bg-rose-500 text-white shadow-xs'
+                                : tool.id === 'laser'
+                                ? 'bg-red-600 text-white shadow-xs'
+                                : tool.id === 'lasso'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-sky-500 text-white shadow-xs'
+                              : 'opacity-85 hover:bg-slate-500/10 hover:opacity-100'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="hidden sm:inline">{tool.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                {/* Geometric Shape Tools (Arrow / Line / Box / Circle) */}
-                <div className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-slate-500/10 p-1">
-                  {SHAPE_TOOLS.map((sh) => {
-                    const Icon = sh.icon;
-                    const active = activeTool === sh.id;
-                    return (
-                      <button
-                        key={sh.id}
-                        type="button"
-                        data-testid={`ink-tool-${sh.id}`}
-                        onClick={() => {
-                          void hapticLight();
-                          onChangeTool(sh.id);
-                        }}
-                        title={sh.label}
-                        className={`inline-flex min-h-[40px] items-center gap-1 rounded-xl px-2.5 text-xs font-extrabold whitespace-nowrap transition active:scale-95 ${
-                          active
-                            ? 'bg-violet-600 text-white shadow-xs'
-                            : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        {active && <span>{sh.label}</span>}
-                      </button>
-                    );
-                  })}
+                  {/* Geometric Shape Tools (Fixed uniform 36x40 buttons -> ZERO width jump!) */}
+                  <div className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-slate-500/10 p-1">
+                    {SHAPE_TOOLS.map((sh) => {
+                      const Icon = sh.icon;
+                      const active = activeTool === sh.id;
+                      return (
+                        <button
+                          key={sh.id}
+                          type="button"
+                          data-testid={`ink-tool-${sh.id}`}
+                          onClick={() => {
+                            void hapticLight();
+                            onChangeTool(sh.id);
+                          }}
+                          title={sh.label}
+                          className={`inline-flex h-10 w-9 items-center justify-center rounded-xl text-xs font-extrabold transition-colors active:scale-95 ${
+                            active
+                              ? 'bg-violet-600 text-white shadow-xs'
+                              : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <button
@@ -763,7 +764,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                     onClose();
                   }}
                   title="Çizim Modundan Çık"
-                  className="inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-xl bg-emerald-500 px-3.5 text-xs font-black text-white shadow-xs active:scale-95"
+                  className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl bg-emerald-500 px-3 text-xs font-black text-white shadow-xs active:scale-95"
                 >
                   <Check className="h-4 w-4" />
                   <span>Bitti</span>
@@ -840,25 +841,25 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1.5">
-                  {(activeTool === 'pen' || isShapeTool) && (
-                    <button
-                      type="button"
-                      data-testid="ink-autoshape-btn"
-                      onClick={() => {
-                        void hapticLight();
-                        onToggleAutoShape();
-                      }}
-                      title="Oto-Şekil: Çizip ucunda 0.4sn bekleyince düz çizgi, daire veya kutuya düzeltir"
-                      className={`inline-flex min-h-[36px] items-center gap-1 rounded-xl border px-2.5 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
-                        autoShapeEnabled
-                          ? 'border-amber-500/45 bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                          : 'border-slate-500/20 opacity-65 hover:opacity-100'
-                      }`}
-                    >
-                      <Wand2 className="h-3.5 w-3.5" />
-                      <span className="hidden md:inline">Oto-Şekil</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    data-testid="ink-autoshape-btn"
+                    onClick={() => {
+                      void hapticLight();
+                      onToggleAutoShape();
+                    }}
+                    title="Oto-Şekil: Çizip ucunda 0.4sn bekleyince düz çizgi, daire veya kutuya düzeltir"
+                    className={`inline-flex h-9 items-center gap-1 rounded-xl border px-2.5 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
+                      autoShapeEnabled && (activeTool === 'pen' || isShapeTool)
+                        ? 'border-amber-500/45 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                        : activeTool === 'pen' || isShapeTool
+                        ? 'border-slate-500/20 opacity-75 hover:opacity-100'
+                        : 'border-slate-500/15 opacity-40 hover:opacity-75'
+                    }`}
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Oto-Şekil</span>
+                  </button>
 
                   <button
                     type="button"
