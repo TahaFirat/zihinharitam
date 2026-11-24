@@ -45,7 +45,74 @@ export type NodePriorityTag = 'important' | 'exam' | 'review';
 
 export type IconTierFilter = 'all' | 'free' | 'pro';
 
-export type MindMapFolder = 'general' | 'study_exam' | 'engineering';
+export type MindMapFolder = 'general' | 'study_exam' | 'engineering' | (string & {});
+
+export type DocumentKind = 'mindmap' | 'flowchart';
+
+export type MindMapLayoutType = 'radial' | 'right_tree' | 'org_chart' | 'timeline';
+
+export type FlowchartShapeType =
+  | 'start_end'
+  | 'process'
+  | 'decision'
+  | 'io'
+  | 'database'
+  | 'document';
+
+export type FlowchartPort = 'top' | 'right' | 'bottom' | 'left';
+
+export type FlowchartEdgeRouting = 'orthogonal' | 'smooth';
+
+export interface FlowchartNode {
+  id: string;
+  shape: FlowchartShapeType;
+  title: string;
+  subtitle?: string;
+  emoji?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  sticker?: StickerAsset;
+}
+
+export interface FlowchartEdge {
+  id: string;
+  fromNodeId: string;
+  fromPort: FlowchartPort;
+  toNodeId: string;
+  toPort: FlowchartPort;
+  label?: string;
+  color?: string;
+  style?: 'solid' | 'dashed';
+  routing?: FlowchartEdgeRouting;
+}
+
+export interface FlowchartData {
+  nodes: FlowchartNode[];
+  edges: FlowchartEdge[];
+  direction?: 'TB' | 'LR';
+}
+
+export interface CustomUserFolder {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  createdAt: number;
+}
+
+export interface SrsCardProgress {
+  cardKey: string;
+  mapId: string;
+  nodeId: string;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  dueAt: number;
+  lastReviewedAt: number;
+}
 
 export type PaywallTriggerReason =
   | 'header_pill'
@@ -96,6 +163,10 @@ export interface MindNode {
   stickerSize?: StickerSizePreset;
   examHidden?: boolean;
   stickerUpdatedAt?: number;
+  /** Optional external reference link (https:// / http:// only, sanitized) */
+  linkUrl?: string;
+  /** Optional visual boundary / group container label */
+  groupLabel?: string;
 }
 
 export interface CrossLink {
@@ -144,13 +215,17 @@ export interface CanvasInkStroke {
 export interface MindMapDocument {
   id: string;
   title: string;
+  documentType?: DocumentKind;
+  layoutType?: MindMapLayoutType;
   department: AcademicDepartment;
   rootNodeId: string;
   nodes: Record<string, MindNode>;
   crossLinks?: CrossLink[];
+  flowchart?: FlowchartData;
   inkStrokes?: CanvasInkStroke[];
   stickyNotes?: CanvasStickyNote[];
   paperStyle?: PaperStyleType;
+  colorTheme?: string;
   createdAt: number;
   updatedAt: number;
   darkMode?: boolean;

@@ -1,5 +1,6 @@
 import {
   BRANCH_PALETTE,
+  type MindMapLayoutType,
   type MindNode,
   type StickerSizePreset,
 } from '../../types/mindmap';
@@ -517,4 +518,143 @@ export function computeRadialAutoLayout(
   layoutSide(leftBranches, -1);
 
   return resolveTreeCollisions(updated, rootNodeId);
+}
+
+/**
+ * Multi-Layout Mind Map Engine (`radial`, `right_tree`, `org_chart`, `timeline`):
+ * Instant 1-tap restructuring for Logic Trees, Top-Down Org Charts, and Chronological Timelines!
+ */
+export function computeMindMapLayout(
+  nodes: Record<string, MindNode>,
+  rootNodeId: string,
+  layoutType: MindMapLayoutType = 'radial'
+): Record<string, MindNode> {
+  if (layoutType === 'radial') {
+    return computeRadialAutoLayout(nodes, rootNodeId);
+  }
+  const root = nodes[rootNodeId];
+  if (!root) return nodes;
+
+  const updated: Record<string, MindNode> = {};
+  for (const [id, node] of Object.entries(nodes)) {
+    updated[id] = { ...node };
+  }
+  const childrenOf = (parentId: string): MindNode[] =>
+    Object.values(updated).filter((n) => n.parentId === parentId);
+
+  if (layoutType === 'right_tree') {
+    updated[rootNodeId].x = -260;
+    updated[rootNodeId].y = 0;
+
+    const subtreeH = (id: string): number => {
+      const n = updated[id];
+      if (!n) return 180;
+      const own = Math.max(160, estimateNodeDimensions(n, id === rootNodeId).totalHeight + 36);
+      if (n.collapsed) return own;
+      const kids = childrenOf(id);
+      if (!kids.length) return own;
+      return Math.max(own, kids.reduce((acc, k) => acc + subtreeH(k.id), 0));
+    };
+
+    const placeRight = (node: MindNode, depth: number, centerY: number) => {
+      const parent = node.parentId ? updated[node.parentId] : updated[rootNodeId];
+      const pDims = estimateNodeDimensions(parent, parent.id === rootNodeId);
+      const nDims = estimateNodeDimensions(node, false);
+      const stepX = Math.max(300, Math.round((pDims.width + nDims.width) * 0.5 + 92));
+      node.x = Math.round(parent.x + stepX);
+      node.y = Math.round(centerY);
+      if (depth > 1) node.branchColor = parent.branchColor;
+      if (node.collapsed) return;
+      const kids = childrenOf(node.id);
+      if (!kids.length) return;
+      const spans = kids.map((k) => subtreeH(k.id));
+      const total = spans.reduce((a, b) => a + b, 0);
+      let cursor = centerY - total * 0.5;
+      kids.forEach((kid, idx) => {
+        placeRight(kid, depth + 1, cursor + spans[idx] * 0.5);
+        cursor += spans[idx];
+      });
+    };
+
+    const main = childrenOf(rootNodeId);
+    const spans = main.map((m) => subtreeH(m.id));
+    const total = spans.reduce((a, b) => a + b, 0);
+    let cursor = -total * 0.5;
+    main.forEach((m, idx) => {
+      placeRight(m, 1, cursor + spans[idx] * 0.5);
+      cursor += spans[idx];
+    });
+    return resolveTreeCollisions(updated, rootNodeId);
+  }
+
+  if (layoutType === 'org_chart') {
+    updated[rootNodeId].x = 0;
+    updated[rootNodeId].y = -240;
+
+    const subtreeW = (id: string): number => {
+      const n = updated[id];
+      if (!n) return 260;
+      const own = Math.max(240, estimateNodeDimensions(n, id === rootNodeId).width + 54);
+      if (n.collapsed) return own;
+      const kids = childrenOf(id);
+      if (!kids.length) return own;
+      return Math.max(own, kids.reduce((acc, k) => acc + subtreeW(k.id), 0));
+    };
+
+    const placeDown = (node: MindNode, depth: number, centerX: number) => {
+      const parent = node.parentId ? updated[node.parentId] : updated[rootNodeId];
+      const pDims = estimateNodeDimensions(parent, parent.id === rootNodeId);
+      const nDims = estimateNodeDimensions(node, false);
+      const stepY = Math.max(220, Math.round(pDims.bottomExtent + nDims.topExtent + 64));
+      node.x = Math.round(centerX);
+      node.y = Math.round(parent.y + stepY);
+      if (depth > 1) node.branchColor = parent.branchColor;
+      if (node.collapsed) return;
+      const kids = childrenOf(node.id);
+      if (!kids.length) return;
+      const widths = kids.map((k) => subtreeW(k.id));
+      const total = widths.reduce((a, b) => a + b, 0);
+      let cursor = centerX - total * 0.5;
+      kids.forEach((kid, idx) => {
+        placeDown(kid, depth + 1, cursor + widths[idx] * 0.5);
+        cursor += widths[idx];
+      });
+    };
+
+    const main = childrenOf(rootNodeId);
+    const widths = main.map((m) => subtreeW(m.id));
+    const total = widths.reduce((a, b) => a + b, 0);
+    let cursor = -total * 0.5;
+    main.forEach((m, idx) => {
+      placeDown(m, 1, cursor + widths[idx] * 0.5);
+      cursor += widths[idx];
+    });
+    return updated;
+  }
+
+  // `timeline`: Horizontal chronological spine with main milestones alternating above & below
+  updated[rootNodeId].x = -380;
+  updated[rootNodeId].y = 0;
+
+  const main = childrenOf(rootNodeId);
+  const milestoneStepX = 330;
+  main.forEach((branch, idx) => {
+    const dirY = idx % 2 === 0 ? -1 : 1;
+    branch.x = Math.round(updated[rootNodeId].x + 340 + idx * milestoneStepX);
+    branch.y = dirY * 195;
+
+    const placeVerticalChain = (parent: MindNode, sign: number) => {
+      if (parent.collapsed) return;
+      const kids = childrenOf(parent.id);
+      kids.forEach((kid, kIdx) => {
+        kid.branchColor = parent.branchColor;
+        kid.x = Math.round(parent.x + (kIdx - (kids.length - 1) / 2) * 230);
+        kid.y = Math.round(parent.y + sign * 205);
+        placeVerticalChain(kid, sign);
+      });
+    };
+    placeVerticalChain(branch, dirY);
+  });
+
+  return updated;
 }

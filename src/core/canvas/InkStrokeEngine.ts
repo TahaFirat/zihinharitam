@@ -132,12 +132,22 @@ export function detectSnappedShape(
   const pLast = points[points.length - 1];
   const endDist = Math.hypot(pLast[0] - p0[0], pLast[1] - p0[1]);
 
-  // 1. Straight Line Detection (`endDist / pathLen >= 0.88`)
+  // 1. Straight Line Detection (`endDist / pathLen >= 0.88`) with magnetic 0° / 90° snap
   if (endDist > 30 && endDist / pathLen >= 0.88) {
-    return { tool: 'line', points: [p0, pLast] };
+    const dx = pLast[0] - p0[0];
+    const dy = pLast[1] - p0[1];
+    const absAngle = Math.abs(Math.atan2(dy, dx));
+    let snapEnd: [number, number, number] = pLast;
+    // Snap nearly horizontal (< 7.5°) or nearly vertical (> 82.5°) lines crisp!
+    if (absAngle < 0.13 || Math.abs(absAngle - Math.PI) < 0.13) {
+      snapEnd = [pLast[0], p0[1], pLast[2]];
+    } else if (Math.abs(absAngle - Math.PI / 2) < 0.13) {
+      snapEnd = [p0[0], pLast[1], pLast[2]];
+    }
+    return { tool: 'line', points: [p0, snapEnd] };
   }
 
-  // 2. Closed Shape Detection (`ellipse` vs `rect`) when start & end nearly meet
+  // 2. Closed Shape Detection (`ellipse` / perfect circle vs `rect` / square) when start & end nearly meet
   if (endDist < Math.max(46, diag * 0.34) && w > 22 && h > 22) {
     const cx = (minX + maxX) * 0.5;
     const cy = (minY + maxY) * 0.5;
@@ -162,7 +172,19 @@ export function detectSnappedShape(
     const avgEllipseErr = ellipseErrSum / points.length;
     const avgRectErr = rectErrSum / points.length;
 
-    if (avgEllipseErr < 0.24 && avgEllipseErr <= avgRectErr * 1.05) {
+    if (avgEllipseErr < 0.25 && avgEllipseErr <= avgRectErr * 1.08) {
+      // Snap near-circles into exact circles!
+      const ratioDiff = Math.abs(w - h) / Math.max(w, h);
+      if (ratioDiff < 0.17) {
+        const r = (rx + ry) * 0.5;
+        return {
+          tool: 'ellipse',
+          points: [
+            [cx - r, cy - r, 0.5],
+            [cx + r, cy + r, 0.5],
+          ],
+        };
+      }
       return {
         tool: 'ellipse',
         points: [
@@ -171,7 +193,7 @@ export function detectSnappedShape(
         ],
       };
     }
-    if (avgRectErr < 0.26) {
+    if (avgRectErr < 0.27) {
       return {
         tool: 'rect',
         points: [

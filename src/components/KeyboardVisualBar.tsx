@@ -72,6 +72,7 @@ interface KeyboardVisualBarProps {
   nodeScreenPos: { x: number; y: number } | null;
   onUpdateNodeTitle: (nodeId: string, title: string) => void;
   onUpdateNodeNote: (nodeId: string, note: string) => void;
+  onUpdateNodeLink?: (nodeId: string, linkUrl: string) => void;
   onToggleNodeCheck: (nodeId: string) => void;
   onChangePriorityTag: (nodeId: string, tag: NodePriorityTag | null) => void;
   onRequestEditTitle: () => void;
@@ -157,6 +158,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   nodeScreenPos: _nodeScreenPos,
   onUpdateNodeTitle,
   onUpdateNodeNote,
+  onUpdateNodeLink,
   onToggleNodeCheck,
   onChangePriorityTag,
   onRequestEditTitle,
@@ -1194,6 +1196,21 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               className="allow-text-input max-h-24 w-full resize-y rounded-2xl border bg-white/80 px-3 py-2 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500 sm:text-xs dark:bg-slate-900/80"
               style={{ borderColor: 'var(--hud-border)', color: 'var(--node-text)' }}
             />
+
+            {onUpdateNodeLink && (
+              <div className="flex items-center gap-2">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                <input
+                  type="url"
+                  data-testid="studio-link-input"
+                  value={activeNode.linkUrl ?? ''}
+                  onChange={(e) => onUpdateNodeLink(activeNode.id, e.target.value)}
+                  placeholder="Kaynak linki (https://youtube.com/..., PDF, makale)..."
+                  className="allow-text-input min-h-[36px] min-w-0 flex-1 rounded-xl border bg-white/75 px-3 text-xs font-semibold outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-900/75"
+                  style={{ borderColor: 'var(--hud-border)', color: 'var(--node-text)' }}
+                />
+              </div>
+            )}
 
             {showTechBadgeInput && (
               <div className="flex items-center gap-2">

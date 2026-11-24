@@ -116,8 +116,8 @@ const STEPS = [
   },
   {
     step: '3 / 4',
-    title: 'S-Pen & Apple Pencil ile Doğrudan Haritaya Çiz',
-    desc: 'Üstteki "Çiz" sekmesine dokun: Kalem, Kurşun, Fosforlu, Lazer, Oto-Şekil, Kement, Yapışkan Not, Defter Desenleri ve kalem silgi tuşu hazır!',
+    title: 'Akış Diyagramı, Kalem & Aralıklı Tekrar',
+    desc: 'Ayrı Akış Diyagramı stüdyosuyla süreç şemaları kur; S-Pen / Apple Pencil ile kalem, fosforlu, oto-şekil (basılı tut) ve silgi kullan, haritanı Flashcard ve Sunum moduna çevir!',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />

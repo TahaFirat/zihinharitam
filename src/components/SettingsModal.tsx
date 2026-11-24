@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileCheck2,
   Gift,
+  Globe,
   HelpCircle,
   History,
   Layers,
@@ -25,6 +26,7 @@ import {
   EntitlementManager,
   useEntitlements,
 } from '../core/monetization/EntitlementManager';
+import { useI18n, type LanguagePreference } from '../core/i18n/i18n';
 import {
   getHapticsEnabled,
   hapticLight,
@@ -70,6 +72,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenGuide,
   initialLegalDoc = null,
 }) => {
+  const { t, pref: langPref, setLanguagePref } = useI18n();
   const { isLifetimePro, localizedPrice, isBusy } = useEntitlements();
   const [hapticsOn, setHapticsOn] = useState<boolean>(() => getHapticsEnabled());
   const [snapshots, setSnapshots] = useState<MapRecoverySnapshot[]>([]);
@@ -390,7 +393,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* 2. Theme, Node Style & Haptics */}
+            {/* 2. Language, Theme, Node Style & Haptics */}
             <div
               className="space-y-3.5 rounded-2xl border p-4"
               style={{
@@ -398,8 +401,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 borderColor: 'var(--hud-border)',
               }}
             >
+              {/* Language Switcher (TR / EN / Auto) */}
               <div>
-                <div className="mb-2 text-xs font-extrabold">Çalışma Teması</div>
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-extrabold">
+                  <Globe className="h-3.5 w-3.5 text-sky-500" />
+                  <span>{t('Uygulama Dili / App Language', 'App Language / Dil')}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { id: 'auto', label: t('Otomatik', 'Auto') },
+                      { id: 'tr', label: 'Türkçe' },
+                      { id: 'en', label: 'English' },
+                    ] as Array<{ id: LanguagePreference; label: string }>
+                  ).map((opt) => {
+                    const active = langPref === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        data-testid={`lang-btn-${opt.id}`}
+                        onClick={() => {
+                          void hapticLight();
+                          setLanguagePref(opt.id);
+                        }}
+                        className={`flex min-h-[40px] items-center justify-center rounded-xl border px-2.5 py-2 text-xs font-bold ${
+                          active
+                            ? 'border-sky-500 bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                            : 'hover:bg-slate-500/5'
+                        }`}
+                        style={{ borderColor: active ? undefined : 'var(--hud-border)' }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs font-extrabold">{t('Çalışma Teması', 'Workspace Theme')}</div>
                 <div className="grid grid-cols-3 gap-2">
                   {(
                     [

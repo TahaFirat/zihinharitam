@@ -1,7 +1,9 @@
 import Dexie, { type Table } from 'dexie';
 import type {
   AcademicDepartment,
+  CustomUserFolder,
   MindMapDocument,
+  SrsCardProgress,
   VisualStyleMode,
 } from '../../types/mindmap';
 import { globalStickerMemoryCache } from '../visuals/StickerMemoryCache';
@@ -437,6 +439,73 @@ export const LocalStore = {
     await db.svgCache.bulkPut(
       items.map((i) => ({ iconId: i.iconId, svgMarkup: i.svgMarkup, updatedAt: now }))
     );
+  },
+
+  async listCustomFolders(): Promise<CustomUserFolder[]> {
+    try {
+      const rec = await db.appMeta.get('custom_folders_v1');
+      const raw = rec?.value || (typeof localStorage !== 'undefined' ? localStorage.getItem('zh_custom_folders_v1') : null);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (f): f is CustomUserFolder =>
+          Boolean(f && typeof f.id === 'string' && typeof f.name === 'string')
+      );
+    } catch {
+      return [];
+    }
+  },
+
+  async saveCustomFolders(folders: CustomUserFolder[]): Promise<void> {
+    const clean = folders.slice(0, 30);
+    const serialized = JSON.stringify(clean);
+    try {
+      localStorage.setItem('zh_custom_folders_v1', serialized);
+    } catch {
+      // Ignore storage quota
+    }
+    try {
+      await db.appMeta.put({
+        key: 'custom_folders_v1',
+        value: serialized,
+        updatedAt: Date.now(),
+      });
+    } catch {
+      // Ignore
+    }
+  },
+
+  async loadSrsProgressMap(): Promise<Record<string, SrsCardProgress>> {
+    try {
+      const rec = await db.appMeta.get('srs_progress_v1');
+      const raw = rec?.value || (typeof localStorage !== 'undefined' ? localStorage.getItem('zh_srs_progress_v1') : null);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, SrsCardProgress>)
+        : {};
+    } catch {
+      return {};
+    }
+  },
+
+  async saveSrsProgressMap(progress: Record<string, SrsCardProgress>): Promise<void> {
+    const serialized = JSON.stringify(progress);
+    try {
+      localStorage.setItem('zh_srs_progress_v1', serialized);
+    } catch {
+      // Ignore
+    }
+    try {
+      await db.appMeta.put({
+        key: 'srs_progress_v1',
+        value: serialized,
+        updatedAt: Date.now(),
+      });
+    } catch {
+      // Ignore
+    }
   },
 
   revokeAllObjectUrls(): void {

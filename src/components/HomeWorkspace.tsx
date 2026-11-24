@@ -4,6 +4,7 @@ import {
   Crown,
   Download,
   FolderInput,
+  FolderPlus,
   HelpCircle,
   MoreHorizontal,
   Pencil,
@@ -15,18 +16,22 @@ import {
   Trash2,
   Upload,
   Wand2,
+  Workflow,
   X,
 } from 'lucide-react';
 import { APP_RELEASE_CONFIG } from '../config/appReleaseConfig';
 import { BrandLogo } from './BrandLogo';
 import { generateMapThumbnailDataUrl } from '../core/canvas/ThumbnailGenerator';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
+import { useI18n } from '../core/i18n/i18n';
 import { hapticLight, shareOrDownloadFile } from '../core/native/NativeBridge';
 import { normalizeTrToken } from '../core/visuals/SemanticTaxonomyTR';
 import { ACADEMIC_TEMPLATES } from '../data/academicTemplates';
+import { FLOWCHART_TEMPLATES } from '../data/flowchartTemplates';
 import {
   DEPARTMENT_LABELS,
   type AcademicDepartment,
+  type CustomUserFolder,
   type MindMapDocument,
   type MindMapFolder,
   type PaywallTriggerReason,
@@ -34,17 +39,24 @@ import {
 
 export type WorkspaceFolderFilter =
   | 'all'
+  | 'flowcharts'
   | 'pinned'
   | 'study_exam'
   | 'engineering'
-  | 'trash';
+  | 'trash'
+  | (string & {});
 
 interface HomeWorkspaceProps {
   maps: MindMapDocument[];
   activeMapId: string;
+  customFolders: CustomUserFolder[];
+  onCreateCustomFolder: (name: string, emoji: string, color: string) => void;
+  onDeleteCustomFolder: (folderId: string) => void;
   onOpenMap: (map: MindMapDocument) => void;
   onCreateBlankMap: (title: string, department: AcademicDepartment) => void;
+  onCreateBlankFlowchart: (title: string, department: AcademicDepartment) => void;
   onCreateFromTemplate: (templateId: string) => void;
+  onCreateFromFlowchartTemplate: (templateId: string) => void;
   onOpenSmartMapGenerator: () => void;
   onRenameMap: (mapId: string, newTitle: string) => void;
   onDuplicateMap: (map: MindMapDocument) => void;
@@ -77,9 +89,14 @@ function formatRelativeDateTr(ts: number): string {
 export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   maps,
   activeMapId,
+  customFolders,
+  onCreateCustomFolder,
+  onDeleteCustomFolder,
   onOpenMap,
   onCreateBlankMap,
+  onCreateBlankFlowchart,
   onCreateFromTemplate,
+  onCreateFromFlowchartTemplate,
   onOpenSmartMapGenerator,
   onRenameMap,
   onDuplicateMap,
@@ -93,6 +110,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onOpenSettings,
   onTriggerPaywall,
 }) => {
+  const { t, isEn } = useI18n();
   const { isLifetimePro, localizedPrice } = useEntitlements();
   const [searchQuery, setSearchQuery] = useState('');
   const [folderFilter, setFolderFilter] = useState<WorkspaceFolderFilter>('all');
@@ -100,11 +118,16 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
 
-  // Clean new-map & free permanent-delete confirmation modal state
+  // Clean new-map / new-flowchart, custom-folder & free permanent-delete modal state
   const [newMapPromptOpen, setNewMapPromptOpen] = useState(false);
+  const [newDocKind, setNewDocKind] = useState<'mindmap' | 'flowchart'>('mindmap');
   const [newMapTitle, setNewMapTitle] = useState('');
   const [newMapDept, setNewMapDept] = useState<AcademicDepartment>('genel');
   const [confirmPermanentDeleteMap, setConfirmPermanentDeleteMap] = useState<MindMapDocument | null>(null);
+  const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderEmoji, setNewFolderEmoji] = useState('📁');
+  const [newFolderColor, setNewFolderColor] = useState('#0EA5E9');
 
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,8 +162,16 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
     return sourceList
       .filter((m) => {
         if (folderFilter === 'pinned' && !m.isPinned) return false;
-        if (folderFilter === 'study_exam' && m.folder !== 'study_exam') return false;
-        if (folderFilter === 'engineering' && m.folder !== 'engineering') return false;
+        if (folderFilter === 'flowcharts' && m.documentType !== 'flowchart') return false;
+        if (
+          folderFilter !== 'all' &&
+          folderFilter !== 'pinned' &&
+          folderFilter !== 'flowcharts' &&
+          folderFilter !== 'trash' &&
+          m.folder !== folderFilter
+        ) {
+          return false;
+        }
 
         if (!normQ) return true;
         if (normalizeTrToken(m.title).includes(normQ)) return true;
@@ -149,6 +180,11 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           if (normalizeTrToken(node.title).includes(normQ)) return true;
           if (node.subtitle && normalizeTrToken(node.subtitle).includes(normQ)) {
             return true;
+          }
+        }
+        if (m.flowchart?.nodes) {
+          for (const fn of m.flowchart.nodes) {
+            if (normalizeTrToken(fn.title).includes(normQ)) return true;
           }
         }
         return false;
@@ -179,14 +215,33 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       onTriggerPaywall('map_limit');
       return;
     }
+    setNewDocKind('mindmap');
     setNewMapTitle('');
     setNewMapDept('genel');
     setNewMapPromptOpen(true);
   };
 
+  const handleClickNewBlankFlowchart = () => {
+    void hapticLight();
+    if (!isLifetimePro && activeMapsCount >= freeLimit) {
+      onTriggerPaywall('map_limit');
+      return;
+    }
+    setNewDocKind('flowchart');
+    setNewMapTitle('');
+    setNewMapDept('sistem_tasarimi');
+    setNewMapPromptOpen(true);
+  };
+
   const handleConfirmBlankMap = (e?: React.FormEvent) => {
     e?.preventDefault();
-    const finalTitle = newMapTitle.trim() || 'Yeni Görsel Harita';
+    if (newDocKind === 'flowchart') {
+      const finalTitle = newMapTitle.trim() || t('Yeni Akış Diyagramı', 'New Flowchart');
+      setNewMapPromptOpen(false);
+      onCreateBlankFlowchart(finalTitle, newMapDept);
+      return;
+    }
+    const finalTitle = newMapTitle.trim() || t('Yeni Görsel Harita', 'New Visual Map');
     setNewMapPromptOpen(false);
     onCreateBlankMap(finalTitle, newMapDept);
   };
@@ -365,9 +420,27 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   <Plus className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-sm font-extrabold">+ Yeni Harita</div>
+                  <div className="text-sm font-extrabold">{t('+ Yeni Harita', '+ Mind Map')}</div>
                   <div className="text-[11px] opacity-80">
-                    Sıfırdan hemen başla
+                    {t('Zihin haritasıyla başla', 'Start visual mind map')}
+                  </div>
+                </div>
+              </button>
+
+              {/* 1b. Dedicated Blank Flowchart Studio */}
+              <button
+                type="button"
+                onClick={handleClickNewBlankFlowchart}
+                data-testid="create-blank-flowchart-btn"
+                className="flex min-h-[104px] w-46 shrink-0 flex-col justify-between rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-4 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
+                  <Workflow className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-extrabold">{t('+ Akış Diyagramı', '+ Flowchart')}</div>
+                  <div className="text-[11px] opacity-85">
+                    {t('Süreç, karar & algoritma', 'Process, decision & flow')}
                   </div>
                 </div>
               </button>
@@ -458,43 +531,124 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   </div>
                 </button>
               ))}
+
+              {/* 5. Ready Flowchart Templates */}
+              {FLOWCHART_TEMPLATES.map((ftpl) => (
+                <button
+                  key={ftpl.id}
+                  type="button"
+                  onClick={() => onCreateFromFlowchartTemplate(ftpl.id)}
+                  data-testid={`flowchart-template-${ftpl.id}`}
+                  className="relative flex min-h-[112px] w-56 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border p-4 text-left shadow-2xs transition hover:-translate-y-0.5 hover:border-emerald-500/45 hover:shadow-md active:scale-[0.98]"
+                  style={{
+                    backgroundColor: 'var(--hud-bg)',
+                    borderColor: 'var(--hud-border)',
+                  }}
+                >
+                  <span
+                    className="absolute inset-x-0 top-0 h-1 opacity-90"
+                    style={{ backgroundColor: ftpl.accentColor }}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1 text-xs font-extrabold">
+                      <Workflow className="h-3.5 w-3.5" style={{ color: ftpl.accentColor }} />
+                      {isEn ? ftpl.categoryEn : ftpl.categoryTr}
+                    </span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white"
+                      style={{ backgroundColor: ftpl.accentColor }}
+                    >
+                      {t('Akış', 'Flow')}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="line-clamp-1 text-xs font-extrabold">
+                      {isEn ? ftpl.titleEn : ftpl.titleTr}
+                    </div>
+                    <div className="mt-0.5 line-clamp-1 text-[11px] opacity-65">
+                      {isEn ? ftpl.subtitleEn : ftpl.subtitleTr}
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
           </section>
 
-          {/* Folder & Trash Tabs */}
+          {/* Folder, Flowchart & Custom Folder Tabs */}
           <section className="space-y-4">
             <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto border-b pb-2.5" style={{ borderColor: 'var(--hud-border)' }}>
               {[
-                { id: 'all' as const, label: `Tümü (${activeMaps.length})` },
-                { id: 'pinned' as const, label: '📌 Sabitlenenler' },
-                { id: 'study_exam' as const, label: '📚 Ders & Sınav' },
-                { id: 'engineering' as const, label: '💻 Mühendislik' },
+                { id: 'all', label: `${t('Tümü', 'All')} (${activeMaps.length})` },
+                {
+                  id: 'flowcharts',
+                  label: `🔀 ${t('Akış Diyagramları', 'Flowcharts')} (${activeMaps.filter((m) => m.documentType === 'flowchart').length})`,
+                },
+                { id: 'pinned', label: `📌 ${t('Sabitlenenler', 'Pinned')}` },
+                { id: 'study_exam', label: `📚 ${t('Ders & Sınav', 'Study & Exam')}` },
+                { id: 'engineering', label: `💻 ${t('Mühendislik', 'Engineering')}` },
+                ...customFolders.map((cf) => ({
+                  id: cf.id,
+                  label: `${cf.emoji} ${cf.name}`,
+                  custom: cf,
+                })),
                 ...(isLifetimePro
                   ? [
                       {
-                        id: 'trash' as const,
-                        label: `🗑️ Çöp Kutusu (${trashedMaps.length})`,
+                        id: 'trash',
+                        label: `🗑️ ${t('Çöp Kutusu', 'Trash')} (${trashedMaps.length})`,
                       },
                     ]
                   : []),
               ].map((tab) => {
                 const active = folderFilter === tab.id;
+                const customFolder = 'custom' in tab ? tab.custom : undefined;
                 return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    data-testid={`folder-tab-${tab.id}`}
-                    onClick={() => setFolderFilter(tab.id)}
-                    className={`min-h-[40px] shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-extrabold transition ${
-                      active
-                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950'
-                        : 'opacity-70 hover:bg-slate-500/10 hover:opacity-100'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
+                  <div key={tab.id} className="inline-flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      data-testid={`folder-tab-${tab.id}`}
+                      onClick={() => setFolderFilter(tab.id)}
+                      className={`min-h-[40px] shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-extrabold transition ${
+                        active
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950'
+                          : 'opacity-70 hover:bg-slate-500/10 hover:opacity-100'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                    {customFolder && active && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onDeleteCustomFolder(customFolder.id);
+                          setFolderFilter('all');
+                        }}
+                        title={t('Klasörü Sil', 'Delete Folder')}
+                        className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-500/10"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
+
+              <button
+                type="button"
+                data-testid="create-custom-folder-btn"
+                onClick={() => {
+                  void hapticLight();
+                  setNewFolderName('');
+                  setNewFolderEmoji('📁');
+                  setNewFolderColor('#0EA5E9');
+                  setNewFolderModalOpen(true);
+                }}
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl border border-dashed px-3 py-1.5 text-xs font-extrabold text-sky-600 hover:bg-sky-500/10 dark:text-sky-300"
+                style={{ borderColor: 'var(--hud-border)' }}
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+                <span>{t('+ Klasör', '+ Folder')}</span>
+              </button>
             </div>
 
             {folderFilter === 'trash' && trashedMaps.length > 0 && (
@@ -576,6 +730,13 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                           </div>
                         )}
 
+                        {map.documentType === 'flowchart' && !isTrashed && (
+                          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-emerald-600/90 px-2.5 py-0.5 text-[10px] font-extrabold text-white shadow-xs backdrop-blur-xs">
+                            <Workflow className="h-2.5 w-2.5" />
+                            {t('Akış Diyagramı', 'Flowchart')}
+                          </span>
+                        )}
+
                         {map.isPinned && !isTrashed && (
                           <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2.5 py-0.5 text-[10px] font-extrabold text-white backdrop-blur-xs">
                             <Pin className="h-2.5 w-2.5" />
@@ -630,10 +791,23 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                             </button>
                           )}
 
-                          <div className="mt-0.5 flex items-center gap-2 text-[11.5px] opacity-65">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] opacity-70">
                             <span>
-                              {deptInfo.emoji} {nodeCount} dal
+                              {map.documentType === 'flowchart' && map.flowchart
+                                ? `🔀 ${map.flowchart.nodes.length} ${t('blok', 'blocks')} • ${map.flowchart.edges.length} ${t('ok', 'edges')}`
+                                : `${deptInfo.emoji} ${nodeCount} ${t('dal', 'nodes')}`}
                             </span>
+                            {(() => {
+                              const allN = Object.values(map.nodes || {});
+                              const totalChecks = allN.filter((n) => typeof n.checked === 'boolean').length;
+                              if (totalChecks === 0) return null;
+                              const doneChecks = allN.filter((n) => n.checked === true).length;
+                              return (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.2 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                                  ✓ {doneChecks}/{totalChecks}
+                                </span>
+                              );
+                            })()}
                             <span>•</span>
                             <span>{formatRelativeDateTr(map.updatedAt)}</span>
                           </div>
@@ -735,12 +909,28 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold hover:bg-slate-500/10"
                                 >
                                   <FolderInput className="h-3.5 w-3.5 opacity-70" />
-                                  <span>
-                                    {map.folder === 'engineering'
-                                      ? 'Ders & Sınav Klasörüne Al'
-                                      : 'Mühendislik Klasörüne Al'}
-                                  </span>
-                                </button>
+                                    <span>
+                                      {map.folder === 'engineering'
+                                        ? t('Ders & Sınav Klasörüne Al', 'Move to Study & Exam')
+                                        : t('Mühendislik Klasörüne Al', 'Move to Engineering')}
+                                    </span>
+                                  </button>
+                                  {customFolders.map((cf) => (
+                                    <button
+                                      key={cf.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setMenuOpenId(null);
+                                        onChangeMapFolder(map.id, cf.id);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold hover:bg-slate-500/10"
+                                    >
+                                      <span>{cf.emoji}</span>
+                                      <span className="truncate">
+                                        {t(`${cf.name} Klasörüne Al`, `Move to ${cf.name}`)}
+                                      </span>
+                                    </button>
+                                  ))}
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -800,7 +990,11 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
             }}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold">Yeni Görsel Zihin Haritası</h3>
+              <h3 className="text-base font-extrabold">
+                {newDocKind === 'flowchart'
+                  ? t('Yeni Akış Diyagramı', 'New Flowchart Diagram')
+                  : t('Yeni Görsel Zihin Haritası', 'New Visual Mind Map')}
+              </h3>
               <button
                 type="button"
                 onClick={() => setNewMapPromptOpen(false)}
@@ -811,13 +1005,19 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
             </div>
 
             <label className="mt-3 block text-xs font-bold opacity-75">
-              Merkez Konu Başlığı
+              {newDocKind === 'flowchart'
+                ? t('Akış Diyagramı Başlığı', 'Flowchart Title')
+                : t('Merkez Konu Başlığı', 'Central Topic Title')}
             </label>
             <input
               type="text"
               value={newMapTitle}
               onChange={(e) => setNewMapTitle(e.target.value)}
-              placeholder="Örn: Kardiyoloji Semiyolojisi, Mikroservis Mimarisi..."
+              placeholder={
+                newDocKind === 'flowchart'
+                  ? t('Örn: Ödeme Süreci, Klinik Tanı Algoritması...', 'e.g. Checkout Flow, Triage Algorithm...')
+                  : t('Örn: Kardiyoloji Semiyolojisi, Mikroservis Mimarisi...', 'e.g. Cardiology Notes, System Design...')
+              }
               autoFocus
               data-testid="new-map-title-input"
               className="allow-text-input mt-1.5 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-base font-bold outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
@@ -857,6 +1057,83 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 className="min-h-[42px] rounded-xl bg-slate-900 px-5 text-xs font-extrabold text-white shadow-xs active:scale-95 dark:bg-sky-500 dark:text-slate-950"
               >
                 Haritayı Aç
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Create Custom Folder Dialog */}
+      {newFolderModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-xs"
+          onClick={() => setNewFolderModalOpen(false)}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const clean = newFolderName.trim();
+              if (!clean) return;
+              onCreateCustomFolder(clean, newFolderEmoji, newFolderColor);
+              setNewFolderModalOpen(false);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="custom-folder-modal"
+            className="w-full max-w-sm rounded-3xl border p-5 shadow-2xl"
+            style={{
+              backgroundColor: 'var(--canvas-bg)',
+              borderColor: 'var(--hud-border)',
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold">{t('Yeni Özel Klasör', 'New Custom Folder')}</h3>
+              <button
+                type="button"
+                onClick={() => setNewFolderModalOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-500/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              type="text"
+              autoFocus
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder={t('Örn: Anatomi, AYT Tarih, Projeler...', 'e.g. Anatomy, History, Projects...')}
+              data-testid="custom-folder-name-input"
+              className="allow-text-input mt-3 min-h-[44px] w-full rounded-xl border bg-transparent px-3.5 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500"
+              style={{ borderColor: 'var(--hud-border)' }}
+            />
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {['📁', '🧠', '🩺', '⚖️', '💻', '📐', '🧪', '📜', '🎯', '🚀'].map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => setNewFolderEmoji(em)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl text-base transition ${
+                    newFolderEmoji === em ? 'bg-sky-500/20 ring-2 ring-sky-500' : 'hover:bg-slate-500/10'
+                  }`}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setNewFolderModalOpen(false)}
+                className="min-h-[40px] rounded-xl px-4 text-xs font-bold opacity-75 hover:bg-slate-500/10"
+              >
+                {t('Vazgeç', 'Cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={!newFolderName.trim()}
+                data-testid="custom-folder-confirm-btn"
+                className="min-h-[40px] rounded-xl bg-slate-900 px-4 text-xs font-extrabold text-white disabled:opacity-40 dark:bg-sky-500 dark:text-slate-950"
+              >
+                {t('Klasör Oluştur', 'Create Folder')}
               </button>
             </div>
           </form>

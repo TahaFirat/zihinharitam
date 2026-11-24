@@ -14,7 +14,8 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "purchaseLifetime", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkEntitlements", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "presentOfferCodeRedeemSheet", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "presentOfferCodeRedeemSheet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestAppReview", returnType: CAPPluginReturnPromise)
     ]
 
     private let monthlyProductId = "com.tahafirat.zihinharitam.pro_monthly"
@@ -52,6 +53,16 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
 
     deinit {
         updatesTask?.cancel()
+    }
+
+    private static func periodToDays(_ period: Product.SubscriptionPeriod) -> Int {
+        switch period.unit {
+        case .day: return period.value
+        case .week: return period.value * 7
+        case .month: return period.value * 30
+        case .year: return period.value * 365
+        @unknown default: return 7
+        }
     }
 
     private func fetchProductsWithRetry(ids: [String], allowSyncRetry: Bool = true) async throws -> [Product] {
@@ -93,14 +104,28 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 let products = try await fetchProductsWithRetry(ids: ids)
-                let mapped = products.map { p in
-                    return [
+                var mapped: [[String: Any]] = []
+                for p in products {
+                    var item: [String: Any] = [
                         "id": p.id,
                         "title": p.displayName,
                         "description": p.description,
                         "displayPrice": p.displayPrice,
                         "price": NSDecimalNumber(decimal: p.price).doubleValue
-                    ] as [String: Any]
+                    ]
+                    // Query live StoreKit 2 Introductory Free Trial eligibility (zero hardcoded promises!)
+                    if let sub = p.subscription,
+                       let intro = sub.introductoryOffer,
+                       intro.paymentMode == .freeTrial {
+                        let eligible = await sub.isEligibleForIntroOffer
+                        let trialDays = Self.periodToDays(intro.period)
+                        item["introOffer"] = [
+                            "eligible": eligible,
+                            "freeTrialDays": trialDays,
+                            "paymentMode": "free_trial"
+                        ]
+                    }
+                    mapped.append(item)
                 }
                 call.resolve(["products": mapped])
             } catch {
@@ -146,12 +171,14 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                             call.reject("Beklenmeyen urun kimligi dogrulandi.")
                             return
                         }
+                        let isTrial = (transaction.offerType == .introductory)
                         saveKeychainEntitlement(true)
                         await transaction.finish()
                         call.resolve([
                             "purchased": true,
                             "productId": transaction.productID,
-                            "transactionId": String(transaction.id)
+                            "transactionId": String(transaction.id),
+                            "isTrial": isTrial
                         ])
                     case .unverified(_, let error):
                         call.reject("Dogrulanamayan islem: \(error.localizedDescription)")
@@ -173,7 +200,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 try await AppStore.sync()
-                let unlocked = await hasVerifiedEntitlement()
+                let unlocked = await hasVerifiedEntitlement(allowOfflineKeychainFallback: false)
                 saveKeychainEntitlement(unlocked)
                 call.resolve(["restored": unlocked, "isLifetimePro": unlocked])
             } catch {
@@ -184,7 +211,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func checkEntitlements(_ call: CAPPluginCall) {
         Task {
-            let unlocked = await hasVerifiedEntitlement()
+            let unlocked = await hasVerifiedEntitlement(allowOfflineKeychainFallback: false)
             call.resolve(["isLifetimePro": unlocked])
         }
     }
@@ -200,7 +227,7 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 do {
                     try await AppStore.presentOfferCodeRedeemSheet(in: scene)
                     try? await AppStore.sync()
-                    let unlocked = await self.hasVerifiedEntitlement()
+                    let unlocked = await self.hasVerifiedEntitlement(allowOfflineKeychainFallback: false)
                     self.saveKeychainEntitlement(unlocked)
                     call.resolve(["presented": true, "isLifetimePro": unlocked])
                 } catch {
@@ -212,8 +239,27 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func hasVerifiedEntitlement() async -> Bool {
-        var sawRevokedOrExpired = false
+    @objc func requestAppReview(_ call: CAPPluginCall) {
+        Task { @MainActor in
+            guard let scene = self.bridge?.viewController?.view.window?.windowScene
+                    ?? UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+                call.resolve(["requested": false])
+                return
+            }
+            if #available(iOS 16.0, *) {
+                AppStore.requestReview(in: scene)
+            } else {
+                SKStoreReviewController.requestReview(in: scene)
+            }
+            call.resolve(["requested": true])
+        }
+    }
+
+    /**
+     * Authoritatively verifies active StoreKit 2 entitlements (active 7-day trials, active renewals,
+     * and one-time lifetime unlocks) AND properly revokes expired/refunded trials or subscriptions!
+     */
+    private func hasVerifiedEntitlement(allowOfflineKeychainFallback: Bool = true) async -> Bool {
         let now = Date()
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
@@ -223,13 +269,28 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                     if active {
                         saveKeychainEntitlement(true)
                         return true
-                    } else {
-                        sawRevokedOrExpired = true
                     }
                 }
             }
         }
-        if sawRevokedOrExpired {
+
+        // Check latest transactions to catch expired trials or revoked subscriptions cleanly
+        var sawExpiredOrRevoked = false
+        for pid in allProProductIds {
+            if let latest = await Transaction.latest(for: pid),
+               case .verified(let tx) = latest {
+                let active = (tx.revocationDate == nil) &&
+                    (tx.expirationDate == nil || tx.expirationDate! > now)
+                if active {
+                    saveKeychainEntitlement(true)
+                    return true
+                } else {
+                    sawExpiredOrRevoked = true
+                }
+            }
+        }
+
+        if sawExpiredOrRevoked || !allowOfflineKeychainFallback {
             saveKeychainEntitlement(false)
             return false
         }

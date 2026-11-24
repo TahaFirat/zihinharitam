@@ -33,6 +33,67 @@ export function generateMapThumbnailDataUrl(doc: MindMapDocument): string {
       }
     }
 
+    // Dedicated Flowchart Live Thumbnail Preview
+    if (doc.documentType === 'flowchart' && doc.flowchart && doc.flowchart.nodes.length > 0) {
+      const fc = doc.flowchart;
+      let fMinX = Infinity;
+      let fMinY = Infinity;
+      let fMaxX = -Infinity;
+      let fMaxY = -Infinity;
+      for (const fn of fc.nodes) {
+        fMinX = Math.min(fMinX, fn.x - fn.width * 0.5 - 20);
+        fMaxX = Math.max(fMaxX, fn.x + fn.width * 0.5 + 20);
+        fMinY = Math.min(fMinY, fn.y - fn.height * 0.5 - 20);
+        fMaxY = Math.max(fMaxY, fn.y + fn.height * 0.5 + 20);
+      }
+      const fW = Math.max(200, fMaxX - fMinX);
+      const fH = Math.max(150, fMaxY - fMinY);
+      const scale = Math.min((THUMB_W - 44) / fW, (THUMB_H - 44) / fH, 0.72);
+      const ox = THUMB_W * 0.5 - ((fMinX + fMaxX) * 0.5) * scale;
+      const oy = THUMB_H * 0.5 - ((fMinY + fMaxY) * 0.5) * scale;
+      const mapById = new Map(fc.nodes.map((n) => [n.id, n]));
+
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.scale(scale, scale);
+
+      // Edges
+      for (const edge of fc.edges) {
+        const a = mapById.get(edge.fromNodeId);
+        const b = mapById.get(edge.toNodeId);
+        if (!a || !b) continue;
+        ctx.strokeStyle = edge.color || '#64748B';
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      // Shapes
+      for (const fn of fc.nodes) {
+        ctx.fillStyle = isDark ? '#1E293B' : '#FFFFFF';
+        ctx.strokeStyle = fn.color || '#0EA5E9';
+        ctx.lineWidth = 3.5;
+        const l = fn.x - fn.width / 2;
+        const t = fn.y - fn.height / 2;
+        ctx.beginPath();
+        if (fn.shape === 'decision') {
+          ctx.moveTo(fn.x, t);
+          ctx.lineTo(l + fn.width, fn.y);
+          ctx.lineTo(fn.x, t + fn.height);
+          ctx.lineTo(l, fn.y);
+          ctx.closePath();
+        } else {
+          ctx.roundRect(l, t, fn.width, fn.height, fn.shape === 'start_end' ? fn.height / 2 : 14);
+        }
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      return canvas.toDataURL('image/webp', 0.82);
+    }
+
     const meta = computeTreeMeta(doc.nodes, doc.rootNodeId);
     const visibleNodes = Object.values(doc.nodes).filter(
       (n) => !meta.hiddenNodeIds.has(n.id)

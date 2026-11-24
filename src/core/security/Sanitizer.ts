@@ -3,7 +3,14 @@ import type {
   CanvasInkStroke,
   CanvasStickyNote,
   CrossLink,
+  DocumentKind,
+  FlowchartData,
+  FlowchartEdge,
+  FlowchartNode,
+  FlowchartPort,
+  FlowchartShapeType,
   MindMapDocument,
+  MindMapLayoutType,
   MindNode,
   PaperStyleType,
   StickerAsset,
@@ -30,6 +37,109 @@ const ALLOWED_PAPER_STYLES = new Set<PaperStyleType>([
   'blank',
   'warm',
 ]);
+
+const ALLOWED_LAYOUT_TYPES = new Set<MindMapLayoutType>([
+  'radial',
+  'right_tree',
+  'org_chart',
+  'timeline',
+]);
+
+const ALLOWED_FLOW_SHAPES = new Set<FlowchartShapeType>([
+  'start_end',
+  'process',
+  'decision',
+  'io',
+  'database',
+  'document',
+]);
+
+const ALLOWED_FLOW_PORTS = new Set<FlowchartPort>(['top', 'right', 'bottom', 'left']);
+
+export function sanitizeExternalLinkUrl(url: unknown): string | undefined {
+  if (typeof url !== 'string') return undefined;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 2048) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.toString();
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function sanitizeFlowchartData(raw: unknown): FlowchartData | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const f = raw as Record<string, unknown>;
+  const safeNodes: FlowchartNode[] = [];
+  const validIds = new Set<string>();
+
+  if (Array.isArray(f.nodes)) {
+    for (const item of f.nodes.slice(0, 300)) {
+      if (!item || typeof item !== 'object') continue;
+      const n = item as Record<string, unknown>;
+      const id = clampStr(n.id, 80, `fn_${safeNodes.length}`);
+      if (!id || FORBIDDEN_OBJECT_KEYS.has(id) || validIds.has(id)) continue;
+      validIds.add(id);
+      const shape =
+        typeof n.shape === 'string' && ALLOWED_FLOW_SHAPES.has(n.shape as FlowchartShapeType)
+          ? (n.shape as FlowchartShapeType)
+          : 'process';
+      safeNodes.push({
+        id,
+        shape,
+        title: clampStr(n.title, 180, 'Adım'),
+        subtitle: typeof n.subtitle === 'string' ? clampStr(n.subtitle, 280) : undefined,
+        emoji: typeof n.emoji === 'string' ? clampStr(n.emoji, 8) : undefined,
+        x: Math.max(-50_000, Math.min(50_000, finiteNum(n.x, 0))),
+        y: Math.max(-50_000, Math.min(50_000, finiteNum(n.y, 0))),
+        width: Math.max(100, Math.min(460, finiteNum(n.width, shape === 'decision' ? 176 : 196))),
+        height: Math.max(52, Math.min(280, finiteNum(n.height, shape === 'decision' ? 104 : 74))),
+        color: sanitizeColor(n.color, '#0EA5E9'),
+        sticker: sanitizeStickerAsset(n.sticker),
+      });
+    }
+  }
+
+  const safeEdges: FlowchartEdge[] = [];
+  if (Array.isArray(f.edges)) {
+    for (const item of f.edges.slice(0, 600)) {
+      if (!item || typeof item !== 'object') continue;
+      const e = item as Record<string, unknown>;
+      const fromNodeId = clampStr(e.fromNodeId, 80);
+      const toNodeId = clampStr(e.toNodeId, 80);
+      if (!validIds.has(fromNodeId) || !validIds.has(toNodeId) || fromNodeId === toNodeId) continue;
+      const fromPort =
+        typeof e.fromPort === 'string' && ALLOWED_FLOW_PORTS.has(e.fromPort as FlowchartPort)
+          ? (e.fromPort as FlowchartPort)
+          : 'bottom';
+      const toPort =
+        typeof e.toPort === 'string' && ALLOWED_FLOW_PORTS.has(e.toPort as FlowchartPort)
+          ? (e.toPort as FlowchartPort)
+          : 'top';
+      safeEdges.push({
+        id: clampStr(e.id, 80, `fe_${safeEdges.length}`),
+        fromNodeId,
+        fromPort,
+        toNodeId,
+        toPort,
+        label: typeof e.label === 'string' ? clampStr(e.label, 80) : undefined,
+        color: sanitizeColor(e.color, '#64748B'),
+        style: e.style === 'dashed' ? 'dashed' : 'solid',
+        routing: e.routing === 'smooth' ? 'smooth' : 'orthogonal',
+      });
+    }
+  }
+
+  return {
+    nodes: safeNodes,
+    edges: safeEdges,
+    direction: f.direction === 'LR' ? 'LR' : 'TB',
+  };
+}
 
 const FORBIDDEN_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -217,6 +327,8 @@ export function sanitizeImportedDocument(raw: unknown): MindMapDocument | null {
       examHidden: Boolean(n.examHidden),
       stickerUpdatedAt:
         typeof n.stickerUpdatedAt === 'number' ? finiteNum(n.stickerUpdatedAt) : undefined,
+      linkUrl: sanitizeExternalLinkUrl(n.linkUrl),
+      groupLabel: typeof n.groupLabel === 'string' ? clampStr(n.groupLabel, 60) : undefined,
     };
     nodeCount += 1;
   }
@@ -300,22 +412,37 @@ export function sanitizeImportedDocument(raw: unknown): MindMapDocument | null {
     typeof doc.paperStyle === 'string' && ALLOWED_PAPER_STYLES.has(doc.paperStyle as PaperStyleType)
       ? (doc.paperStyle as PaperStyleType)
       : 'dots';
+  const documentType: DocumentKind = doc.documentType === 'flowchart' ? 'flowchart' : 'mindmap';
+  const layoutType: MindMapLayoutType =
+    typeof doc.layoutType === 'string' && ALLOWED_LAYOUT_TYPES.has(doc.layoutType as MindMapLayoutType)
+      ? (doc.layoutType as MindMapLayoutType)
+      : 'radial';
+  const safeFlowchart = sanitizeFlowchartData(doc.flowchart);
+  const rawFolder = typeof doc.folder === 'string' ? clampStr(doc.folder, 64) : '';
+  const safeFolder =
+    rawFolder && !FORBIDDEN_OBJECT_KEYS.has(rawFolder) && /^[a-zA-Z0-9_-]+$/.test(rawFolder)
+      ? rawFolder
+      : 'study_exam';
 
   return {
     id: clampStr(doc.id, 90, `map_${Date.now()}`),
     title: clampStr(doc.title, 200, 'İçe Aktarılan Harita'),
+    documentType,
+    layoutType,
     department: dept,
     rootNodeId: rootId,
     nodes: safeNodes,
     crossLinks: safeCrossLinks,
+    flowchart: safeFlowchart,
     inkStrokes: safeInkStrokes,
     stickyNotes: safeStickies,
     paperStyle,
+    colorTheme: typeof doc.colorTheme === 'string' ? clampStr(doc.colorTheme, 32) : undefined,
     createdAt: finiteNum(doc.createdAt, Date.now()),
     updatedAt: finiteNum(doc.updatedAt, Date.now()),
     darkMode: Boolean(doc.darkMode),
     defaultNodeStyle: doc.defaultNodeStyle === 'organic' ? 'organic' : 'card',
-    folder: doc.folder === 'engineering' ? 'engineering' : 'study_exam',
+    folder: safeFolder,
     isPinned: Boolean(doc.isPinned),
     deletedAt: null,
   };

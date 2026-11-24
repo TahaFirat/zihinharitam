@@ -1,0 +1,5 @@
+v1.1.0 — Dedicated Flowchart Studio, Multi-Layout Maps, SM-2 Flashcards & Pitch Mode:
+• NEW Flowchart Studio (Decision/Database/Document shapes, 90° connectors & Mermaid import)
+• 4 Map Layouts (Radial, Logic Tree, Org Chart, Timeline) & 6 Designer Studio Themes
+• Spaced Repetition Flashcards, Cinematic Presentation Mode & Custom Folders
+• Live English / Turkish UI + Markdown, Mermaid, OPML & Anki CSV export

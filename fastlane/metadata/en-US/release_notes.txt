@@ -1,6 +1,6 @@
-v1.0.3 — Major Tablet Notes, Apple Pencil & UX Update:
-• Brand-new tactile 3D app icon and simplified 3-tab interface (Map | Draw | Study).
-• Apple Pencil double-tap/squeeze & stylus eraser upgrade for instant smooth erasing right over mind-map cards.
-• Draggable, edge-snapping & collapsible PencilKit-style floating drawing toolbar and mobile bottom-sheet icon dock.
-• 43,000+ vibrant gamified icons, smart search, and dynamic topic-aware sub-branch suggestions.
-• Enhanced offline storage safety, cache controls, and an always-accessible interactive Guide.
+v1.1.0 — Dedicated Flowchart Studio, Multi-Layout, Flashcards & Pitch Mode:
+• NEW Dedicated Flowchart Studio: Start/End, Process, Decision (Yes/No), Data, Database & Document shapes, 90-degree smart connectors, 3 templates & 1-tap Mermaid code import!
+• 4 Mind Map Layouts & 6 Designer Studio Themes: Instant switch between Radial, Logic Tree, Org Chart & Timeline + 1-tap Mind Map to Flowchart converter.
+• Spaced Repetition (SM-2) Flashcards & Full-Screen Cinematic Presentation (Pitch) Mode.
+• Custom folders, clickable branch reference links, and live English / Turkish language switcher.
+• Markdown (.md), Mermaid (.mmd), OPML & Anki CSV export + 7-Day Free Trial on Yearly Pro!

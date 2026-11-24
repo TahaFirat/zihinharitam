@@ -1,0 +1,5 @@
+v1.1.0 — Akış Diyagramı Stüdyosu, Çoklu Harita Düzeni, SM-2 Flashcard & Sunum Modu:
+• YENİ Akış Diyagramı Stüdyosu (Karar/Veritabanı/Doküman blokları, 90° oklar & Mermaid içe aktarım)
+• 4 Harita Düzeni (Radyal, Sağa Ağaç, Org Şeması, Zaman Çizgisi) & 6 Stüdyo Renk Teması
+• Aralıklı Tekrar (SM-2 Flashcard), Sunum (Pitch) Modu & Özel Klasörler
+• Canlı Türkçe/İngilizce dil desteği + Markdown, Mermaid, OPML & Anki dışa aktarımı

@@ -1,6 +1,6 @@
-v1.0.3 — Büyük Tablet Notları, S-Pen / Apple Pencil & Arayüz Güncellemesi:
-• Yeni 3D uygulama ikonu ve daha sade, 3 sekmeli arayüz (Harita | Çiz | Çalış).
-• Samsung S-Pen & Apple Pencil silgi tuşu tam donanım düzeltmesi: harita kartları üzerinde bile anında ve pürüzsüz silme.
-• Samsung Notes & Apple PencilKit tarzı sürüklenebilir, kenara mıknatıs gibi oturan ve küçültülebilen çizim ve ikon panelleri.
-• 43.000+ canlı oyunlaştırılmış ikon, Türkçe kök/ek algılama ve harita konusuna göre dinamik alt dal önerileri.
-• Güçlendirilmiş veri güvenliği, önbellek sağlığı kontrolü ve her zaman erişilebilir uygulama rehberi.
+v1.1.0 — Akış Diyagramı Stüdyosu, Çoklu Düzen, Flashcard & Sunum Güncellemesi:
+• YENİ Ayrı Akış Diyagramı Stüdyosu: Başla/Bitir, İşlem, Karar (Evet/Hayır), Veri, Veritabanı ve Doküman blokları, 90° akıllı oklar, 3 hazır şablon ve Mermaid kodundan tek tık diyagram oluşturma!
+• 4-Yönlü Harita Düzeni & 6 Stüdyo Renk Teması: Radyal, Sağa Ağaç, Org Şeması ve Zaman Çizgisi arasında tek tık geçiş + zihin haritasını akış diyagramına dönüştürme.
+• Aralıklı Tekrar (SM-2 Flashcard) & Tam Ekran Sinematik Sunum (Pitch) Modu.
+• Özel klasörler oluşturma, dallara tıklanabilir kaynak linki ekleme, canlı Türkçe/İngilizce dil seçimi.
+• Markdown (.md), Mermaid (.mmd), OPML ve Anki CSV dışa aktarım + Yıllık Pro’da 7 Gün Ücretsiz Deneme!

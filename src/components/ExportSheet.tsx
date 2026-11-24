@@ -38,6 +38,11 @@ import { computeTreeMeta } from '../core/canvas/RadialAutoLayout';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
 import { shareOrDownloadFile, hapticSuccess } from '../core/native/NativeBridge';
 import { LocalStore } from '../core/sync/LocalStore';
+import { useI18n } from '../core/i18n/i18n';
+import {
+  exportFlowchartToMermaid,
+  renderFlowchartToSvgString,
+} from '../data/flowchartTemplates';
 
 interface ExportSheetProps {
   isOpen: boolean;
@@ -46,6 +51,135 @@ interface ExportSheetProps {
   collaborators: CollaboratorPresence[];
   onImportDocument: (doc: MindMapDocument) => void;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
+  onExportSuccess?: () => void;
+}
+
+function buildMarkdownExport(doc: MindMapDocument): string {
+  if (doc.documentType === 'flowchart' && doc.flowchart) {
+    const lines = [`# ${doc.title}`, '', '```mermaid', exportFlowchartToMermaid(doc).trim(), '```', ''];
+    for (const n of doc.flowchart.nodes) {
+      lines.push(`- **${n.title}**${n.subtitle ? ` — ${n.subtitle}` : ''}`);
+    }
+    return lines.join('\n') + '\n';
+  }
+  const lines: string[] = [`# ${doc.title}`, ''];
+  const visited = new Set<string>();
+  const walk = (id: string, depth: number) => {
+    if (visited.has(id)) return;
+    const node = doc.nodes[id];
+    if (!node) return;
+    visited.add(id);
+    if (depth > 0) {
+      const indent = '  '.repeat(depth - 1);
+      const badge = node.techBadge ? ` \`[${node.techBadge}]\`` : '';
+      const sub = node.subtitle ? ` — ${node.subtitle}` : '';
+      lines.push(`${indent}- **${node.title}**${badge}${sub}`);
+      if (node.note?.trim()) {
+        lines.push(`${indent}  > ${node.note.trim().replace(/\r?\n/g, `\n${indent}  > `)}`);
+      }
+      if (node.linkUrl) {
+        lines.push(`${indent}  - Link: ${node.linkUrl}`);
+      }
+    }
+    Object.values(doc.nodes)
+      .filter((c) => c.parentId === id)
+      .forEach((c) => walk(c.id, depth + 1));
+  };
+  walk(doc.rootNodeId, 0);
+  return lines.join('\n') + '\n';
+}
+
+function buildOpmlExport(doc: MindMapDocument): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const visited = new Set<string>();
+  const walk = (id: string, pad: string): string => {
+    if (visited.has(id)) return '';
+    const node = doc.nodes[id];
+    if (!node) return '';
+    visited.add(id);
+    const kids = Object.values(doc.nodes).filter((c) => c.parentId === id);
+    const noteAttr = node.note ? ` _note="${esc(node.note)}"` : node.subtitle ? ` _note="${esc(node.subtitle)}"` : '';
+    if (!kids.length) {
+      return `${pad}<outline text="${esc(node.title)}"${noteAttr} />\n`;
+    }
+    return `${pad}<outline text="${esc(node.title)}"${noteAttr}>\n${kids
+      .map((k) => walk(k.id, pad + '  '))
+      .join('')}${pad}</outline>\n`;
+  };
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n  <head><title>${esc(doc.title)}</title></head>\n  <body>\n${walk(doc.rootNodeId, '    ')}  </body>\n</opml>\n`;
+}
+
+function buildMindMapMermaid(doc: MindMapDocument): string {
+  if (doc.documentType === 'flowchart') {
+    return exportFlowchartToMermaid(doc);
+  }
+  const lines = ['mindmap'];
+  const visited = new Set<string>();
+  const clean = (s: string) => s.replace(/[()[\]{}"]/g, '').trim() || 'Topic';
+  const walk = (id: string, depth: number) => {
+    if (visited.has(id)) return;
+    const node = doc.nodes[id];
+    if (!node) return;
+    visited.add(id);
+    const pad = '  '.repeat(depth + 1);
+    lines.push(depth === 0 ? `${pad}root((${clean(node.title)}))` : `${pad}${clean(node.title)}`);
+    Object.values(doc.nodes)
+      .filter((c) => c.parentId === id)
+      .forEach((k) => walk(k.id, depth + 1));
+  };
+  walk(doc.rootNodeId, 0);
+  return lines.join('\n') + '\n';
+}
+
+function buildAnkiCsvExport(doc: MindMapDocument): string {
+  const q = (s: string) => `"${s.replace(/"/g, '""').replace(/\r?\n/g, '<br>')}"`;
+  const rows: string[] = [];
+  for (const node of Object.values(doc.nodes)) {
+    if (node.id === doc.rootNodeId) continue;
+    const parent = node.parentId ? doc.nodes[node.parentId]?.title : doc.title;
+    const kids = Object.values(doc.nodes)
+      .filter((c) => c.parentId === node.id)
+      .map((c) => c.title);
+    const front = `[${parent || doc.title}] ${node.title}`;
+    const backParts = [
+      node.subtitle,
+      node.techBadge ? `(${node.techBadge})` : '',
+      node.note,
+      kids.length ? `Alt Dallar: ${kids.join(', ')}` : '',
+    ].filter(Boolean);
+    const back = backParts.join(' — ') || node.title;
+    rows.push(`${q(front)};${q(back)}`);
+  }
+  return rows.join('\n') + '\n';
+}
+
+async function renderFlowchartToCanvas(
+  doc: MindMapDocument,
+  transparentBg: boolean,
+  scale = 2.4
+): Promise<HTMLCanvasElement> {
+  const svgStr = renderFlowchartToSvgString(doc, transparentBg);
+  const wMatch = svgStr.match(/width="(\d+)"/);
+  const hMatch = svgStr.match(/height="(\d+)"/);
+  const baseW = Math.max(480, Number(wMatch?.[1]) || 960);
+  const baseH = Math.max(360, Number(hMatch?.[1]) || 640);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(baseW * scale);
+  canvas.height = Math.round(baseH * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await loadExportImage(url);
+    if (img) {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    }
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return canvas;
 }
 
 function loadExportImage(url: string): Promise<HTMLImageElement | null> {
@@ -371,7 +505,9 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
   collaborators,
   onImportDocument,
   onTriggerPaywall,
+  onExportSuccess,
 }) => {
+  const { t } = useI18n();
   const { isLifetimePro } = useEntitlements();
   const [busyType, setBusyType] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -410,12 +546,15 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
     const key = transparent ? 'png_trans' : 'png_paper';
     setBusyType(key);
     try {
-      const canvas = await renderHighResMapCanvas(
-        mindmapDoc,
-        transparent,
-        isLifetimePro ? 2.8 : 2.0,
-        !isLifetimePro && !transparent
-      );
+      const canvas =
+        mindmapDoc.documentType === 'flowchart'
+          ? await renderFlowchartToCanvas(mindmapDoc, transparent, isLifetimePro ? 2.6 : 2.0)
+          : await renderHighResMapCanvas(
+              mindmapDoc,
+              transparent,
+              isLifetimePro ? 2.8 : 2.0,
+              !isLifetimePro && !transparent
+            );
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error('PNG oluşturulamadı'))),
@@ -431,6 +570,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
         mindmapDoc.title
       );
       void hapticSuccess();
+      onExportSuccess?.();
     } finally {
       setBusyType(null);
     }
@@ -444,7 +584,10 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
 
     setBusyType('pdf');
     try {
-      const canvas = await renderHighResMapCanvas(mindmapDoc, false, 3.0, false);
+      const canvas =
+        mindmapDoc.documentType === 'flowchart'
+          ? await renderFlowchartToCanvas(mindmapDoc, false, 2.8)
+          : await renderHighResMapCanvas(mindmapDoc, false, 3.0, false);
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const cw = canvas.width;
       const ch = canvas.height;
@@ -482,6 +625,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
         `${mindmapDoc.title} (300 DPI Poster PDF)`
       );
       void hapticSuccess();
+      onExportSuccess?.();
     } finally {
       setBusyType(null);
     }
@@ -495,7 +639,12 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
 
     setBusyType('svg');
     try {
-      const blob = buildVectorSvgBlob(mindmapDoc);
+      const blob =
+        mindmapDoc.documentType === 'flowchart'
+          ? new Blob([renderFlowchartToSvgString(mindmapDoc, false)], {
+              type: 'image/svg+xml;charset=utf-8',
+            })
+          : buildVectorSvgBlob(mindmapDoc);
       await shareOrDownloadFile(
         blob,
         `${safeSlug}.svg`,
@@ -503,9 +652,32 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
         mindmapDoc.title
       );
       void hapticSuccess();
+      onExportSuccess?.();
     } finally {
       setBusyType(null);
     }
+  };
+
+  const handleExportTextFormat = async (kind: 'md' | 'opml' | 'mmd' | 'anki') => {
+    const content =
+      kind === 'md'
+        ? buildMarkdownExport(mindmapDoc)
+        : kind === 'opml'
+        ? buildOpmlExport(mindmapDoc)
+        : kind === 'mmd'
+        ? buildMindMapMermaid(mindmapDoc)
+        : buildAnkiCsvExport(mindmapDoc);
+    const ext = kind === 'anki' ? 'csv' : kind;
+    const mime =
+      kind === 'opml'
+        ? 'text/xml;charset=utf-8'
+        : kind === 'anki'
+        ? 'text/csv;charset=utf-8'
+        : 'text/markdown;charset=utf-8';
+    const blob = new Blob([content], { type: mime });
+    await shareOrDownloadFile(blob, `${safeSlug}.${ext}`, mime, mindmapDoc.title);
+    void hapticSuccess();
+    onExportSuccess?.();
   };
 
   const handleExportZihin = async () => {
@@ -700,6 +872,59 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                 Sonsuz ölçeklenebilir kübik Bezier & çapraz ok çıktısı
               </div>
             </button>
+          </div>
+
+          {/* Structured Text & Developer/Study Exports: Markdown, OPML, Mermaid, Anki CSV */}
+          <div
+            className="rounded-2xl border p-3.5"
+            style={{ backgroundColor: 'var(--hud-bg)', borderColor: 'var(--hud-border)' }}
+            data-testid="export-structured-formats"
+          >
+            <div className="mb-2 text-xs font-extrabold">
+              {t('Not, Diyagram & Çalışma Formatları (Ücretsiz)', 'Notes, Diagrams & Study Formats (Free)')}
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <button
+                type="button"
+                data-testid="export-md-btn"
+                onClick={() => void handleExportTextFormat('md')}
+                className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-extrabold transition hover:bg-slate-500/10"
+                style={{ borderColor: 'var(--hud-border)', backgroundColor: 'var(--canvas-bg)' }}
+              >
+                <div>Markdown</div>
+                <div className="text-[10px] font-semibold opacity-60">.md • Notion/Obsidian</div>
+              </button>
+              <button
+                type="button"
+                data-testid="export-mmd-btn"
+                onClick={() => void handleExportTextFormat('mmd')}
+                className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-extrabold transition hover:bg-slate-500/10"
+                style={{ borderColor: 'var(--hud-border)', backgroundColor: 'var(--canvas-bg)' }}
+              >
+                <div>Mermaid</div>
+                <div className="text-[10px] font-semibold opacity-60">.mmd • GitHub/Docs</div>
+              </button>
+              <button
+                type="button"
+                data-testid="export-opml-btn"
+                onClick={() => void handleExportTextFormat('opml')}
+                className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-extrabold transition hover:bg-slate-500/10"
+                style={{ borderColor: 'var(--hud-border)', backgroundColor: 'var(--canvas-bg)' }}
+              >
+                <div>OPML</div>
+                <div className="text-[10px] font-semibold opacity-60">.opml • Xmind/MindNode</div>
+              </button>
+              <button
+                type="button"
+                data-testid="export-anki-btn"
+                onClick={() => void handleExportTextFormat('anki')}
+                className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-extrabold transition hover:bg-slate-500/10"
+                style={{ borderColor: 'var(--hud-border)', backgroundColor: 'var(--canvas-bg)' }}
+              >
+                <div>Anki Kartları</div>
+                <div className="text-[10px] font-semibold opacity-60">.csv • Flashcards</div>
+              </button>
+            </div>
           </div>
 
           {/* Realtime Collaboration Link */}

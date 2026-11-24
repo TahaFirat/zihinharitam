@@ -28,17 +28,27 @@ import {
   Brain,
   HelpCircle,
   Grid3X3,
+  Presentation,
+  LayoutGrid,
+  Palette,
+  Workflow,
 } from 'lucide-react';
+import {
+  STUDIO_THEMES,
+  type StudioThemeId,
+} from '../core/theme/StudioThemes';
 import {
   DEPARTMENT_LABELS,
   type AcademicDepartment,
   type CollaboratorPresence,
   type ExamRecallMode,
+  type MindMapLayoutType,
   type NodeVisualStyle,
   type PaperStyleType,
   type PaywallTriggerReason,
 } from '../types/mindmap';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
+import { useI18n } from '../core/i18n/i18n';
 
 export type WorkspaceTopTab = 'map' | 'draw' | 'study';
 
@@ -48,6 +58,13 @@ interface TopMinimalHUDProps {
   contextEmoji?: string;
   defaultNodeStyle: NodeVisualStyle;
   paperStyle: PaperStyleType;
+  layoutType: MindMapLayoutType;
+  colorTheme?: string;
+  onChangeLayoutType: (layout: MindMapLayoutType) => void;
+  onApplyStudioTheme?: (themeId: StudioThemeId) => void;
+  onConvertToFlowchart?: () => void;
+  onOpenFlashcards: () => void;
+  onStartPresentation: () => void;
   onToggleDefaultNodeStyle: () => void;
   onCyclePaperStyle: () => void;
   onOpenCommandPalette: () => void;
@@ -94,6 +111,13 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   contextEmoji,
   defaultNodeStyle,
   paperStyle,
+  layoutType,
+  colorTheme,
+  onChangeLayoutType,
+  onApplyStudioTheme,
+  onConvertToFlowchart,
+  onOpenFlashcards,
+  onStartPresentation,
   onToggleDefaultNodeStyle,
   onCyclePaperStyle,
   onOpenCommandPalette,
@@ -125,6 +149,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   onOpenExport,
   zoomPercent,
 }) => {
+  const { t } = useI18n();
   const { isLifetimePro, localizedPrice } = useEntitlements();
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(mapTitle);
@@ -192,7 +217,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
 
   return (
     <header
-      className="pointer-events-none fixed inset-x-0 top-0 z-30 flex flex-col gap-2 px-2.5 sm:px-4"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[45] flex flex-col gap-2 px-2.5 sm:px-4"
       style={{
         paddingTop: 'max(12px, calc(var(--safe-top) + 8px))',
         paddingLeft: 'calc(var(--safe-left) + 10px)',
@@ -282,14 +307,14 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             }`}
           >
             <Brain className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-            <span>Harita</span>
+            <span>{t('Harita', 'Map')}</span>
           </button>
 
           <button
             type="button"
             data-testid="hud-draw-toggle-btn"
             onClick={onToggleDrawingMode}
-            title="Tuval Üzerine Kalem, Fosforlu, Şekil, Kement & Yapışkan Not"
+            title={t('Tuval Üzerine Kalem, Fosforlu, Şekil, Kement & Yapışkan Not', 'Draw with Pen, Highlighter, Smart Shapes, Lasso & Sticky Notes')}
             className={`inline-flex h-10 items-center gap-1 rounded-xl px-2 text-[11px] font-extrabold transition active:scale-95 sm:gap-1.5 sm:px-3.5 sm:text-[13px] ${
               activeTopTab === 'draw'
                 ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-xs'
@@ -297,7 +322,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             }`}
           >
             <PenTool className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-            <span>{drawingMode ? 'Çizim' : 'Çiz'}</span>
+            <span>{drawingMode ? t('Çizim', 'Drawing') : t('Çiz', 'Draw')}</span>
           </button>
 
           <button
@@ -307,7 +332,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
               onExitDrawingMode();
               setStudyTabOpen((v) => !v);
             }}
-            title="Sınav Modu, Odak, Sayaç, Anahat & Akıllı Harita Araçları"
+            title={t('Sınav Modu, Flashcard, Sunum, Odak, Sayaç & Anahat', 'Exam Mode, Flashcards, Pitch Mode, Focus, Timer & Outline')}
             className={`inline-flex h-10 items-center gap-1 rounded-xl px-2 text-[11px] font-extrabold transition active:scale-95 sm:gap-1.5 sm:px-3.5 sm:text-[13px] ${
               activeTopTab === 'study'
                 ? 'bg-violet-600 text-white shadow-xs'
@@ -315,7 +340,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             }`}
           >
             <GraduationCap className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-            <span>Çalış</span>
+            <span>{t('Çalış', 'Study')}</span>
             {examMode !== 'off' && (
               <span className="rounded-md bg-white/25 px-1 py-0.5 text-[9.5px] font-black">
                 {examStats.revealed}/{examStats.total}
@@ -397,7 +422,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
 
             {moreMenuOpen && (
               <div
-                className="absolute right-0 z-50 mt-2 w-72 rounded-3xl border p-2.5 shadow-2xl backdrop-blur-xl"
+                className="absolute right-0 z-50 mt-2 max-h-[72dvh] w-72 overflow-y-auto rounded-3xl border p-2.5 shadow-2xl backdrop-blur-xl"
                 style={{
                   backgroundColor: 'var(--canvas-bg)',
                   borderColor: 'var(--hud-border)',
@@ -523,6 +548,92 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   )}
                   <span>{darkMode ? 'Açık Defter Teması' : 'Karanlık Çalışma Teması'}</span>
                 </button>
+
+                <div className="my-1.5 h-px bg-slate-400/20" />
+
+                {/* 4-Way Multi-Layout Mind Map Switcher */}
+                <div className="px-2 py-1">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-extrabold tracking-wider uppercase opacity-60">
+                    <LayoutGrid className="h-3 w-3" />
+                    <span>{t('Harita Düzeni', 'Map Layout')}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(
+                      [
+                        { id: 'radial', label: t('Radyal', 'Radial') },
+                        { id: 'right_tree', label: t('Sağa Ağaç', 'Logic Tree') },
+                        { id: 'org_chart', label: t('Org Şeması', 'Org Chart') },
+                        { id: 'timeline', label: t('Zaman Çizgisi', 'Timeline') },
+                      ] as Array<{ id: MindMapLayoutType; label: string }>
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        data-testid={`layout-btn-${opt.id}`}
+                        onClick={() => {
+                          onChangeLayoutType(opt.id);
+                          setMoreMenuOpen(false);
+                        }}
+                        className={`min-h-[34px] rounded-xl px-2 text-[11px] font-extrabold transition ${
+                          layoutType === opt.id
+                            ? 'bg-sky-500 text-white shadow-xs'
+                            : 'bg-slate-500/10 hover:bg-slate-500/15'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 6 Curated Designer Studio Themes */}
+                {onApplyStudioTheme && (
+                  <div className="mt-1 px-2 py-1">
+                    <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-extrabold tracking-wider uppercase opacity-60">
+                      <Palette className="h-3 w-3" />
+                      <span>{t('Stüdyo Renk Teması', 'Studio Color Theme')}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {STUDIO_THEMES.map((th) => (
+                        <button
+                          key={th.id}
+                          type="button"
+                          data-testid={`studio-theme-btn-${th.id}`}
+                          onClick={() => {
+                            onApplyStudioTheme(th.id);
+                            setMoreMenuOpen(false);
+                          }}
+                          className={`flex min-h-[34px] items-center gap-1.5 rounded-xl px-2 text-[10.5px] font-extrabold transition ${
+                            colorTheme === th.id
+                              ? 'bg-slate-900 text-white dark:bg-sky-500 dark:text-slate-950'
+                              : 'bg-slate-500/10 hover:bg-slate-500/15'
+                          }`}
+                        >
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full ring-1 ring-black/15"
+                            style={{ backgroundColor: th.swatch }}
+                          />
+                          <span className="truncate">{th.nameTr.split(' ')[0]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {onConvertToFlowchart && (
+                  <button
+                    type="button"
+                    data-testid="hud-convert-flowchart-btn"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      onConvertToFlowchart();
+                    }}
+                    className="mt-1 flex min-h-[40px] w-full items-center gap-2.5 rounded-2xl bg-emerald-500/12 px-3 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                  >
+                    <Workflow className="h-4 w-4" />
+                    <span>{t('Akış Diyagramına Dönüştür', 'Convert to Flowchart')}</span>
+                  </button>
+                )}
 
                 <div className="my-1.5 h-px bg-slate-400/20" />
 
@@ -671,6 +782,26 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              data-testid="study-flashcards-btn"
+              onClick={onOpenFlashcards}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-fuchsia-500/12 px-3 text-xs font-extrabold whitespace-nowrap text-fuchsia-700 hover:bg-fuchsia-500/20 active:scale-95 dark:text-fuchsia-300"
+            >
+              <Brain className="h-4 w-4" />
+              <span>{t('Flashcard', 'Flashcards')}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="study-presentation-btn"
+              onClick={onStartPresentation}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-amber-500/15 px-3 text-xs font-extrabold whitespace-nowrap text-amber-700 hover:bg-amber-500/25 active:scale-95 dark:text-amber-300"
+            >
+              <Presentation className="h-4 w-4" />
+              <span>{t('Sunum', 'Pitch')}</span>
+            </button>
 
             <button
               type="button"

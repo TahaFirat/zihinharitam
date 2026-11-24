@@ -3076,6 +3076,29 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     </span>
                   )}
 
+                  {showSecondaryMeta && node.linkUrl && /^https?:\/\//i.test(node.linkUrl) && (
+                    <a
+                      href={node.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="node-link-badge"
+                      onPointerDown={(ev) => ev.stopPropagation()}
+                      onClick={(ev) => ev.stopPropagation()}
+                      className="mt-1 inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-sky-500/35 bg-sky-500/12 px-2 py-0.5 text-[10px] font-extrabold text-sky-700 hover:bg-sky-500/20 dark:text-sky-300"
+                    >
+                      <span>🔗</span>
+                      <span className="truncate">
+                        {(() => {
+                          try {
+                            return new URL(node.linkUrl).hostname.replace(/^www\./, '');
+                          } catch {
+                            return 'Kaynak';
+                          }
+                        })()}
+                      </span>
+                    </a>
+                  )}
+
                   {/* RESPONSIVE MULTI-LINE BRANCH DESCRIPTION (`node.note`) */}
                   {showSecondaryMeta && cleanNote.length > 0 && (
                     <div

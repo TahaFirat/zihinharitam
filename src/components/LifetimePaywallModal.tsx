@@ -18,6 +18,7 @@ import {
   useEntitlements,
 } from '../core/monetization/EntitlementManager';
 import { hapticLight, hapticMedium, hapticSuccess } from '../core/native/NativeBridge';
+import { useI18n } from '../core/i18n/i18n';
 import type { PaywallTriggerReason, VisualSearchResult } from '../types/mindmap';
 
 export interface LifetimePaywallModalProps {
@@ -107,6 +108,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
   onUnlocked,
   onOpenLegalPage,
 }) => {
+  const { t, isEn } = useI18n();
   const { plans, isBusy, isLifetimePro } = useEntitlements();
   const [selectedTier, setSelectedTier] = useState<ProPlanTier>('yearly');
   const [showPromoBox, setShowPromoBox] = useState(false);
@@ -127,9 +129,29 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
 
   if (!isOpen) return null;
 
-  const copy = TRIGGER_HEADERS[triggerReason] ?? TRIGGER_HEADERS.header_pill;
+  const copy = isEn
+    ? {
+        badge:
+          triggerReason === 'map_limit'
+            ? '2 / 2 Free Maps Used'
+            : triggerReason === 'pro_export'
+            ? 'Print-Quality Export'
+            : 'MindSticker Pro Plans',
+        title:
+          triggerReason === 'map_limit'
+            ? 'Upgrade to Create Unlimited Mind Maps & Flowcharts'
+            : 'Unlock Full Visual Mind Mapping & Flowchart Power',
+        subtitle:
+          'Your existing 2 maps always stay open. Choose flexible Monthly, 50% off Yearly, or one-time Lifetime Pro access.',
+      }
+    : TRIGGER_HEADERS[triggerReason] ?? TRIGGER_HEADERS.header_pill;
   const activePlan = plans[selectedTier] ?? plans.yearly;
   const activePlanCfg = APP_RELEASE_CONFIG.iap.plans[selectedTier];
+  const yearlyTrialDays =
+    plans.yearly.introOffer?.eligible && plans.yearly.introOffer.freeTrialDays > 0
+      ? plans.yearly.introOffer.freeTrialDays
+      : 0;
+  const isYearlyTrialEligible = yearlyTrialDays > 0;
 
   // Dynamically derive the monthly equivalent from the live store yearly price (never hardcoded mismatch!)
   const yearlyMonthlyEquiv = (() => {
@@ -285,10 +307,24 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
 
   const ctaLabel =
     selectedTier === 'monthly'
-      ? `Aylık Pro’yu Başlat — ${plans.monthly.displayPrice} / ay`
+      ? t(
+          `Aylık Pro’yu Başlat — ${plans.monthly.displayPrice} / ay`,
+          `Start Monthly Pro — ${plans.monthly.displayPrice} / mo`
+        )
       : selectedTier === 'yearly'
-      ? `Yıllık Pro’yu Başlat — ${plans.yearly.displayPrice} / yıl`
-      : `Ömür Boyu Erişimi Aç — ${plans.lifetime.displayPrice}`;
+      ? isYearlyTrialEligible
+        ? t(
+            `${yearlyTrialDays} Gün Ücretsiz Dene — Sonra ${plans.yearly.displayPrice} / yıl`,
+            `Start ${yearlyTrialDays}-Day Free Trial — Then ${plans.yearly.displayPrice} / yr`
+          )
+        : t(
+            `Yıllık Pro’yu Başlat — ${plans.yearly.displayPrice} / yıl`,
+            `Start Yearly Pro — ${plans.yearly.displayPrice} / yr`
+          )
+      : t(
+          `Ömür Boyu Erişimi Aç — ${plans.lifetime.displayPrice}`,
+          `Unlock Lifetime Access — ${plans.lifetime.displayPrice}`
+        );
 
   return (
     <div
@@ -395,7 +431,10 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <InfinityIcon className="h-3.5 w-3.5" />
             </div>
             <span className="font-bold">
-              Sınırsız Zihin Haritası, Klasör & Sınırsız Alt Dal
+              {t(
+                'Sınırsız Zihin Haritası, Akış Diyagramı & Özel Klasör',
+                'Unlimited Mind Maps, Flowcharts & Custom Folders'
+              )}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -403,7 +442,10 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <Palette className="h-3.5 w-3.5" />
             </div>
             <span className="font-bold">
-              30.000+ Renkli 3D, El Çizimi & Akademik Atlas İkonu + 3D Stüdyo
+              {t(
+                '30.000+ Renkli 3D, El Çizimi & Akademik Atlas İkonu + 3D Stüdyo',
+                '30,000+ Colorful 3D, Hand-Drawn & Academic Stickers + 3D Studio'
+              )}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -411,7 +453,10 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <Scissors className="h-3.5 w-3.5" />
             </div>
             <span className="font-bold">
-              Nottan Şema Kesme, Sınav Modu & 300 DPI A4/A3 PDF Poster
+              {t(
+                'Nottan Şema Kesme, Flashcard/Sunum Modu & 300 DPI PDF Poster',
+                'Note Cropping, Flashcards/Pitch Mode & 300 DPI PDF Posters'
+              )}
             </span>
           </div>
         </div>
@@ -434,7 +479,9 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
           >
             <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-0.5 text-[9.5px] font-black tracking-wide text-slate-950 shadow-xs">
               <Sparkles className="h-2.5 w-2.5" />
-              EN POPÜLER • %50 AVANTAJLI
+              {isYearlyTrialEligible
+                ? t(`${yearlyTrialDays} GÜN ÜCRETSİZ • %50 AVANTAJLI`, `${yearlyTrialDays}-DAY FREE TRIAL • SAVE 50%`)
+                : t('EN POPÜLER • %50 AVANTAJLI', 'MOST POPULAR • SAVE 50%')}
             </span>
             <div className="flex items-center gap-2.5">
               <div
@@ -448,10 +495,18 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               </div>
               <div>
                 <div className="text-xs font-extrabold sm:text-[13px]">
-                  Yıllık Pro Abonelik
+                  {t('Yıllık Pro Abonelik', 'Yearly Pro Subscription')}
                 </div>
                 <div className="text-[11px] font-semibold opacity-75">
-                  Aylık sadece <strong>{yearlyMonthlyEquiv}</strong>’ye gelir • 12 ay tam erişim
+                  {isYearlyTrialEligible
+                    ? t(
+                        `İlk ${yearlyTrialDays} gün ücretsiz • Aylık ${yearlyMonthlyEquiv}`,
+                        `${yearlyTrialDays} days free • Then ${yearlyMonthlyEquiv}/mo`
+                      )
+                    : t(
+                        `Aylık sadece ${yearlyMonthlyEquiv}’ye gelir • 12 ay tam erişim`,
+                        `Only ${yearlyMonthlyEquiv}/mo • 12 months full access`
+                      )}
                 </div>
               </div>
             </div>
@@ -459,7 +514,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <div className="text-sm font-black text-amber-600 sm:text-base dark:text-amber-400">
                 {plans.yearly.displayPrice}
               </div>
-              <div className="text-[10px] font-bold opacity-65">/ yıl</div>
+              <div className="text-[10px] font-bold opacity-65">{t('/ yıl', '/ yr')}</div>
             </div>
           </button>
 
@@ -489,10 +544,10 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               </div>
               <div>
                 <div className="text-xs font-extrabold sm:text-[13px]">
-                  Aylık Pro Abonelik
+                  {t('Aylık Pro Abonelik', 'Monthly Pro Subscription')}
                 </div>
                 <div className="text-[11px] font-semibold opacity-75">
-                  Esnek aylık plan • İstediğin zaman iptal et
+                  {t('Esnek aylık plan • İstediğin zaman iptal et', 'Flexible monthly plan • Cancel anytime')}
                 </div>
               </div>
             </div>
@@ -500,7 +555,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <div className="text-sm font-black sm:text-base">
                 {plans.monthly.displayPrice}
               </div>
-              <div className="text-[10px] font-bold opacity-65">/ ay</div>
+              <div className="text-[10px] font-bold opacity-65">{t('/ ay', '/ mo')}</div>
             </div>
           </button>
 
@@ -530,13 +585,13 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-extrabold sm:text-[13px]">
-                  <span>Ömür Boyu Pro</span>
+                  <span>{t('Ömür Boyu Pro', 'Lifetime Pro')}</span>
                   <span className="rounded-md bg-violet-500/20 px-1.5 py-0.2 text-[9.5px] font-black text-violet-600 dark:text-violet-300">
-                    TEK ÖDEME
+                    {t('TEK ÖDEME', 'ONE-TIME')}
                   </span>
                 </div>
                 <div className="text-[11px] font-semibold opacity-75">
-                  Abonelik yok • Tek sefer öde, sonsuza dek kullan
+                  {t('Abonelik yok • Tek sefer öde, sonsuza dek kullan', 'No subscription • Pay once, own forever')}
                 </div>
               </div>
             </div>
@@ -544,7 +599,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
               <div className="text-sm font-black text-violet-600 sm:text-base dark:text-violet-400">
                 {plans.lifetime.displayPrice}
               </div>
-              <div className="text-[10px] font-bold opacity-65">tek sefer</div>
+              <div className="text-[10px] font-bold opacity-65">{t('tek sefer', 'one-time')}</div>
             </div>
           </button>
         </div>
@@ -591,14 +646,26 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
           )}
         </button>
 
-        {/* Mandatory Store Auto-Renewal & Plan Disclosure */}
+        {/* Mandatory Store Auto-Renewal & Free Trial Disclosure (Apple Guideline 3.1.2) */}
         <div
           className="mt-1.5 text-center text-[10.5px] leading-snug font-medium"
           style={{ color: 'var(--text-secondary)' }}
+          data-testid="paywall-renewal-disclosure"
         >
           {activePlanCfg.isSubscription
-            ? `${activePlan.title} (${activePlan.displayPrice}${activePlanCfg.periodLabelTr}): Ödeme mağaza hesabınızdan (App Store / Google Play) tahsil edilir. Dönem bitiminden en az 24 saat önce iptal edilmezse otomatik yenilenir. Hesap Abonelikleri bölümünden istediğiniz an iptal edebilirsiniz.`
-            : `Tek seferlik ödeme (${activePlan.displayPrice}) • Otomatik yenilenen abonelik değildir, tüm cihazlarınızda ömür boyu geçerlidir.`}
+            ? selectedTier === 'yearly' && isYearlyTrialEligible
+              ? t(
+                  `İlk ${yearlyTrialDays} gün tamamen ücretsizdir; deneme bitmeden en az 24 saat önce iptal ederseniz hiçbir ücret alınmaz. Ardından ${activePlan.displayPrice} / yıl (aylık ${yearlyMonthlyEquiv}) olarak otomatik yenilenir. ${storeName} Abonelikler bölümünden istediğiniz an iptal edebilirsiniz.`,
+                  `Free for ${yearlyTrialDays} days; cancel at least 24 hours before trial ends to avoid charges. Then automatically renews at ${activePlan.displayPrice} / year (${yearlyMonthlyEquiv}/mo). Manage or cancel anytime in ${storeName} Subscriptions.`
+                )
+              : t(
+                  `${activePlan.title} (${activePlan.displayPrice}${activePlanCfg.periodLabelTr}): Ödeme mağaza hesabınızdan (App Store / Google Play) tahsil edilir. Dönem bitiminden en az 24 saat önce iptal edilmezse otomatik yenilenir. Hesap Abonelikleri bölümünden istediğiniz an iptal edebilirsiniz.`,
+                  `${activePlan.title} (${activePlan.displayPrice}${selectedTier === 'monthly' ? ' / mo' : ' / yr'}): Payment charged to your ${storeName} account. Auto-renews unless canceled at least 24 hours before period ends.`
+                )
+            : t(
+                `Tek seferlik ödeme (${activePlan.displayPrice}) • Otomatik yenilenen abonelik değildir, tüm cihazlarınızda ömür boyu geçerlidir.`,
+                `One-time purchase (${activePlan.displayPrice}) • Not a recurring subscription; lifetime access across your devices.`
+              )}
         </div>
 
         {/* Optional Friend Gift Code Input (Android / Web; iOS uses Apple native Offer Code Sheet!) */}
@@ -637,7 +704,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
             data-testid="paywall-restore-btn"
             className="min-h-[32px] px-1 text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
           >
-            Satın Alımları Geri Yükle
+            {t('Satın Alımları Geri Yükle', 'Restore Purchases')}
           </button>
           <span className="opacity-30">•</span>
           <button
@@ -648,7 +715,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
             className="inline-flex min-h-[32px] items-center gap-1 px-1 text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
           >
             <Gift className="h-3 w-3" />
-            <span>Hediye Kodu</span>
+            <span>{t('Hediye Kodu', 'Redeem Code')}</span>
           </button>
           <span className="opacity-30">•</span>
           <button
@@ -656,7 +723,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
             onClick={() => openLegal('terms')}
             className="min-h-[32px] px-1 opacity-75 underline-offset-2 hover:opacity-100 hover:underline"
           >
-            Kullanım Koşulları (EULA)
+            {t('Kullanım Koşulları (EULA)', 'Terms of Use (EULA)')}
           </button>
           <span className="opacity-30">•</span>
           <button
@@ -664,7 +731,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
             onClick={() => openLegal('privacy')}
             className="min-h-[32px] px-1 opacity-75 underline-offset-2 hover:opacity-100 hover:underline"
           >
-            Gizlilik Politikası
+            {t('Gizlilik Politikası', 'Privacy Policy')}
           </button>
         </div>
       </div>

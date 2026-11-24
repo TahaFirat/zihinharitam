@@ -203,14 +203,51 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
     }
 
     /**
-     * Deterministically chooses the primary base-plan offer for a subscription ProductDetails
-     * so the displayed price and the launched Google Play Billing sheet ALWAYS match identically!
+     * Parses ISO-8601 Google Play billingPeriod (e.g. "P7D", "P1W", "P14D") into free trial days.
+     */
+    private int parseIsoTrialDays(@Nullable String period) {
+        if (period == null || period.isEmpty()) return 7;
+        try {
+            String p = period.trim().toUpperCase();
+            if (p.startsWith("P") && p.endsWith("D")) {
+                return Math.max(1, Integer.parseInt(p.substring(1, p.length() - 1)));
+            }
+            if (p.startsWith("P") && p.endsWith("W")) {
+                return Math.max(1, Integer.parseInt(p.substring(1, p.length() - 1)) * 7);
+            }
+            if (p.startsWith("P") && p.endsWith("M")) {
+                return Math.max(1, Integer.parseInt(p.substring(1, p.length() - 1)) * 30);
+            }
+        } catch (Exception ignored) {
+        }
+        return 7;
+    }
+
+    /**
+     * Deterministically selects the best eligible offer for a subscription ProductDetails:
+     * 1. If Google Play returns an eligible Free Trial offer (first phase == 0 micros AND final phase > 0),
+     *    select THAT exact offer so both `getProducts` and `launchBillingFlow` use the identical `offerToken`.
+     * 2. Otherwise deterministically select the standard base-plan offer (`offerId == null`).
+     * Never mixes different plans or displays 0 TL as the recurring price!
      */
     @Nullable
     private ProductDetails.SubscriptionOfferDetails selectPrimaryOffer(@NonNull ProductDetails pd) {
         List<ProductDetails.SubscriptionOfferDetails> offers = pd.getSubscriptionOfferDetails();
         if (offers == null || offers.isEmpty()) return null;
-        // Prefer standard base-plan offer (offerId == null) so introductory/promo mismatches never occur
+
+        // 1. Check for eligible Free Trial offer on this exact productId
+        for (ProductDetails.SubscriptionOfferDetails offer : offers) {
+            List<ProductDetails.PricingPhase> phases = offer.getPricingPhases().getPricingPhaseList();
+            if (offer.getOfferId() != null && phases.size() >= 2) {
+                ProductDetails.PricingPhase firstPhase = phases.get(0);
+                ProductDetails.PricingPhase lastPhase = phases.get(phases.size() - 1);
+                if (firstPhase.getPriceAmountMicros() == 0 && lastPhase.getPriceAmountMicros() > 0) {
+                    return offer;
+                }
+            }
+        }
+
+        // 2. Fall back cleanly to standard base-plan offer (offerId == null)
         for (ProductDetails.SubscriptionOfferDetails offer : offers) {
             if (offer.getOfferId() == null) {
                 return offer;
@@ -233,9 +270,18 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             if (primaryOffer != null) {
                 List<ProductDetails.PricingPhase> phases = primaryOffer.getPricingPhases().getPricingPhaseList();
                 if (!phases.isEmpty()) {
-                    ProductDetails.PricingPhase phase = phases.get(phases.size() - 1);
-                    displayPrice = phase.getFormattedPrice();
-                    numericPrice = phase.getPriceAmountMicros() / 1_000_000.0;
+                    // ALWAYS read displayPrice from the final recurring phase (never ₺0,00!)
+                    ProductDetails.PricingPhase recurringPhase = phases.get(phases.size() - 1);
+                    displayPrice = recurringPhase.getFormattedPrice();
+                    numericPrice = recurringPhase.getPriceAmountMicros() / 1_000_000.0;
+
+                    if (phases.size() >= 2 && phases.get(0).getPriceAmountMicros() == 0) {
+                        JSObject intro = new JSObject();
+                        intro.put("eligible", true);
+                        intro.put("freeTrialDays", parseIsoTrialDays(phases.get(0).getBillingPeriod()));
+                        intro.put("paymentMode", "free_trial");
+                        obj.put("introOffer", intro);
+                    }
                 }
             }
         } else {
@@ -390,14 +436,22 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
         if (code == BillingClient.BillingResponseCode.OK && purchases != null && !purchases.isEmpty()) {
             Purchase matched = purchases.get(0);
             if (matched.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-                acknowledgeIfNeeded(matched);
-                if (activeCall != null) {
-                    JSObject ret = new JSObject();
-                    ret.put("purchased", true);
-                    ret.put("productId", activeProd != null ? activeProd : (matched.getProducts().isEmpty() ? "" : matched.getProducts().get(0)));
-                    ret.put("transactionId", matched.getOrderId() != null ? matched.getOrderId() : matched.getPurchaseToken());
-                    activeCall.resolve(ret);
-                }
+                final String resolvedPid = activeProd != null
+                    ? activeProd
+                    : (matched.getProducts().isEmpty() ? "" : matched.getProducts().get(0));
+                final String resolvedTxId = matched.getOrderId() != null
+                    ? matched.getOrderId()
+                    : matched.getPurchaseToken();
+                // Acknowledge BEFORE resolving JS so Google Play never auto-refunds after 3 days!
+                acknowledgeIfNeeded(matched, () -> {
+                    if (activeCall != null) {
+                        JSObject ret = new JSObject();
+                        ret.put("purchased", true);
+                        ret.put("productId", resolvedPid);
+                        ret.put("transactionId", resolvedTxId);
+                        activeCall.resolve(ret);
+                    }
+                });
             } else if (matched.getPurchaseState() == Purchase.PurchaseState.PENDING) {
                 if (activeCall != null) {
                     JSObject ret = new JSObject();
@@ -425,15 +479,31 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
         }
     }
 
-    private void acknowledgeIfNeeded(Purchase purchase) {
+    private void acknowledgeIfNeeded(Purchase purchase, @Nullable Runnable onComplete) {
         if (!purchase.isAcknowledged()) {
             AcknowledgePurchaseParams ackParams = AcknowledgePurchaseParams.newBuilder()
                 .setPurchaseToken(purchase.getPurchaseToken())
                 .build();
             billingClient.acknowledgePurchase(ackParams, result -> {
-                // Acknowledged silently
+                if (result.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                    // Single silent retry on transient network glitch
+                    billingClient.acknowledgePurchase(ackParams, retryRes -> {
+                        if (onComplete != null) onComplete.run();
+                    });
+                } else if (onComplete != null) {
+                    onComplete.run();
+                }
             });
+        } else if (onComplete != null) {
+            onComplete.run();
         }
+    }
+
+    @PluginMethod
+    public void requestAppReview(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("requested", false);
+        call.resolve(ret);
     }
 
     @PluginMethod
@@ -468,7 +538,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
                     if (res.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
                         for (Purchase p : list) {
                             if (p.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-                                acknowledgeIfNeeded(p);
+                                acknowledgeIfNeeded(p, null);
                                 unlocked.set(true);
                             }
                         }
@@ -483,7 +553,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
                     if (res.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
                         for (Purchase p : list) {
                             if (p.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-                                acknowledgeIfNeeded(p);
+                                acknowledgeIfNeeded(p, null);
                                 unlocked.set(true);
                             }
                         }

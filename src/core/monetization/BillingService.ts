@@ -2,6 +2,12 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { APP_RELEASE_CONFIG, type ProPlanTier } from '../../config/appReleaseConfig';
 
+export interface IntroOfferInfo {
+  eligible: boolean;
+  freeTrialDays: number;
+  paymentMode: 'free_trial' | 'pay_as_you_go' | 'pay_up_front';
+}
+
 export interface StoreProductInfo {
   id: string;
   tier?: ProPlanTier;
@@ -9,12 +15,14 @@ export interface StoreProductInfo {
   description: string;
   displayPrice: string;
   price: number;
+  introOffer?: IntroOfferInfo;
 }
 
 export interface PurchaseResult {
   purchased: boolean;
   cancelled?: boolean;
   pending?: boolean;
+  isTrial?: boolean;
   productId?: string;
   transactionId?: string;
   errorMessage?: string;
@@ -32,12 +40,26 @@ interface StoreKitBillingPlugin {
   restorePurchases(): Promise<{ restored: boolean; isLifetimePro: boolean }>;
   checkEntitlements(): Promise<{ isLifetimePro: boolean }>;
   presentOfferCodeRedeemSheet?(): Promise<{ presented: boolean; isLifetimePro: boolean }>;
+  requestAppReview?(): Promise<{ requested: boolean }>;
 }
 
 const StoreKitBilling = registerPlugin<StoreKitBillingPlugin>('StoreKitBilling');
 
 const ENTITLEMENT_STORAGE_KEY = 'zh_v4_entitlement_pro_lifetime';
 const SANDBOX_RECEIPT_STORAGE_KEY = 'zh_v4_sandbox_cloud_receipt';
+const SANDBOX_TRIAL_USED_KEY = 'zh_v11_sandbox_trial_used';
+const REVIEW_DELIGHT_KEY = 'zh_v11_review_delight_state';
+
+type EntitlementSource = 'store' | 'friend_promo' | 'sandbox';
+
+interface PersistedEntitlementPayload {
+  entitlementId: string;
+  productId: string;
+  unlocked: boolean;
+  source?: EntitlementSource;
+  txId: string;
+  verifiedAt: number;
+}
 
 const ALL_PRO_PRODUCT_IDS: readonly string[] = [
   APP_RELEASE_CONFIG.iap.monthlyProductId,
@@ -48,51 +70,71 @@ const ALL_PRO_PRODUCT_IDS: readonly string[] = [
 async function persistVerifiedEntitlement(
   unlocked: boolean,
   txId?: string,
-  productId?: string
+  productId?: string,
+  source: EntitlementSource = 'store'
 ): Promise<void> {
-  const payload = JSON.stringify({
+  const payloadObj: PersistedEntitlementPayload = {
     entitlementId: APP_RELEASE_CONFIG.iap.entitlementId,
     productId: productId ?? APP_RELEASE_CONFIG.iap.yearlyProductId,
     unlocked,
+    source,
     txId: txId ?? 'verified',
     verifiedAt: Date.now(),
-  });
+  };
+  const payload = JSON.stringify(payloadObj);
 
   try {
-    localStorage.setItem(ENTITLEMENT_STORAGE_KEY, payload);
+    if (!unlocked) {
+      localStorage.removeItem(ENTITLEMENT_STORAGE_KEY);
+    } else {
+      localStorage.setItem(ENTITLEMENT_STORAGE_KEY, payload);
+    }
   } catch {
     // Ignore private-mode storage errors
   }
 
   try {
-    await Preferences.set({ key: ENTITLEMENT_STORAGE_KEY, value: payload });
+    if (!unlocked) {
+      await Preferences.remove({ key: ENTITLEMENT_STORAGE_KEY });
+    } else {
+      await Preferences.set({ key: ENTITLEMENT_STORAGE_KEY, value: payload });
+    }
   } catch {
     // Ignore Preferences fallback errors on non-native environments
   }
 }
 
-export async function readCachedEntitlement(): Promise<boolean> {
+async function readPersistedEntitlementPayload(): Promise<PersistedEntitlementPayload | null> {
   try {
     const localRaw = localStorage.getItem(ENTITLEMENT_STORAGE_KEY);
     if (localRaw) {
-      const parsed = JSON.parse(localRaw) as { unlocked?: boolean };
-      if (parsed.unlocked === true) return true;
+      return JSON.parse(localRaw) as PersistedEntitlementPayload;
     }
   } catch {
-    // Continue to Preferences check
+    // Continue to Preferences
   }
-
   try {
     const pref = await Preferences.get({ key: ENTITLEMENT_STORAGE_KEY });
     if (pref.value) {
-      const parsed = JSON.parse(pref.value) as { unlocked?: boolean };
-      return parsed.unlocked === true;
+      return JSON.parse(pref.value) as PersistedEntitlementPayload;
     }
   } catch {
     // Ignore
   }
+  return null;
+}
 
-  return false;
+export async function readCachedEntitlement(): Promise<boolean> {
+  const p = await readPersistedEntitlementPayload();
+  return p?.unlocked === true;
+}
+
+function isSandboxTrialAlreadyUsed(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(SANDBOX_TRIAL_USED_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 function getDefaultPlansMap(): Record<ProPlanTier, StoreProductInfo> {
@@ -160,23 +202,66 @@ export const BillingService = {
     const defaults = getDefaultPlansMap();
 
     if (this.isNativeStorePlatform()) {
+      // On native iOS/Android: NEVER assume trial eligibility locally — wait strictly for StoreKit 2 / Play Billing!
       try {
         const { products } = await StoreKitBilling.getProducts({
           productIds: [...ALL_PRO_PRODUCT_IDS],
         });
         for (const p of products) {
           if (!p?.displayPrice || (typeof p.price === 'number' && p.price <= 0)) continue;
+          const safeIntro: IntroOfferInfo | undefined =
+            p.introOffer &&
+            p.introOffer.eligible === true &&
+            Number(p.introOffer.freeTrialDays) > 0
+              ? {
+                  eligible: true,
+                  freeTrialDays: Math.min(30, Math.max(1, Math.round(Number(p.introOffer.freeTrialDays)))),
+                  paymentMode: 'free_trial',
+                }
+              : undefined;
+
           if (p.id === defaults.monthly.id) {
-            defaults.monthly = { ...defaults.monthly, ...p, id: defaults.monthly.id, tier: 'monthly' };
+            defaults.monthly = {
+              ...defaults.monthly,
+              ...p,
+              id: defaults.monthly.id,
+              tier: 'monthly',
+              introOffer: undefined, // Monthly NEVER displays trial badge
+            };
           } else if (p.id === defaults.yearly.id) {
-            defaults.yearly = { ...defaults.yearly, ...p, id: defaults.yearly.id, tier: 'yearly' };
+            defaults.yearly = {
+              ...defaults.yearly,
+              ...p,
+              id: defaults.yearly.id,
+              tier: 'yearly',
+              introOffer: safeIntro,
+            };
           } else if (p.id === defaults.lifetime.id) {
-            defaults.lifetime = { ...defaults.lifetime, ...p, id: defaults.lifetime.id, tier: 'lifetime' };
+            defaults.lifetime = {
+              ...defaults.lifetime,
+              ...p,
+              id: defaults.lifetime.id,
+              tier: 'lifetime',
+              introOffer: undefined,
+            };
           }
         }
       } catch {
-        // Fallback to localized regional prices when offline / Airplane mode
+        // Fallback to localized regional prices (without trial claims) when offline
       }
+      return defaults;
+    }
+
+    // Web / Desktop Sandbox preview: simulate 7-day free trial eligibility on Yearly ONLY until consumed
+    if (!isSandboxTrialAlreadyUsed()) {
+      defaults.yearly = {
+        ...defaults.yearly,
+        introOffer: {
+          eligible: true,
+          freeTrialDays: 7,
+          paymentMode: 'free_trial',
+        },
+      };
     }
 
     return defaults;
@@ -211,7 +296,7 @@ export const BillingService = {
       try {
         const res = await StoreKitBilling.purchaseLifetime({ productId });
         if (res.purchased) {
-          await persistVerifiedEntitlement(true, res.transactionId, res.productId || productId);
+          await persistVerifiedEntitlement(true, res.transactionId, res.productId || productId, 'store');
         }
         return res;
       } catch (err) {
@@ -226,23 +311,29 @@ export const BillingService = {
     }
 
     // 2. Web / Desktop Sandbox StoreKit Simulator
+    const isTrial = tier === 'yearly' && !isSandboxTrialAlreadyUsed();
     const txId = `sk2_sandbox_${tier}_${Date.now()}`;
     try {
       const receiptPayload = JSON.stringify({
         productId,
         tier,
+        isTrial,
         transactionId: txId,
         purchasedAt: Date.now(),
       });
       localStorage.setItem(SANDBOX_RECEIPT_STORAGE_KEY, receiptPayload);
+      if (isTrial) {
+        localStorage.setItem(SANDBOX_TRIAL_USED_KEY, '1');
+      }
       await Preferences.set({ key: SANDBOX_RECEIPT_STORAGE_KEY, value: receiptPayload });
     } catch {
       // Ignore storage quota issues
     }
 
-    await persistVerifiedEntitlement(true, txId, productId);
+    await persistVerifiedEntitlement(true, txId, productId, 'sandbox');
     return {
       purchased: true,
+      isTrial,
       productId,
       transactionId: txId,
     };
@@ -308,21 +399,61 @@ export const BillingService = {
   },
 
   async syncEntitlementsOnLaunch(): Promise<boolean> {
-    const cached = await readCachedEntitlement();
+    const persisted = await readPersistedEntitlementPayload();
+    const cachedUnlocked = persisted?.unlocked === true;
 
     if (this.isNativeStorePlatform()) {
+      // Preserve verified Android friend-gift unlocks (never stored on Apple iOS)
+      if (!this.isNativeIos() && cachedUnlocked && persisted?.source === 'friend_promo') {
+        return true;
+      }
       try {
         const res = await StoreKitBilling.checkEntitlements();
         if (res.isLifetimePro) {
-          await persistVerifiedEntitlement(true, 'launch_native_store');
+          await persistVerifiedEntitlement(true, 'launch_native_store', undefined, 'store');
           return true;
         }
+        // Online store confirmed zero active entitlements -> cleanly expire ended trials/subscriptions!
+        if (cachedUnlocked && (persisted?.source === 'store' || this.isNativeIos())) {
+          await persistVerifiedEntitlement(false, 'expired_native_store', undefined, 'store');
+        }
+        return false;
       } catch {
-        return cached;
+        // Offline launch: gracefully trust cached entitlement until next network sync
+        return cachedUnlocked;
       }
     }
 
-    return cached;
+    return cachedUnlocked;
+  },
+
+  async recordDelightMomentAndMaybeRequestReview(): Promise<boolean> {
+    try {
+      const now = Date.now();
+      const raw = localStorage.getItem(REVIEW_DELIGHT_KEY);
+      const state: { count: number; lastPromptAt: number } = raw
+        ? JSON.parse(raw)
+        : { count: 0, lastPromptAt: 0 };
+      const nextCount = (Number(state.count) || 0) + 1;
+      const cooldownMs = 60 * 24 * 60 * 60 * 1000; // Max once every 60 days
+      const shouldAsk = nextCount >= 2 && now - (Number(state.lastPromptAt) || 0) > cooldownMs;
+
+      localStorage.setItem(
+        REVIEW_DELIGHT_KEY,
+        JSON.stringify({
+          count: nextCount,
+          lastPromptAt: shouldAsk ? now : state.lastPromptAt || 0,
+        })
+      );
+
+      if (shouldAsk && this.isNativeIos() && StoreKitBilling.requestAppReview) {
+        const res = await StoreKitBilling.requestAppReview();
+        return Boolean(res?.requested);
+      }
+      return false;
+    } catch {
+      return false;
+    }
   },
 
   async presentIosOfferCodeRedeemSheet(): Promise<{
@@ -359,7 +490,8 @@ export const BillingService = {
     await persistVerifiedEntitlement(
       true,
       `friend_gift_slot_${slotNumber}_${codeHash.slice(0, 10)}`,
-      APP_RELEASE_CONFIG.iap.lifetimeProductId
+      APP_RELEASE_CONFIG.iap.lifetimeProductId,
+      'friend_promo'
     );
   },
 
@@ -369,6 +501,7 @@ export const BillingService = {
       await Preferences.remove({ key: ENTITLEMENT_STORAGE_KEY });
       if (!keepCloudReceiptForRestore) {
         localStorage.removeItem(SANDBOX_RECEIPT_STORAGE_KEY);
+        localStorage.removeItem(SANDBOX_TRIAL_USED_KEY);
         await Preferences.remove({ key: SANDBOX_RECEIPT_STORAGE_KEY });
       }
     } catch {

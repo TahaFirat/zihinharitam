@@ -292,7 +292,8 @@ class EntitlementStore {
     try {
       const res = await BillingService.purchaseProPlan(tier, expectedProductId);
       if (res.purchased) {
-        this.update({ isLifetimePro: true, isBusy: false });
+        const refreshedPlans = await BillingService.fetchAllProPlans().catch(() => this.snapshot.plans);
+        this.update({ isLifetimePro: true, isBusy: false, plans: refreshedPlans });
       } else {
         this.update({ isBusy: false });
       }
@@ -383,7 +384,8 @@ class EntitlementStore {
 
   public async resetForTesting(keepCloudReceiptForRestore = true): Promise<void> {
     await BillingService.resetLocalEntitlementForTesting(keepCloudReceiptForRestore);
-    this.update({ isLifetimePro: false });
+    const refreshedPlans = await BillingService.fetchAllProPlans().catch(() => this.snapshot.plans);
+    this.update({ isLifetimePro: false, plans: refreshedPlans });
   }
 }
 

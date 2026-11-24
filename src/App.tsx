@@ -19,11 +19,13 @@ import type {
   CanvasStickyNote,
   CollaboratorPresence,
   CrossLink,
+  CustomUserFolder,
   EraserMode,
   ExamRecallMode,
   InkToolType,
   MindMapDocument,
   MindMapFolder,
+  MindMapLayoutType,
   MindNode,
   NodePriorityTag,
   NodeVisualStyle,
@@ -42,9 +44,20 @@ import {
   KNOWN_TEMPLATE_TECH_BADGES,
   resolveStarterStickerForConcept,
 } from './data/academicTemplates';
+import {
+  FLOWCHART_TEMPLATES,
+  convertMindMapToFlowchart,
+  createBlankFlowchart,
+} from './data/flowchartTemplates';
+import {
+  applyStudioThemeToDocument,
+  type StudioThemeId,
+} from './core/theme/StudioThemes';
+import { sanitizeExternalLinkUrl } from './core/security/Sanitizer';
 import { LocalStore } from './core/sync/LocalStore';
 import { RealtimeCollabSession } from './core/sync/RealtimeCollab';
 import {
+  computeMindMapLayout,
   computeRadialAutoLayout,
   computeTreeMeta,
   findBestOpenBranchPosition,
@@ -52,11 +65,15 @@ import {
   resolveTreeCollisions,
 } from './core/canvas/RadialAutoLayout';
 import { generateMapThumbnailDataUrl } from './core/canvas/ThumbnailGenerator';
+import { BillingService } from './core/monetization/BillingService';
 import { EntitlementManager } from './core/monetization/EntitlementManager';
 import { TopicContextIntelligence } from './core/visuals/TopicContextIntelligence';
 import { OfflineVisualSearchClient } from './core/visuals/OfflineVisualSearchClient';
 import { VisualSearchOrchestrator } from './core/visuals/VisualSearchOrchestrator';
 import { CanvasStage } from './components/CanvasStage';
+import { FlowchartWorkspace } from './components/FlowchartWorkspace';
+import { FlashcardStudyModal } from './components/FlashcardStudyModal';
+import { PresentationOverlay } from './components/PresentationOverlay';
 import { CanvasDrawingToolbar } from './components/CanvasDrawingToolbar';
 import { TopMinimalHUD } from './components/TopMinimalHUD';
 import { KeyboardVisualBar } from './components/KeyboardVisualBar';
@@ -206,6 +223,9 @@ export const App: React.FC = () => {
   const [noteCropperOpen, setNoteCropperOpen] = useState(false);
   const [sketchPopoverOpen, setSketchPopoverOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [flashcardsOpen, setFlashcardsOpen] = useState(false);
+  const [presentationOpen, setPresentationOpen] = useState(false);
+  const [customFolders, setCustomFolders] = useState<CustomUserFolder[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialLegal, setSettingsInitialLegal] = useState<
     'privacy' | 'terms' | 'support' | null
@@ -682,7 +702,40 @@ export const App: React.FC = () => {
     setActiveScreen('home');
   }, [editingNodeId]);
 
-  // --- HomeWorkspace Library Actions (with 3-Map Free Quota Enforcement) ---
+  // Load custom user folders from persistent storage
+  useEffect(() => {
+    void LocalStore.listCustomFolders().then(setCustomFolders);
+  }, []);
+
+  const handleCreateCustomFolder = useCallback(
+    (name: string, emoji: string, color: string) => {
+      const nextFolder: CustomUserFolder = {
+        id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        name: name.trim().slice(0, 32),
+        emoji: emoji || '📁',
+        color: color || '#0EA5E9',
+        createdAt: Date.now(),
+      };
+      setCustomFolders((prev) => {
+        const next = [...prev, nextFolder];
+        void LocalStore.saveCustomFolders(next);
+        return next;
+      });
+      void hapticSuccess();
+    },
+    []
+  );
+
+  const handleDeleteCustomFolder = useCallback((folderId: string) => {
+    setCustomFolders((prev) => {
+      const next = prev.filter((f) => f.id !== folderId);
+      void LocalStore.saveCustomFolders(next);
+      return next;
+    });
+    void hapticLight();
+  }, []);
+
+  // --- HomeWorkspace Library Actions (with 2-Map Free Quota Enforcement) ---
   const handleCreateBlankMap = useCallback(
     async (title: string, dept: AcademicDepartment) => {
       if (!EntitlementManager.canCreateActiveMap(activeMapsCount)) {
@@ -698,6 +751,46 @@ export const App: React.FC = () => {
       await LocalStore.saveMap(fresh, { forceSnapshot: true });
       setSavedMaps(await LocalStore.listMaps());
       openMapOnCanvas(fresh, true);
+    },
+    [activeMapsCount, openMapOnCanvas, openPaywall, themePref]
+  );
+
+  const handleCreateBlankFlowchart = useCallback(
+    async (title: string, dept: AcademicDepartment) => {
+      if (!EntitlementManager.canCreateActiveMap(activeMapsCount)) {
+        openPaywall('map_limit');
+        return;
+      }
+      const fresh = createBlankFlowchart(title, dept);
+      fresh.darkMode =
+        themePref === 'dark' ||
+        (themePref === 'system' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches);
+      fresh.thumbnailDataUrl = generateMapThumbnailDataUrl(fresh);
+      await LocalStore.saveMap(fresh, { forceSnapshot: true });
+      setSavedMaps(await LocalStore.listMaps());
+      openMapOnCanvas(fresh, false);
+    },
+    [activeMapsCount, openMapOnCanvas, openPaywall, themePref]
+  );
+
+  const handleCreateFromFlowchartTemplate = useCallback(
+    async (templateId: string) => {
+      if (!EntitlementManager.canCreateActiveMap(activeMapsCount)) {
+        openPaywall('map_limit');
+        return;
+      }
+      const tpl = FLOWCHART_TEMPLATES.find((t) => t.id === templateId);
+      if (!tpl) return;
+      const built = tpl.build();
+      built.darkMode =
+        themePref === 'dark' ||
+        (themePref === 'system' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches);
+      built.thumbnailDataUrl = generateMapThumbnailDataUrl(built);
+      await LocalStore.saveMap(built, { forceSnapshot: true });
+      setSavedMaps(await LocalStore.listMaps());
+      openMapOnCanvas(built, false);
     },
     [activeMapsCount, openMapOnCanvas, openPaywall, themePref]
   );
@@ -1629,12 +1722,79 @@ export const App: React.FC = () => {
     setIsAutoLayoutAnimating(true);
     setDoc((prev) => ({
       ...prev,
-      nodes: computeRadialAutoLayout(prev.nodes, prev.rootNodeId),
+      nodes: computeMindMapLayout(prev.nodes, prev.rootNodeId, prev.layoutType ?? 'radial'),
       updatedAt: Date.now(),
     }));
     setTimeout(() => setFitTrigger((t) => t + 1), 30);
     setTimeout(() => setIsAutoLayoutAnimating(false), 380);
   }, [doc, pushHistory]);
+
+  const handleChangeLayoutType = useCallback(
+    (nextLayout: MindMapLayoutType) => {
+      pushHistory(doc);
+      void hapticMedium();
+      setIsAutoLayoutAnimating(true);
+      setDoc((prev) => ({
+        ...prev,
+        layoutType: nextLayout,
+        nodes: computeMindMapLayout(prev.nodes, prev.rootNodeId, nextLayout),
+        updatedAt: Date.now(),
+      }));
+      setTimeout(() => setFitTrigger((t) => t + 1), 40);
+      setTimeout(() => setIsAutoLayoutAnimating(false), 380);
+    },
+    [doc, pushHistory]
+  );
+
+  const handleApplyStudioTheme = useCallback(
+    (themeId: StudioThemeId) => {
+      pushHistory(doc);
+      void hapticMedium();
+      setDoc((prev) => applyStudioThemeToDocument(prev, themeId));
+    },
+    [doc, pushHistory]
+  );
+
+  const handleUpdateNodeLink = useCallback((nodeId: string, rawUrl: string) => {
+    setDoc((prev) => {
+      const target = prev.nodes[nodeId];
+      if (!target) return prev;
+      const trimmed = rawUrl.trim();
+      const safe = trimmed ? sanitizeExternalLinkUrl(trimmed) ?? trimmed : undefined;
+      return {
+        ...prev,
+        nodes: {
+          ...prev.nodes,
+          [nodeId]: { ...target, linkUrl: safe },
+        },
+        updatedAt: Date.now(),
+      };
+    });
+  }, []);
+
+  const handleConvertActiveMapToFlowchart = useCallback(async () => {
+    if (!EntitlementManager.canCreateActiveMap(activeMapsCount)) {
+      openPaywall('map_limit');
+      return;
+    }
+    const converted = convertMindMapToFlowchart(doc);
+    converted.darkMode = Boolean(doc.darkMode);
+    converted.thumbnailDataUrl = generateMapThumbnailDataUrl(converted);
+    await LocalStore.saveMap(converted, { forceSnapshot: true });
+    setSavedMaps(await LocalStore.listMaps());
+    void hapticSuccess();
+    openMapOnCanvas(converted, false);
+  }, [activeMapsCount, doc, openMapOnCanvas, openPaywall]);
+
+  const handleFocusPresentationNode = useCallback(
+    (nodeId: string) => {
+      const target = doc.nodes[nodeId];
+      if (!target) return;
+      setSelectedNodeId(nodeId);
+      setRadarJump({ x: target.x, y: target.y, seq: Date.now() });
+    },
+    [doc.nodes]
+  );
 
   const anyModalOpen =
     stickerDrawerOpen ||
@@ -1645,6 +1805,8 @@ export const App: React.FC = () => {
     noteCropperOpen ||
     sketchPopoverOpen ||
     exportOpen ||
+    flashcardsOpen ||
+    presentationOpen ||
     settingsOpen ||
     paywallState.open ||
     showOnboarding;
@@ -2071,9 +2233,14 @@ export const App: React.FC = () => {
         <HomeWorkspace
           maps={savedMaps}
           activeMapId={doc.id}
+          customFolders={customFolders}
+          onCreateCustomFolder={handleCreateCustomFolder}
+          onDeleteCustomFolder={handleDeleteCustomFolder}
           onOpenMap={(mapToOpen) => openMapOnCanvas(mapToOpen, false)}
           onCreateBlankMap={handleCreateBlankMap}
+          onCreateBlankFlowchart={handleCreateBlankFlowchart}
           onCreateFromTemplate={handleCreateFromTemplate}
+          onCreateFromFlowchartTemplate={handleCreateFromFlowchartTemplate}
           onOpenSmartMapGenerator={() =>
             handleRequestOpenSmartGenerator('text_to_map', true)
           }
@@ -2092,15 +2259,71 @@ export const App: React.FC = () => {
           }}
           onTriggerPaywall={(reason) => openPaywall(reason, null)}
         />
+      ) : doc.documentType === 'flowchart' ? (
+        <>
+          {/* Screen C: Dedicated Flowchart & Process Diagram Studio */}
+          <FlowchartWorkspace
+            doc={doc}
+            darkMode={Boolean(doc.darkMode)}
+            onChangeDoc={(updater, recordHistory = true) => {
+              if (recordHistory) pushHistory(doc);
+              setDoc((prev) => ({
+                ...updater(prev),
+                updatedAt: Date.now(),
+              }));
+            }}
+            onNavigateHome={() => void handleNavigateHome()}
+            onToggleDarkMode={() => {
+              const nextDark = !doc.darkMode;
+              setThemePref(nextDark ? 'dark' : 'light');
+            }}
+            onOpenExport={() => setExportOpen(true)}
+            onOpenSettings={() => {
+              setSettingsInitialLegal(null);
+              setSettingsOpen(true);
+            }}
+            canUndo={pastDocs.length > 0}
+            canRedo={futureDocs.length > 0}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+          />
+
+          <ExportSheet
+            isOpen={exportOpen}
+            onClose={() => setExportOpen(false)}
+            document={doc}
+            collaborators={collaborators}
+            onImportDocument={(imported) => {
+              void handleImportMapsBatch([imported]);
+            }}
+            onTriggerPaywall={(reason) => openPaywall(reason, null)}
+            onExportSuccess={() => {
+              void BillingService.recordDelightMomentAndMaybeRequestReview();
+            }}
+          />
+        </>
       ) : (
         <>
           {/* Screen B: 60/120 FPS Zero-Jitter Visual Mind Map Canvas */}
-          <TopMinimalHUD
+          {!presentationOpen && (
+            <TopMinimalHUD
             mapTitle={doc.title}
             department={doc.department}
             contextEmoji={mapContext.emoji}
             defaultNodeStyle={defaultNodeStyle}
             paperStyle={doc.paperStyle ?? 'dots'}
+            layoutType={doc.layoutType ?? 'radial'}
+            colorTheme={doc.colorTheme}
+            onChangeLayoutType={handleChangeLayoutType}
+            onApplyStudioTheme={handleApplyStudioTheme}
+            onConvertToFlowchart={() => void handleConvertActiveMapToFlowchart()}
+            onOpenFlashcards={() => setFlashcardsOpen(true)}
+            onStartPresentation={() => {
+              setDrawingMode(false);
+              setEditingNodeId(null);
+              setFocusMode(true);
+              setPresentationOpen(true);
+            }}
             onToggleDefaultNodeStyle={handleToggleDefaultNodeStyle}
             onCyclePaperStyle={handleCyclePaperStyle}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
@@ -2195,6 +2418,7 @@ export const App: React.FC = () => {
             onOpenExport={() => setExportOpen(true)}
             zoomPercent={zoomPercent}
           />
+          )}
 
           <CanvasStage
             nodes={doc.nodes}
@@ -2310,6 +2534,7 @@ export const App: React.FC = () => {
             nodeScreenPos={activeNodeScreenPos}
             onUpdateNodeTitle={handleUpdateNodeTitle}
             onUpdateNodeNote={handleUpdateNodeNote}
+            onUpdateNodeLink={handleUpdateNodeLink}
             onToggleNodeCheck={handleToggleNodeCheck}
             onChangePriorityTag={handleChangeNodePriorityTag}
             onRequestEditTitle={() => {
@@ -2704,6 +2929,28 @@ export const App: React.FC = () => {
               void handleImportMapsBatch([imported]);
             }}
             onTriggerPaywall={(reason) => openPaywall(reason, null)}
+            onExportSuccess={() => {
+              void BillingService.recordDelightMomentAndMaybeRequestReview();
+            }}
+          />
+
+          <FlashcardStudyModal
+            isOpen={flashcardsOpen}
+            doc={doc}
+            onClose={() => setFlashcardsOpen(false)}
+            onSessionComplete={() => {
+              void BillingService.recordDelightMomentAndMaybeRequestReview();
+            }}
+          />
+
+          <PresentationOverlay
+            isOpen={presentationOpen}
+            doc={doc}
+            onFocusNode={handleFocusPresentationNode}
+            onClose={() => {
+              setPresentationOpen(false);
+              setFocusMode(false);
+            }}
           />
         </>
       )}

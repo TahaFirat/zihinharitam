@@ -127,27 +127,19 @@ const SCENES = [
   },
   {
     filename: '03-sistem-mimarisi-koyu.png',
-    query: '?view=canvas&tpl=tpl_sistem_tasarimi&dark=1&exam=hide_text&no_onboard=1',
+    query: '?no_onboard=1',
     bgHex: '#FFA954',
     posterTheme: {
       bg: '#FFA954',
       ink: '#0B1220',
-      line1: 'Sınav Öncesi',
-      line2: 'Kendini Test Et',
+      line1: 'Akış Diyagramı',
+      line2: 'Stüdyosu',
     },
-    prepare: async (page, device) => {
-      await page.waitForSelector('canvas', { timeout: 10000 });
-      await page.click('[data-testid="hud-tab-study"]');
-      await page.waitForSelector('[data-testid="hud-timer-toggle-btn"]', { timeout: 6000 });
-      await page.click('[data-testid="hud-timer-toggle-btn"]');
-      await page.waitForTimeout(450);
-      if (device?.isMobile) {
-        const cx = Math.round(device.viewport.width / 2);
-        const cy = Math.round(device.viewport.height / 2);
-        await page.mouse.move(cx, cy);
-        await page.mouse.wheel(0, -300);
-        await page.waitForTimeout(300);
-      }
+    prepare: async (page) => {
+      await page.waitForSelector('[data-testid="flowchart-template-flow_auth_2fa"]', { timeout: 10000 });
+      await page.click('[data-testid="flowchart-template-flow_auth_2fa"]');
+      await page.waitForSelector('[data-testid="flowchart-workspace"]', { timeout: 8000 });
+      await page.waitForTimeout(550);
     },
   },
   {
