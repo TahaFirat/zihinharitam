@@ -1,0 +1,3 @@
+• 52.700+ telifsiz mühendislik, tıp ve fen ikonu (yazarken kaybolma ve kırık görsel sorunları tamamen çözüldü).
+• Kusursuz Türkçe = İngilizce ikon eşleşmesi ve 3D İkon Stüdyosu kararlılık düzeltmesi.
+• Metinden Harita içine canlı "Ders Notunu Formata Çevir" analiz sekmesi (Özet/Dengeli/Detaylı).

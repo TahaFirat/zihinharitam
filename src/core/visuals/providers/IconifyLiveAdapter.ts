@@ -3,20 +3,27 @@ import type {
   VisualSearchResult,
   VisualStyleMode,
 } from '../../../types/mindmap';
+import {
+  buildDuotoneVectorStickerDataUri,
+  wrapMultiColorSvgAsStickerDataUri,
+} from '../PureVectorStickerizer';
 import { EN_CONCEPT_INTENT_MAP } from '../taxonomyData.js';
 
 const ICONIFY_API = 'https://api.iconify.design';
 
-// Strictly verified commercial-safe & attributed icon collections ONLY (MIT, Apache-2.0, ISC, CC-BY 4.0/3.0 — zero NC / SA / unverified packs!)
+// Strictly verified commercial-safe & attributed icon collections ONLY (MIT, Apache-2.0, ISC, CC0, CC-BY 4.0/3.0 — zero NC / SA / unverified packs!)
 const LIVE_COLORFUL_SETS = new Set([
   'fluent-emoji',
   'fluent-emoji-flat',
   'fluent-color',
+  'streamline-ultimate-color',
+  'streamline-plump-color',
+  'streamline-color',
+  'streamline-cyber-color',
+  'streamline-kameleon-color',
+  'streamline-emojis',
   'noto',
   'twemoji',
-  'streamline-color',
-  'streamline-emojis',
-  'streamline-plump-color',
   'emojione',
   'fxemoji',
   'icon-park',
@@ -31,9 +38,23 @@ const LIVE_COLORFUL_SETS = new Set([
 ]);
 
 const LIVE_MONO_SAFE_SETS = new Set([
+  'energy-icons',
+  'uix',
+  'iconoven',
+  'coolicons',
+  'hugeicons',
+  'ix',
+  'iconoir',
+  'temaki',
+  'maki',
+  'gis',
+  'covid',
   'healthicons',
   'medical-icon',
   'game-icons',
+  'material-symbols',
+  'clarity',
+  'fluent',
   'mdi',
   'lucide',
   'ph',
@@ -56,8 +77,11 @@ const SET_PRIORITY_BOOST: Record<string, number> = {
   'fluent-emoji': 1.36,
   'fluent-emoji-flat': 1.35,
   'streamline-plump-color': 1.34,
+  'streamline-ultimate-color': 1.33,
   'fluent-color': 1.32,
   'streamline-color': 1.30,
+  'streamline-cyber-color': 1.30,
+  'streamline-kameleon-color': 1.29,
   'streamline-emojis': 1.29,
   noto: 1.27,
   twemoji: 1.25,
@@ -72,11 +96,24 @@ const SET_PRIORITY_BOOST: Record<string, number> = {
   logos: 1.15,
   devicon: 1.15,
   'skill-icons': 1.15,
-  healthicons: 1.18,
-  'medical-icon': 1.17,
+  healthicons: 1.20,
+  'medical-icon': 1.18,
+  covid: 1.18,
+  'energy-icons': 1.18,
+  uix: 1.16,
+  iconoven: 1.15,
+  ix: 1.15,
+  temaki: 1.14,
+  gis: 1.14,
   'game-icons': 1.14,
+  hugeicons: 1.13,
+  coolicons: 1.13,
+  iconoir: 1.12,
   ph: 1.12,
   lucide: 1.12,
+  'material-symbols': 1.11,
+  clarity: 1.11,
+  fluent: 1.11,
   mdi: 1.10,
   carbon: 1.10,
   tabler: 1.08,
@@ -149,7 +186,10 @@ function classifyLivePrefix(prefix: string): {
     prefix === 'fluent-color' ||
     prefix === 'fluent-emoji-flat' ||
     prefix === 'streamline-plump-color' ||
+    prefix === 'streamline-ultimate-color' ||
     prefix === 'streamline-color' ||
+    prefix === 'streamline-cyber-color' ||
+    prefix === 'streamline-kameleon-color' ||
     prefix === 'meteocons' ||
     prefix === 'marketeq'
   ) {
@@ -166,7 +206,7 @@ function classifyLivePrefix(prefix: string): {
   ) {
     return { category: 'hand_drawn', mode: 'illustration', isColor: true };
   }
-  if (prefix === 'healthicons' || prefix === 'medical-icon') {
+  if (prefix === 'healthicons' || prefix === 'medical-icon' || prefix === 'covid') {
     return { category: 'medical_academic', mode: 'illustration', isColor };
   }
   if (TRADEMARK_REFERENCE_SETS.has(prefix)) {
@@ -189,6 +229,8 @@ export interface SearchIconifyLiveOptions {
   allWordsMatched?: boolean;
   hasExactPhraseMatch?: boolean;
   preTranslatedEn?: string | null;
+  translationAttempted?: boolean;
+  skipIconifyIds?: Set<string>;
   headEnTerms?: string[];
   blockedTokens?: string[];
 }
@@ -225,6 +267,7 @@ export async function searchIconifyLive(
   const normalizedClean = clean.toLowerCase();
   const isMultiWord = normalizedClean.includes(' ');
   const needsLiveTrTranslation =
+    !options?.translationAttempted &&
     !options?.preTranslatedEn &&
     (!options?.hasExactOfflineLexicon ||
       options?.allWordsMatched === false ||
@@ -236,7 +279,7 @@ export async function searchIconifyLive(
   if (needsLiveTrTranslation) {
     liveTranslatedEn = await Promise.race([
       translateTurkishToEnglishLive(clean, signal),
-      new Promise<null>((r) => setTimeout(() => r(null), 1100)),
+      new Promise<null>((r) => setTimeout(() => r(null), 900)),
     ]);
   }
   if (liveTranslatedEn) {
@@ -452,7 +495,87 @@ export async function searchIconifyLive(
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, 44);
+  const topCandidates = scored.slice(0, 36);
+
+  // Batch-hydrate remote Iconify icons via `/{prefix}.json?icons=...` into 100% self-contained
+  // `data:image/svg+xml` Data URIs so Android/iOS WebView & 3D Studio Canvas NEVER fail on external SVG <img> loads!
+  const byPrefix = new Map<string, string[]>();
+  for (const item of topCandidates) {
+    if (!item.iconifyId || options?.skipIconifyIds?.has(item.iconifyId)) continue;
+    const colon = item.iconifyId.indexOf(':');
+    if (colon <= 0) continue;
+    const pref = item.iconifyId.slice(0, colon);
+    const icName = item.iconifyId.slice(colon + 1);
+    const list = byPrefix.get(pref) ?? [];
+    if (!list.includes(icName)) list.push(icName);
+    byPrefix.set(pref, list);
+  }
+
+  const hydratedSvgMap = new Map<string, { viewBox: string; body: string; isColor: boolean }>();
+  if (byPrefix.size > 0 && !signal?.aborted) {
+    const entries = Array.from(byPrefix.entries()).slice(0, 8);
+    await Promise.allSettled(
+      entries.map(async ([pref, names]) => {
+        try {
+          const url = `${ICONIFY_API}/${encodeURIComponent(pref)}.json?icons=${encodeURIComponent(names.join(','))}`;
+          const res = await fetch(url, { signal });
+          if (!res.ok) return;
+          const json = (await res.json()) as {
+            width?: number;
+            height?: number;
+            icons?: Record<string, { body?: string; width?: number; height?: number; left?: number; top?: number }>;
+            aliases?: Record<string, { parent?: string }>;
+          };
+          const defW = json.width || 24;
+          const defH = json.height || 24;
+          const isColorSet = LIVE_COLORFUL_SETS.has(pref);
+          for (const n of names) {
+            const direct = json.icons?.[n];
+            const aliasParent = !direct ? json.aliases?.[n]?.parent : undefined;
+            const rec = direct || (aliasParent ? json.icons?.[aliasParent] : undefined);
+            if (!rec?.body) continue;
+            const vb = `${rec.left || 0} ${rec.top || 0} ${rec.width || defW} ${rec.height || defH}`;
+            const hasChromatic = isColorSet
+              ? /#(?!(?:000|000000|fff|ffffff|111|111111|222|222222)\b)[0-9a-f]{3,8}\b|url\(#|rgb\((?!0,\s*0,\s*0)/i.test(rec.body)
+              : false;
+            hydratedSvgMap.set(`${pref}:${n}`, {
+              viewBox: vb,
+              body: rec.body,
+              isColor: hasChromatic,
+            });
+          }
+        } catch {
+          // Skip failed batch silently — local offline icons stay intact!
+        }
+      })
+    );
+  }
+
+  const top: VisualSearchResult[] = [];
+  for (const item of topCandidates) {
+    if (item.iconifyId && options?.skipIconifyIds?.has(item.iconifyId)) {
+      // Let VisualSearchOrchestrator serve the guaranteed local offline shard copy instead!
+      top.push(item);
+      continue;
+    }
+    const hyd = item.iconifyId ? hydratedSvgMap.get(item.iconifyId) : undefined;
+    if (hyd) {
+      const dataUri = hyd.isColor
+        ? wrapMultiColorSvgAsStickerDataUri(hyd.viewBox, hyd.body)
+        : buildDuotoneVectorStickerDataUri(hyd.viewBox, hyd.body, branchColor);
+      top.push({
+        ...item,
+        previewUrl: dataUri,
+        rawUrl: dataUri,
+        rawSvgMarkup: hyd.body,
+        rawViewBox: hyd.viewBox,
+        isDuotoneColorizable: !hyd.isColor,
+        isVectorSvg: true,
+      });
+    }
+    // Note: if batch JSON hydration failed for a remote-only icon, drop it instead of emitting a broken https:// URL!
+  }
+
   if (top.length > 0) {
     if (searchResponseCache.size > 120) {
       const oldest = searchResponseCache.keys().next().value;

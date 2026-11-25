@@ -266,10 +266,13 @@ export class VisualSearchOrchestrator {
       offlineWave.results.length >= 6;
 
     // ZERO-REGRESSION GUARD: When our curated offline dictionary ALREADY matched the exact word/phrase
-    // with high confidence (e.g. `kar -> snow`, `top -> soccer ball`, `taş -> rock`), NEVER overwrite or
-    // run live Google Translate (which would translate `kar` -> `profit`!) or ARASAAC TR substring search!
+    // with high confidence (e.g. `kar -> snow`, `top -> soccer ball`, `taş -> rock`), OR the query is pure ASCII
+    // English that already matched offline icon names (`tunnel`, `router`, `resistor`), skip slow MyMemory translation!
+    const isAsciiOnlyQuery = /^[a-z0-9\s+-]+$/i.test(clean);
+    const hasOfflineAsciiHit = isAsciiOnlyQuery && offlineWave.results.length >= 3;
     const needsFullPhraseTranslation =
       !offlineHasStrongFullMatch &&
+      !hasOfflineAsciiHit &&
       (!expanded.allWordsMatched ||
         !expanded.hasLexiconMatch ||
         (Boolean(expanded.isMultiWord) && !expanded.hasExactPhraseMatch));
@@ -279,10 +282,10 @@ export class VisualSearchOrchestrator {
       needsFullPhraseTranslation
         ? Promise.race([
             translateTurkishToEnglishLive(clean, signal),
-            new Promise<null>((r) => setTimeout(() => r(null), 1050)),
+            new Promise<null>((r) => setTimeout(() => r(null), 900)),
           ])
         : Promise.resolve(null),
-      !expanded.hasLexiconMatch && clean.length >= 3
+      !expanded.hasLexiconMatch && !hasOfflineAsciiHit && clean.length >= 3
         ? Promise.race([
             resolveViaTurkishWikipedia(clean, signal),
             new Promise<null>((r) => setTimeout(() => r(null), 350)),
@@ -291,6 +294,17 @@ export class VisualSearchOrchestrator {
     ]);
 
     if (signal?.aborted) return offlineWave;
+
+    // Index all guaranteed-working LOCAL offline shard items by `iconifyId` so remote calls NEVER
+    // overwrite a working local `data:image/svg+xml` icon with an external URL!
+    const localOfflineByIconifyId = new Map<string, VisualSearchResult>();
+    const localOfflineIconifyIds = new Set<string>();
+    for (const offItem of offlineWave.results) {
+      if (offItem.iconifyId) {
+        localOfflineByIconifyId.set(offItem.iconifyId, offItem);
+        localOfflineIconifyIds.add(offItem.iconifyId);
+      }
+    }
 
     const primaryEnList = expanded.primaryEnTokens ?? expanded.expandedEnTokens;
     const enTerms = Array.from(
@@ -320,13 +334,15 @@ export class VisualSearchOrchestrator {
           allWordsMatched: Boolean(expanded.allWordsMatched),
           hasExactPhraseMatch: Boolean(expanded.hasExactPhraseMatch),
           preTranslatedEn: offlineHasStrongFullMatch ? primaryEn : liveTranslatedEn,
+          translationAttempted: true,
+          skipIconifyIds: localOfflineIconifyIds,
           headEnTerms: expanded.headEnTokens,
           blockedTokens: expanded.blockedTokens,
         }),
         AIStickerDirector.searchSharedPool(clean, 4),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
-        setTimeout(() => r([]), 2100)
+        setTimeout(() => r([]), 2800)
       ),
     ]);
 
@@ -374,23 +390,35 @@ export class VisualSearchOrchestrator {
       combined.push(item);
     };
 
+    const resolveSafeItem = (item: VisualSearchResult): VisualSearchResult => {
+      if (item.iconifyId && localOfflineByIconifyId.has(item.iconifyId)) {
+        const localHit = localOfflineByIconifyId.get(item.iconifyId)!;
+        return {
+          ...localHit,
+          score: Math.max(localHit.score, item.score),
+        };
+      }
+      return item;
+    };
+
     if (!offlineHasStrongFullMatch) {
-      // Unknown word OR partial multi-word compound -> put live full-phrase translated results FIRST!
+      // Unknown word OR partial multi-word compound -> put live full-phrase translated results FIRST,
+      // while ALWAYS substituting our guaranteed local `data:image/svg+xml` copy whenever `iconifyId` matches!
       for (const s of settled) {
         if (s.status === 'fulfilled') {
           for (const remoteItem of s.value) {
             if (isRemoteItemRelevant(remoteItem)) {
-              pushUnique(remoteItem);
+              pushUnique(resolveSafeItem(remoteItem));
             }
           }
         }
       }
       for (const offItem of offlineWave.results) {
-        pushUnique({ ...offItem, score: Math.min(offItem.score, 0.86) });
+        pushUnique({ ...offItem, score: Math.min(offItem.score, 0.88) });
       }
     } else {
       // Anchored curated offline results ALWAYS stay stably at the top (zero jump / zero vanish after 155ms!);
-      // extra 546K remote icons append cleanly underneath!
+      // extra remote icons append cleanly underneath!
       for (const offItem of offlineWave.results) {
         pushUnique(offItem);
       }
@@ -402,7 +430,8 @@ export class VisualSearchOrchestrator {
         if (s.status === 'fulfilled') {
           for (const remoteItem of s.value) {
             if (isRemoteItemRelevant(remoteItem)) {
-              pushUnique({ ...remoteItem, score: Math.min(remoteItem.score, remoteCap) });
+              const safe = resolveSafeItem(remoteItem);
+              pushUnique({ ...safe, score: Math.min(safe.score, remoteCap) });
             }
           }
         }

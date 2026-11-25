@@ -249,17 +249,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Creative Commons Atıfları (CC BY 4.0 / CC BY 3.0)
               </div>
               <ul className="list-disc space-y-1 pl-4 font-medium opacity-85">
-                <li><strong>Streamline</strong> (Streamline Color, Plump Color, Emojis) — streamlinehq.com • <em>CC BY 4.0</em></li>
+                <li><strong>Streamline</strong> (Streamline Color, Plump Color, Ultimate Color, Cyber Color, Kameleon Color, Emojis) — streamlinehq.com • <em>CC BY 4.0</em></li>
                 <li><strong>Twemoji</strong> — Twitter / X • <em>CC BY 4.0</em></li>
                 <li><strong>EmojiOne v2</strong> — Emoji One • <em>CC BY 4.0</em></li>
                 <li><strong>Font Awesome 6 Free</strong> — Dave Gandy (fontawesome.com) • <em>CC BY 4.0</em></li>
+                <li><strong>GIS Icons &amp; Covid Clinical Icons</strong> — <em>CC BY 4.0</em></li>
                 <li><strong>Game-Icons.net</strong> — Lorc, Delapouite &amp; Katkıda Bulunanlar • <em>CC BY 3.0</em></li>
               </ul>
             </div>
 
             <div className="space-y-1.5 rounded-2xl border p-3.5" style={{ borderColor: 'var(--hud-border)' }}>
               <div className="text-[11px] font-black tracking-wide uppercase opacity-65">
-                MIT / Apache-2.0 / ISC İkon &amp; Yazılım Kütüphaneleri
+                MIT / Apache-2.0 / ISC / CC0 İkon &amp; Yazılım Kütüphaneleri
               </div>
               <ul className="list-disc space-y-1 pl-4 font-medium opacity-85">
                 <li><strong>Microsoft Fluent UI Emoji &amp; Fluent Color</strong> — Microsoft (MIT)</li>
@@ -267,7 +268,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <li><strong>Mozilla FxEmoji</strong> — Mozilla (Apache-2.0)</li>
                 <li><strong>ByteDance IconPark</strong> — ByteDance (Apache-2.0)</li>
                 <li><strong>HealthIcons &amp; Medical Icons</strong> — Resolve to Save Lives / Samuel Frémondière (MIT)</li>
-                <li><strong>Phosphor Icons, Tabler Icons, Marketeq, Meteocons, Flat Color Icons, Circle Flags</strong> (MIT)</li>
+                <li><strong>Energy Icons, Siemens IX, Iconoir, Phosphor Icons, Tabler Icons, Marketeq, Meteocons, Flat Color Icons, Circle Flags</strong> (MIT)</li>
+                <li><strong>Temaki Civil &amp; Infrastructure Icons</strong> (CC0 Public Domain)</li>
                 <li><strong>IBM Carbon Icons &amp; Pictogrammers Material Design Icons</strong> (Apache-2.0)</li>
                 <li><strong>Lucide Icons</strong> (ISC) • <strong>React, Capacitor, jsPDF, Yjs, MiniSearch, RBush</strong> (MIT) • <strong>Dexie</strong> (Apache-2.0)</li>
               </ul>

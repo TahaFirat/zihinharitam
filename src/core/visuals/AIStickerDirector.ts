@@ -170,17 +170,20 @@ async function synthesizeCustomDieCutSticker(
   artStyle: AIArtStyle,
   slotIndex: number,
   seed: number,
-  branchColor = '#0EA5E9'
+  branchColor = '#0EA5E9',
+  conceptLabel = ''
 ): Promise<string> {
   if (typeof document === 'undefined') {
     return baseVisualUrl;
   }
 
-  let img: HTMLImageElement;
-  try {
-    img = await loadImageElement(baseVisualUrl, 3500);
-  } catch {
-    return baseVisualUrl;
+  let img: HTMLImageElement | null = null;
+  if (baseVisualUrl) {
+    try {
+      img = await loadImageElement(baseVisualUrl, 3000);
+    } catch {
+      img = null;
+    }
   }
 
   const size = 512;
@@ -363,7 +366,8 @@ async function synthesizeCustomDieCutSticker(
     ctx.fill();
   }
 
-  // Draw the central high-resolution concept illustration with crisp white inner halo
+  // Draw the central high-resolution concept illustration with crisp white inner halo,
+  // OR a crisp on-device geometric emblem monogram if image failed so 3D Studio NEVER renders a broken <img>!
   const iconBox = artStyle === 'scientific_atlas' ? 252 : 268;
   const ix = Math.round((size - iconBox) / 2);
   const iy = Math.round((size - iconBox) / 2);
@@ -372,10 +376,36 @@ async function synthesizeCustomDieCutSticker(
   ctx.shadowColor = 'rgba(15, 23, 42, 0.16)';
   ctx.shadowBlur = 14;
   ctx.shadowOffsetY = 5;
-  ctx.drawImage(img, ix, iy, iconBox, iconBox);
+  if (img && img.naturalWidth > 0) {
+    ctx.drawImage(img, ix, iy, iconBox, iconBox);
+  } else {
+    // Guaranteed crisp geometric monogram emblem (zero broken images even in Airplane Mode!)
+    const badgeGrad = ctx.createLinearGradient(cx - 88, cy - 88, cx + 88, cy + 88);
+    badgeGrad.addColorStop(0, primaryColor);
+    badgeGrad.addColorStop(1, pal.accent);
+    ctx.fillStyle = badgeGrad;
+    drawRoundedSquircle(ctx, cx - 96, cy - 96, 192, 192, 56);
+    ctx.fill();
+    const initials = (conceptLabel || 'ZH')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toLocaleUpperCase('tr-TR'))
+      .join('') || '★';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 84px "Plus Jakarta Sans", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initials, cx, cy + 6);
+  }
   ctx.restore();
 
-  return canvas.toDataURL('image/png');
+  try {
+    return canvas.toDataURL('image/png');
+  } catch {
+    return baseVisualUrl.startsWith('data:') ? baseVisualUrl : '';
+  }
 }
 
 export class AIStickerDirector {
@@ -559,15 +589,14 @@ export class AIStickerDirector {
         wave1.results[idx % Math.max(1, wave1.results.length)];
 
       const basePreview = baseItem?.previewUrl || '';
-      const synthesizedUrl = basePreview
-        ? await synthesizeCustomDieCutSticker(
-            basePreview,
-            artStyle,
-            idx,
-            seed,
-            branchColor
-          )
-        : '';
+      const synthesizedUrl = await synthesizeCustomDieCutSticker(
+        basePreview,
+        artStyle,
+        idx,
+        seed,
+        branchColor,
+        clean
+      );
 
       if (signal?.aborted) return;
 
@@ -575,7 +604,7 @@ export class AIStickerDirector {
         slotIndex: idx,
         seed,
         status: 'ready',
-        previewUrl: synthesizedUrl || basePreview,
+        previewUrl: synthesizedUrl || (basePreview.startsWith('data:') ? basePreview : ''),
         aspectRatio: 1,
         promptEn: fullPrompt,
         variantLabelTr: pal.labelTr,

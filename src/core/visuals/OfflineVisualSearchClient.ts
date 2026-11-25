@@ -27,7 +27,10 @@ const PACK_DISPLAY_NAMES: Record<string, string> = {
   'fluent-emoji-flat': 'Fluent Emoji (Offline)',
   'fluent-color': 'Fluent 3D Color (Offline)',
   'streamline-plump-color': 'Streamline Plump (Offline)',
+  'streamline-ultimate-color': 'Streamline Bilim & Müh. (Offline)',
   'streamline-color': 'Streamline Renkli (Offline)',
+  'streamline-cyber-color': 'Streamline Siber & Ağ (Offline)',
+  'streamline-kameleon-color': 'Streamline Kameleon (Offline)',
   'streamline-emojis': 'Streamline Sticker (Offline)',
   emojione: 'EmojiOne Renkli (Offline)',
   noto: 'Google Noto (Offline)',
@@ -44,6 +47,12 @@ const PACK_DISPLAY_NAMES: Record<string, string> = {
   'skill-icons': 'Skill Icons (Offline)',
   healthicons: 'HealthIcons Tıp (Offline)',
   'medical-icon': 'Medical Atlas (Offline)',
+  covid: 'Klinik Viroloji (Offline)',
+  'energy-icons': 'Enerji & Mühendislik (Offline)',
+  ix: 'Siemens Endüstri (Offline)',
+  temaki: 'Altyapı & Mimarlık (Offline)',
+  gis: 'Harita & Geomatik (Offline)',
+  iconoir: 'Iconoir Teknik (Offline)',
   'game-icons': 'Ansiklopedik Vektör (Offline)',
   mdi: 'Material Design (Offline)',
   lucide: 'Lucide Modern (Offline)',
@@ -61,7 +70,10 @@ function mapHitToCategoryAndMode(hit: HydratedOfflineHit): {
     hit.pack === 'fluent-color' ||
     hit.pack === 'fluent-emoji-flat' ||
     hit.pack === 'streamline-plump-color' ||
+    hit.pack === 'streamline-ultimate-color' ||
     hit.pack === 'streamline-color' ||
+    hit.pack === 'streamline-cyber-color' ||
+    hit.pack === 'streamline-kameleon-color' ||
     hit.pack === 'marketeq' ||
     hit.pack === 'meteocons'
   ) {
@@ -78,7 +90,7 @@ function mapHitToCategoryAndMode(hit: HydratedOfflineHit): {
   ) {
     return { category: 'hand_drawn', mode: 'illustration' };
   }
-  if (hit.pack === 'healthicons' || hit.pack === 'medical-icon') {
+  if (hit.pack === 'healthicons' || hit.pack === 'medical-icon' || hit.pack === 'covid') {
     return { category: 'medical_academic', mode: 'illustration' };
   }
   if (
@@ -87,11 +99,13 @@ function mapHitToCategoryAndMode(hit: HydratedOfflineHit): {
     hit.pack === 'skill-icons' ||
     hit.pack === 'vscode-icons' ||
     hit.pack === 'simple-icons' ||
-    hit.pack === 'carbon'
+    hit.pack === 'carbon' ||
+    hit.pack === 'energy-icons' ||
+    hit.pack === 'ix'
   ) {
     return {
       category: 'system_arch',
-      mode: hit.pack === 'carbon' ? 'diagram' : 'illustration',
+      mode: hit.pack === 'carbon' || hit.pack === 'energy-icons' || hit.pack === 'ix' ? 'diagram' : 'illustration',
     };
   }
   if (hit.domain === 'medicine_bio' || hit.domain === 'science') {

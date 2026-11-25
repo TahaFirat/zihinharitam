@@ -1,4 +1,4 @@
-• NEW Lecture Note to Mind Map Converter: Turns raw PDFs, slides, and textbook paragraphs into clean structured ZihinHaritam outlines in one tap, and automatically clears input boxes after map creation.
-• Smoother Canvas Performance: Stabilized canvas memoization, cached ink SVG paths, and zero-render sticky/lasso dragging for fluid panning, zooming, and editing.
-• 45,500+ Commercially-Licensed Offline Icons: Expanded with Phosphor & IBM Carbon icon packs, full in-app Open-Source License attributions in Settings, and multilingual icon search.
-• Native Voice Dictation & Tablet Polish: On-device iOS/Android dictation, smarter text-to-mind-map parsing, and responsive low-GPU rendering.
+• 52,700+ Royalty-Free Icons & Zero-Vanish Search: Added 9 new commercial-safe engineering, science, and medical icon packs (MIT/Apache-2.0/CC0/CC-BY 4.0) with local-first vector hydration so icons never vanish while typing or offline.
+• Exact Turkish-English Parity & 3D Studio Reliability: Fixed bilingual mismatches and broken previews with guaranteed 512x512 on-device rendering.
+• Live Raw Lecture Note Converter Tab: Analyzes unstructured paragraphs and study notes into clean structured mind-map outlines (Central Topic, Branches with Descriptions/Badges, Sub-concepts & Notes) with Compact/Balanced/Detailed depth modes.
+• Updated v8 offline cache and overall stability improvements.

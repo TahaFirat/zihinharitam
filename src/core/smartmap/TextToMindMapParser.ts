@@ -691,6 +691,12 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
 // editable ZihinHaritam outline syntax (`- Ana Dal` / `  - Alt Dal: Açıklama [Rozet]`).
 // =============================================================================
 
+export type LectureNoteDepth = 'compact' | 'balanced' | 'detailed';
+
+export interface LectureNoteConversionOptions {
+  depth?: LectureNoteDepth;
+}
+
 export interface LectureNoteConversionResult {
   formattedOutline: string;
   stats: {
@@ -706,14 +712,17 @@ const TURKISH_ACRONYMS = new Set([
   'EKG', 'EEG', 'EMG', 'MRI', 'MR', 'BT', 'USG', 'DNA', 'RNA', 'ATP', 'ADP', 'NADH', 'FADH',
   'SA', 'AV', 'QRS', 'ST', 'PR', 'QT', 'CO2', 'O2', 'H2O', 'PH', 'HB', 'RBC', 'WBC', 'LDL', 'HDL',
   'TUS', 'YKS', 'TYT', 'AYT', 'KPSS', 'HMGS', 'ALES', 'YDS', 'DGS', 'LGS', 'TBMM', 'TCK', 'TMK', 'HMK', 'CMK', 'AYM',
-  'CPU', 'GPU', 'RAM', 'ROM', 'SSD', 'API', 'REST', 'SQL', 'NOSQL', 'HTTP', 'HTTPS', 'TCP', 'UDP', 'DNS', 'CDN', 'WAF', 'JWT', 'SSL', 'TLS', 'SSH', 'CI', 'CD', 'AI', 'ML', 'LLM', 'UI', 'UX', 'PDF', 'SVG', 'PNG', 'HTML', 'CSS', 'JS', 'TS',
+  'CPU', 'GPU', 'RAM', 'ROM', 'SSD', 'API', 'REST', 'SQL', 'NOSQL', 'HTTP', 'HTTPS', 'TCP', 'UDP', 'IP', 'OSI', 'NAT', 'VPN', 'DHCP', 'ARP', 'ICMP', 'BGP', 'MAC', 'LAN', 'WAN', 'VLAN', 'DNS', 'CDN', 'WAF', 'JWT', 'SSL', 'TLS', 'SSH', 'PLC', 'SCADA', 'FPGA', 'CNC', 'AC', 'DC', 'LED', 'MOSFET', 'CI', 'CD', 'AI', 'ML', 'LLM', 'UI', 'UX', 'PDF', 'SVG', 'PNG', 'HTML', 'CSS', 'JS', 'TS',
 ]);
 
 const PAGE_NOISE_LINE_RE =
   /^(?:sayfa\s*\d+(?:\s*\/\s*\d+)?|slayt\s*\d+|s\.\s*\d+|page\s*\d+(?:\s*of\s*\d+)?|[-–—•*.\s]*\d+(?:\s*\/\s*\d+)?[-–—•*.\s]*)$/i;
 
 const QUANT_BADGE_RE =
-  /\b(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*(?:atım\/dk|cm²|cm2|mm²|mmHg|mg\/dL|mmol\/L|mL\/dk|m\/s|km\/s|mV|kV|Hz|kHz|MHz|GHz|ms|sn|saniye|dakika|dk|saat|gün|yıl|yüzyıl|yy\.?|akçe|kcal|kg|gr|mg|lt|mL|DPI|GB|MB|KB|TB)|%\s*\d+(?:[.,]\d+)?|(?:Madde|Md\.?)\s*\d+|pH\s*\d+(?:[.,]\d+)?)\b/i;
+  /\b(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*(?:atım\/dk|cm²|cm2|mm²|mmHg|mg\/dL|mmol\/L|mL\/dk|m\/s|km\/s|mV|kV|V|mA|kΩ|Ω|Hz|kHz|MHz|GHz|ms|sn|saniye|dakika|dk|saat|gün|yıl|yüzyıl|yy\.?|akçe|kcal|kg|gr|mg|lt|mL|DPI|GB|MB|KB|TB|bit|byte|Mbps|Gbps)|%\s*\d+(?:[.,]\d+)?|(?:Port|Katman|Layer|Madde|Md\.?)\s*\d+|pH\s*\d+(?:[.,]\d+)?|O\([^)]{1,14}\))\b/i;
+
+const CONTEXTUAL_EXTRA_NOTE_RE =
+  /^(?:not\s*:|ipucu\s*:|dikkat\s*:|unutma\s*:|örneğin\b|mesela\b|örnek\s+olarak\b|ancak\b|fakat\b|oysa\b|buna\s+karşın\b|öte\s+yandan\b|ayrıca\b|ek\s+olarak\b|istisna\s*:|normal\s+süresi\b|bu\s+sayede\b|bunun\s+sonucunda\b|for\s+example\b|note\s*:|however\b)/i;
 
 const TR_PREDICATE_SPLIT_RE =
   /\s+(?:ise|denir|olarak\s+adlandırılır|olarak\s+bilinir|temsil\s+eder|gösterir|sağlar|oluşturur|oluşur|meydana\s+getirir|bulunur|yer\s+alır|gerçekleşir|kullanılır|görev\s+yapar|çalışır|başlar|ulaşır|yayılır|yönetir|düzenler|kontrol\s+eder|korur|taşır|üretir|içerir|kapsar|ifade\s+eder|anlamına\s+gelir|anlatır|tanımlanır|ayrılır|bölünür)\b/i;
@@ -777,7 +786,7 @@ function splitCleanSentences(text: string): string[] {
 }
 
 const TR_SUBJECT_HEAD_RE =
-  /^([A-ZÇĞİÖŞÜa-zçğıöşü0-9-]+(?:\s+\([A-ZÇĞİÖŞÜ0-9-]{1,10}\))?(?:\s+[A-ZÇĞİÖŞÜa-zçğıöşü0-9-]+){0,3}\s+(?:dalgası|kompleksi|düğümü|düğüm|düğümden|düğüme|sistemi|kapağı|kapak|evresi|evresinde|aşaması|aşamasında|hücreleri|hücrelerinde|bölünmesi|bölünme|uyarısı|kanunu|mahkemesi|yapısı|katmanı|servisi|dönemi|savaşı|yasası|teorisi|ilkesi|etkisi|süreci|merkezi|organı|dokusu|hormonu|enzimi|reaksiyonu|lifleri|demeti|toprakları|sahipleri|yöntemi|modeli|algoritması|protokolü|mekanizması|fonksiyonu|görevi|özelliği|kuralı|kavramı))\s+(.{8,})$/i;
+  /^([A-ZÇĞİÖŞÜa-zçğıöşü0-9/-]+(?:\s+\([A-ZÇĞİÖŞÜ0-9/-]{1,12}\))?(?:\s+[A-ZÇĞİÖŞÜa-zçğıöşü0-9/-]+){0,3}\s+(?:dalgası|kompleksi|düğümü|düğüm|düğümden|düğüme|sistemi|kapağı|kapak|evresi|evresinde|aşaması|aşamasında|hücreleri|hücrelerinde|hücresi|bölünmesi|bölünme|uyarısı|kanunu|mahkemesi|yapısı|katmanı|katmanında|servisi|dönemi|savaşı|antlaşması|yasası|teorisi|teoremi|denklemi|ilkesi|etkisi|süreci|merkezi|organı|dokusu|hormonu|enzimi|reaksiyonu|lifleri|demeti|toprakları|sahipleri|yöntemi|modeli|algoritması|protokolü|tüneli|yönlendiricisi|anahtarı|direnci|kondansatörü|transistörü|pistonu|türbini|kirişi|kolonu|reaktörü|molekülü|damarı|siniri|mekanizması|fonksiyonu|görevi|özelliği|kuralı|kavramı))\s+(.{8,})$/i;
 
 const TR_PAREN_CONCEPT_RE =
   /\b([A-ZÇĞİÖŞÜa-zçğıöşü]+(?:\s+[A-ZÇĞİÖŞÜa-zçğıöşü]+)?\s*\([A-ZÇĞİÖŞÜ0-9]{1,8}\)\s*[a-zçğıöşüA-ZÇĞİÖŞÜ]+)/;
@@ -1063,8 +1072,13 @@ function extractInlineSentenceEnumeration(sentence: string): {
  * ```
  */
 export function convertLectureNoteToMindMapFormat(
-  rawLectureNote: string
+  rawLectureNote: string,
+  options?: LectureNoteConversionOptions
 ): LectureNoteConversionResult {
+  const depth: LectureNoteDepth = options?.depth ?? 'balanced';
+  const maxSubsPerSection = depth === 'compact' ? 3 : depth === 'detailed' ? 10 : 6;
+  const maxParagraphs = depth === 'compact' ? 6 : depth === 'detailed' ? 14 : 9;
+
   const cleaned = cleanPdfAndRawText(rawLectureNote);
   if (!cleaned) {
     return {
@@ -1099,6 +1113,16 @@ export function convertLectureNoteToMindMapFormat(
 
   const trackBadge = (b?: string) => {
     if (b) badgesCount++;
+  };
+
+  const emitExtraNoteLine = (indentSpaces: number, rawSent: string) => {
+    const noteBody = rawSent
+      .replace(/^(?:not|ipucu|dikkat|unutma|istisna|note)\s*[:\-–—]\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!noteBody) return;
+    const pad = ' '.repeat(Math.min(4, indentSpaces + 2));
+    outputLines.push(`${pad}Not: ${noteBody}`);
   };
 
   if (isMostlyStructured) {
@@ -1214,10 +1238,14 @@ export function convertLectureNoteToMindMapFormat(
         outputLines.push(formatLineWithMeta(0, dec.title, dec.note, dec.badge, dec.priority));
         currentMainActive = true;
       } else {
-        // Multi-sentence paragraph sitting beneath a heading -> break each sentence into a clean sub-branch!
+        // Multi-sentence paragraph sitting beneath a heading -> break each sentence into clean sub-branches or `Not:` extra notes!
         const sentences = splitCleanSentences(line.content);
         const indent = currentMainActive ? 2 : 0;
-        for (const sent of sentences.slice(0, 6)) {
+        for (const sent of sentences.slice(0, maxSubsPerSection)) {
+          if (outputLines.length > 1 && CONTEXTUAL_EXTRA_NOTE_RE.test(sent)) {
+            emitExtraNoteLine(indent, sent);
+            continue;
+          }
           const dec = decomposeSentenceToBranch(sent);
           trackBadge(dec.badge);
           outputLines.push(formatLineWithMeta(indent, dec.title, dec.note, dec.badge, dec.priority));
@@ -1282,7 +1310,7 @@ export function convertLectureNoteToMindMapFormat(
         startPara = 0;
       }
 
-      for (let pi = startPara; pi < Math.min(paragraphs.length, startPara + 8); pi++) {
+      for (let pi = startPara; pi < Math.min(paragraphs.length, startPara + maxParagraphs); pi++) {
         const para = paragraphs[pi];
         const sentences = splitCleanSentences(para);
         if (sentences.length === 0) continue;
@@ -1291,7 +1319,7 @@ export function convertLectureNoteToMindMapFormat(
         trackBadge(lead.badge);
 
         // If paragraph has multiple sentences, first sentence's concept becomes Main Branch (`- ...`),
-        // and each sentence becomes crisp Sub-Branches (`  - ...`)!
+        // and each sentence becomes crisp Sub-Branches (`  - ...`) or contextual `    Not: ...`!
         if (sentences.length === 1) {
           outputLines.push(formatLineWithMeta(0, lead.title, lead.note, lead.badge, lead.priority));
           if (lead.enumItems) {
@@ -1300,14 +1328,21 @@ export function convertLectureNoteToMindMapFormat(
             }
           }
         } else {
-          const subDecomposed = sentences.slice(1, 6).map((extra) => decomposeSentenceToBranch(extra));
+          const restSlice = sentences.slice(1, 1 + maxSubsPerSection);
+          const subEntries = restSlice.map((extra) => ({
+            raw: extra,
+            isExtraNote: CONTEXTUAL_EXTRA_NOTE_RE.test(extra),
+            dec: decomposeSentenceToBranch(extra),
+          }));
           const coveredTitles = new Set(
-            subDecomposed.map((sd) => sd.title.toLocaleLowerCase('tr-TR'))
+            subEntries
+              .filter((e) => !e.isExtraNote)
+              .map((sd) => sd.dec.title.toLocaleLowerCase('tr-TR'))
           );
 
           const hasExplicitColonLead = /^[^:.]{2,48}:\s+/.test(sentences[0]);
           if (hasExplicitColonLead) {
-            outputLines.push(formatLineWithMeta(0, lead.title));
+            outputLines.push(formatLineWithMeta(0, lead.title, lead.enumItems ? undefined : lead.note, lead.badge, lead.priority));
             if (lead.enumItems) {
               for (const item of lead.enumItems) {
                 const normItem = item.toLocaleLowerCase('tr-TR');
@@ -1318,8 +1353,6 @@ export function convertLectureNoteToMindMapFormat(
                   outputLines.push(formatLineWithMeta(2, item));
                 }
               }
-            } else if (lead.note) {
-              outputLines.push(formatLineWithMeta(2, 'Genel Bakış', lead.note, lead.badge, lead.priority));
             }
           } else {
             outputLines.push(formatLineWithMeta(0, lead.title, lead.note, lead.badge, lead.priority));
@@ -1336,7 +1369,12 @@ export function convertLectureNoteToMindMapFormat(
             }
           }
 
-          for (const sub of subDecomposed) {
+          for (const entry of subEntries) {
+            if (entry.isExtraNote) {
+              emitExtraNoteLine(2, entry.raw);
+              continue;
+            }
+            const sub = entry.dec;
             trackBadge(sub.badge);
             outputLines.push(formatLineWithMeta(2, sub.title, sub.note, sub.badge, sub.priority));
             if (sub.enumItems) {

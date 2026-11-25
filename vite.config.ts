@@ -24,10 +24,19 @@ export default defineConfig({
           process.cwd(),
           'dist',
           'offline-packs',
-          'fast-index-v7.json'
+          'fast-index-v8.json'
         );
         if (fs.existsSync(fastIndex) && fs.existsSync(legacyManifest)) {
           fs.unlinkSync(legacyManifest);
+        }
+        const staleV7 = path.resolve(
+          process.cwd(),
+          'dist',
+          'offline-packs',
+          'fast-index-v7.json'
+        );
+        if (fs.existsSync(staleV7)) {
+          fs.unlinkSync(staleV7);
         }
       },
     },
@@ -72,9 +81,9 @@ export default defineConfig({
             urlPattern: /\/offline-packs\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'mindmap-offline-packs-v7',
+              cacheName: 'mindmap-offline-packs-v8',
               expiration: {
-                maxEntries: 44,
+                maxEntries: 52,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
               },
             },

@@ -80,7 +80,7 @@ async function fetchShard(shardId: number): Promise<Record<string, ShardSvgRecor
   if (existing) return existing;
 
   const padded = String(shardId).padStart(2, '0');
-  const url = buildAssetUrl(`offline-packs/shards/shard-${padded}.json`);
+  const url = buildAssetUrl(`offline-packs/shards/shard-${padded}.json?v=8`);
 
   const p = fetch(url)
     .then(async (res) => {
@@ -108,8 +108,8 @@ async function ensureInitialized(): Promise<void> {
 
   initPromise = (async () => {
     try {
-      // Load pre-compiled `fast-index-v7.json` first (0ms runtime indexing on phones & tablets!)
-      const fastRes = await fetch(buildAssetUrl('offline-packs/fast-index-v7.json'));
+      // Load pre-compiled `fast-index-v8.json` first (0ms runtime indexing + clean cache-bust across updates!)
+      const fastRes = await fetch(buildAssetUrl('offline-packs/fast-index-v8.json'));
       if (fastRes.ok) {
         const fastJson = (await fastRes.json()) as FastIndexV7Payload;
         engine.loadFastIndexV7(fastJson);

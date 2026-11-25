@@ -1,4 +1,4 @@
-• YENİ Ders Notunu Formata Çevir: PDF, slayt veya düz paragraf ders notlarını tek dokunuşla ZihinHaritam formatına çevirir; harita oluşturduktan sonra giriş kutularını otomatik temizler.
-• Daha Akıcı Harita Performansı: Stabilize tuval motoru, önbellekli çizim yolları ve sıfır-render sürükleme ile harita içinde kasma olmadan yüksek akıcılık.
-• 45.500+ Ticari Lisanslı Çevrimdışı İkon: Phosphor ve IBM Carbon ikon setleriyle büyüyen katalog, Ayarlar altında çevrimdışı Açık Kaynak Lisansları sayfası ve çok kelimeli Türkçe-İngilizce arama.
-• Native Sesle Dikte & Tablet Deneyimi: iOS ve Android yerel ses tanıma, parmakla çizim koruması ve geliştirilmiş akıllı metinden harita dönüşümü.
+• 52.700+ Telifsiz İkon & Sıfır Kaybolma Garantisi: Tüm mühendislik dalları (Bilgisayar/Ağ/TCP-IP, Elektrik-Elektronik, Makine, İnşaat, Kimya, Mimarlık), lise dersleri ve tıp alanı için 9 yeni telifsiz ikon paketi eklendi; yazarken veya kelime bitince ikonların kaybolma sorunu tamamen giderildi.
+• Kusursuz Türkçe = İngilizce İkon Eşleşmesi: Türkçe ve İngilizce aramalarda birebir doğru sonuçlar, kırık görsel sıfırlama (batch SVG hidrasyonu) ve 3D İkon Stüdyosu güvenilirliği.
+• Ders Notunu Zihin Haritası Formatına Çevirici Sekmesi: Ham paragraf veya ders notlarını anında analiz ederek Merkezi Konu, Ana Dal: Açıklama [Rozet], Alt Kavram ve Not: yapısına canlı dönüştürür (Özet/Dengeli/Detaylı modları ile).
+• Yeni v8 önbellek ve genel kararlılık iyileştirmeleri.

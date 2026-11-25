@@ -138,9 +138,9 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
           (offRes.results[0]?.score ?? 0) < 0.9);
 
       if (needsOnline) {
+        setLoadingOnline(true);
         onlineTimer = window.setTimeout(async () => {
           if (cancelled || seq !== seqRef.current || controller.signal.aborted) return;
-          setLoadingOnline(true);
           try {
             const fedRes = await VisualSearchOrchestrator.searchFederatedGallery(
               effectiveQuery,
@@ -149,7 +149,9 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
               controller.signal
             );
             if (!cancelled && seq === seqRef.current && !controller.signal.aborted) {
-              setAllResults(fedRes.results);
+              if (fedRes.results.length > 0 || offRes.results.length === 0) {
+                setAllResults(fedRes.results);
+              }
               setMetaphorChips(fedRes.metaphorChips);
             }
           } finally {
@@ -157,7 +159,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
               setLoadingOnline(false);
             }
           }
-        }, 140);
+        }, 120);
       } else {
         setLoadingOnline(false);
       }

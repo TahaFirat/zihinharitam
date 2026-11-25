@@ -5,7 +5,10 @@ const PACK_QUALITY_MULTIPLIER = {
   'fluent-emoji-flat': 1.56,
   'streamline-plump-color': 1.54,
   'fluent-color': 1.52,
+  'streamline-ultimate-color': 1.50,
   'streamline-color': 1.49,
+  'streamline-cyber-color': 1.48,
+  'streamline-kameleon-color': 1.46,
   emojione: 1.46,
   noto: 1.45,
   'streamline-emojis': 1.43,
@@ -21,15 +24,57 @@ const PACK_QUALITY_MULTIPLIER = {
   logos: 1.18,
   devicon: 1.18,
   'skill-icons': 1.18,
-  healthicons: 1.22,
-  'medical-icon': 1.20,
+  healthicons: 1.26,
+  'medical-icon': 1.24,
+  covid: 1.24,
+  'energy-icons': 1.24,
   'game-icons': 1.20,
+  ix: 1.18,
+  temaki: 1.16,
+  gis: 1.16,
+  ph: 1.14,
+  carbon: 1.12,
+  iconoir: 1.12,
   // Plain 1-color wireframes sit cleanly below gamified color icons!
-  lucide: 0.86,
-  mdi: 0.85,
-  'fa6-solid': 0.83,
-  tabler: 0.82,
+  lucide: 0.90,
+  mdi: 0.89,
+  'fa6-solid': 0.87,
+  tabler: 0.86,
 };
+
+/**
+ * Lightweight English morphological lemmatizer so finishing a plural/gerund English word
+ * (`tunnels`, `routers`, `switches`, `batteries`, `tunneling`, `routing`) NEVER drops results to 0!
+ */
+function lemmatizeEnglishToken(w) {
+  if (!w || w.length < 4) return [];
+  const out = [];
+  if (w.endsWith('ies') && w.length >= 5) out.push(`${w.slice(0, -3)}y`);
+  if (w.endsWith('ves') && w.length >= 5) {
+    out.push(`${w.slice(0, -3)}f`);
+    out.push(`${w.slice(0, -3)}fe`);
+  }
+  if (w.endsWith('ches') || w.endsWith('shes') || w.endsWith('xes') || w.endsWith('zes') || w.endsWith('ses')) {
+    if (w.length >= 5) out.push(w.slice(0, -2));
+  }
+  if (w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us') && !w.endsWith('is') && w.length >= 4) {
+    out.push(w.slice(0, -1));
+  }
+  if (w.endsWith('ing') && w.length >= 6) {
+    const stem = w.slice(0, -3);
+    out.push(stem);
+    out.push(`${stem}e`);
+    if (stem.length >= 4 && stem[stem.length - 1] === stem[stem.length - 2]) {
+      out.push(stem.slice(0, -1));
+    }
+  }
+  if (w.endsWith('ed') && w.length >= 5) {
+    const stem = w.slice(0, -2);
+    out.push(stem);
+    out.push(`${stem}e`);
+  }
+  return Array.from(new Set(out.filter((x) => x.length >= 3 && x !== w)));
+}
 
 function canonicalConceptKey(name) {
   return String(name || '')
@@ -298,6 +343,22 @@ export class OfflineBM25Engine {
         const pts = 175 * rankDecay;
         for (let i = 0; i < tList.length; i++) bumpCandidate(tList[i], pts, false, true);
       }
+      // English lemmatization rescue (`tunnels -> tunnel`, `routers -> router`, `tunneling -> tunnel`)
+      if (!nList && pw.length >= 4) {
+        for (const lem of lemmatizeEnglishToken(pw)) {
+          if (blockedSet.has(lem)) continue;
+          const ln = this.namePostings.get(lem);
+          if (ln) {
+            const pts = 470 * rankDecay;
+            for (let i = 0; i < ln.length; i++) bumpCandidate(ln[i], pts, true, true);
+          }
+          const lt = this.tagPostings.get(lem);
+          if (lt) {
+            const pts = 145 * rankDecay;
+            for (let i = 0; i < lt.length; i++) bumpCandidate(lt[i], pts, false, true);
+          }
+        }
+      }
     }
 
     // 2. Turkish Synonym / Tag Tokens (+280 in icon name, +195 in trTags)
@@ -349,6 +410,31 @@ export class OfflineBM25Engine {
             for (let i = 0; i < tList.length; i++) bumpCandidate(tList[i], pts, false, false);
           }
         }
+      }
+    }
+
+    // 4b. ZERO-VANISH Progressive Root Rescue: if finishing a long/suffixed word (`tunneling`, `tünelleme`, `kapakçık`)
+    // produced 0 exact/prefix hits, step down from `len-1` to `4` chars so icons NEVER suddenly vanish on the final keystroke!
+    if (baseScores.size === 0 && lastWord.length >= 5 && !isRiskyCollisionStem) {
+      for (let cutLen = lastWord.length - 1; cutLen >= 4; cutLen--) {
+        const sub = lastWord.slice(0, cutLen);
+        const exactN = this.namePostings.get(sub);
+        const exactT = this.tagPostings.get(sub);
+        const prefList = findPrefixTokensInVocab(this.vocab, sub, 12);
+        if (exactN) {
+          for (let i = 0; i < exactN.length; i++) bumpCandidate(exactN[i], 280, true, true);
+        }
+        if (exactT) {
+          for (let i = 0; i < exactT.length; i++) bumpCandidate(exactT[i], 130, false, false);
+        }
+        for (const pTok of prefList) {
+          if (blockedSet.has(pTok)) continue;
+          const nList = this.namePostings.get(pTok);
+          if (nList) {
+            for (let i = 0; i < nList.length; i++) bumpCandidate(nList[i], 165, true, false);
+          }
+        }
+        if (baseScores.size >= 4) break;
       }
     }
 

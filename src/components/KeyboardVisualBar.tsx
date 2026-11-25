@@ -330,11 +330,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             (offlineWave.results[0]?.score ?? 0) < 0.9);
 
         if (needsOnlineEnrichment) {
+          setLoadingRemote(true);
           onlineTimer = window.setTimeout(async () => {
             if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
               return;
             }
-            setLoadingRemote(true);
             try {
               const fullRes = await VisualSearchOrchestrator.searchFederatedGallery(
                 searchQuery,
@@ -343,7 +343,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                 controller.signal
               );
               if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
-                setAllFederated(fullRes.results);
+                if (fullRes.results.length > 0 || offlineWave.results.length === 0) {
+                  setAllFederated(fullRes.results);
+                }
               }
             } finally {
               if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {

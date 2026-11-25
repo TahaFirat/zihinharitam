@@ -13,6 +13,7 @@ import {
   Trash2,
   ArrowRight,
   BookOpen,
+  Copy,
 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -27,6 +28,7 @@ import {
   convertLectureNoteToMindMapFormat,
   parseTextToMindMapOutline,
   type LectureNoteConversionResult,
+  type LectureNoteDepth,
 } from '../core/smartmap/TextToMindMapParser';
 import {
   TopicContextIntelligence,
@@ -400,9 +402,17 @@ const SAMPLE_RAW_LECTURE_NOTE = `Hücre Bölünmesi ve Mitoz Süreci
 
 Mitoz bölünme tek bir ana hücreden genetik olarak birbirinin aynısı 2 yeni yavru hücre oluşmasını sağlar. Çok hücreli canlılarda büyüme, gelişme ve doku onarımı mitoz ile gerçekleşir.
 
-Mitoz Evreleri: Mitoz çekirdek bölünmesi 4 temel evreden oluşur: Profaz, Metafaz, Anafaz ve Telofaz. Profaz evresinde kromatin iplikler kısalıp kalınlaşarak kromozomlara dönüşür ve çekirdek zarı erir. Metafaz evresinde kromozomlar hücrenin ekvator düzleminde tek sıra dizilir ve karyotip analizi bu evrede yapılır (sınavda çıkar). Anafaz evresinde kardeş kromatitler ayrılarak zıt kutuplara çekilir.
+Mitoz Evreleri: Mitoz çekirdek bölünmesi 4 temel evreden oluşur: Profaz, Metafaz, Anafaz ve Telofaz. Profaz evresinde kromatin iplikler kısalıp kalınlaşarak kromozomlara dönüşür ve çekirdek zarı erir. Metafaz evresinde kromozomlar hücrenin ekvator düzleminde tek sıra dizilir ve karyotip analizi bu evrede yapılır (sınavda çıkar). Ancak Anafaz evresinde kardeş kromatitler ayrılarak zıt kutuplara çekilir.
 
-Sitokinez (Sitoplazma Bölünmesi): Hayvan hücrelerinde hücre zarı dıştan içe boğumlanarak bölünür. Bitki hücrelerinde ise hücre duvarı nedeniyle merkezde ara lamel (orta plak) oluşumu gerçekleşir.`;
+Sitokinez (Sitoplazma Bölünmesi): Hayvan hücrelerinde hücre zarı dıştan içe boğumlanarak bölünür. Örneğin bitki hücrelerinde ise hücre duvarı nedeniyle merkezde ara lamel (orta plak) oluşumu gerçekleşir.`;
+
+const SAMPLE_RAW_NETWORK_NOTE = `TCP/IP Ağ Modeli ve Tünel Protokolleri
+
+TCP/IP modeli internet üzerindeki veri iletişimini 4 temel katmanda düzenler. Uygulama Katmanı: HTTP, HTTPS, DNS ve SSH gibi son kullanıcı protokollerini barındırır (Port 443). Ancak veri paketleri şifrelenerek VPN tüneli üzerinden güvenle iletilebilir.
+
+Taşıma Katmanı: TCP güvenilir, bağlantılı ve sıralı veri iletimi sağlarken UDP düşük gecikmeli hızlı yayınlar için kullanılır (sınavda çıkar). İnternet Katmanı: IP adresleme ve yönlendirici (router) üzerinden en uygun rota seçimini yönetir.
+
+Ağ Erişim Katmanı: Ethernet ve Wi-Fi üzerinden fiziksel çerçeve (frame) iletimini ve MAC adresi eşleştirmesini gerçekleştirir.`;
 
 export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   isOpen,
@@ -419,6 +429,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [inputMode, setInputMode] = useState<'outline' | 'converter'>('outline');
   const [outlineText, setOutlineText] = useState('');
   const [rawLectureNote, setRawLectureNote] = useState('');
+  const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('balanced');
+  const [copiedConverted, setCopiedConverted] = useState(false);
   const [convertFeedback, setConvertFeedback] = useState<
     LectureNoteConversionResult['stats'] | null
   >(null);
@@ -452,12 +464,19 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       setIsDictating(false);
       return;
     }
-    dictationPrefixRef.current = outlineText.trim();
+    dictationPrefixRef.current =
+      inputMode === 'converter' ? rawLectureNote.trim() : outlineText.trim();
+    const targetMode = inputMode;
     const applyText = (spoken: string) => {
       const clean = spoken.trim();
       if (!clean) return;
       const base = dictationPrefixRef.current;
-      setOutlineText(base ? `${base}\n${clean}` : clean);
+      const merged = base ? `${base}\n${clean}` : clean;
+      if (targetMode === 'converter') {
+        setRawLectureNote(merged);
+      } else {
+        setOutlineText(merged);
+      }
     };
     const ok = await ctrl.start({
       locale: 'tr-TR',
@@ -480,6 +499,13 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     if (!trimmed) return null;
     return parseTextToMindMapOutline(trimmed);
   }, [outlineText]);
+
+  // Real-time Photo-6 Structure Converter Preview inside the Lecture Note Analyzer tab!
+  const liveConvertedPreview = useMemo(() => {
+    const trimmed = rawLectureNote.trim();
+    if (!trimmed) return null;
+    return convertLectureNoteToMindMapFormat(trimmed, { depth: analysisDepth });
+  }, [rawLectureNote, analysisDepth]);
 
   useEffect(() => {
     if (isOpen) {
@@ -565,14 +591,14 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     const raw = rawLectureNote.trim();
     if (!raw) return;
     void hapticSuccess();
-    const res = convertLectureNoteToMindMapFormat(raw);
+    const res = convertLectureNoteToMindMapFormat(raw, { depth: analysisDepth });
     setOutlineText(res.formattedOutline);
     setConvertFeedback(res.stats);
-    setInputMode('outline');
-    setShowLivePreview(true);
     if (andCreateMap && res.formattedOutline.trim()) {
       void executeGenerateFromText(res.formattedOutline);
     } else {
+      setInputMode('outline');
+      setShowLivePreview(true);
       window.setTimeout(() => {
         outlineTextareaRef.current?.focus();
       }, 60);
@@ -722,16 +748,45 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
               {inputMode === 'converter' ? (
                 <div className="space-y-3" data-testid="lecture-note-converter-panel">
-                  <div className="rounded-2xl border border-violet-500/25 bg-violet-500/8 p-3 text-xs leading-relaxed font-semibold">
-                    PDF, slayt, kitap paragrafı veya dağınık ders notunuzu aşağıya yapıştırın. Uygulama başlıkları, alt kavramları, açıklamaları ve sayısal değerleri otomatik ayıklayıp <strong>ZihinHaritam formatına</strong> çevirir.
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-violet-500/25 bg-violet-500/8 p-3 text-xs leading-relaxed font-semibold">
+                    <span className="min-w-0 flex-1">
+                      Ham ders notunu, PDF paragrafını veya slayt metnini yapıştır — uygulama analiz edip otomatik olarak{' '}
+                      <strong>Merkezi Konu / - Ana Dal: Açıklama [Rozet] / - Alt Kavram / Not:</strong> yapısına çevirir.
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1 rounded-xl border border-violet-500/25 bg-white/60 p-0.5 dark:bg-slate-900/60">
+                      {(
+                        [
+                          { id: 'compact', label: 'Özet' },
+                          { id: 'balanced', label: 'Dengeli' },
+                          { id: 'detailed', label: 'Detaylı' },
+                        ] as Array<{ id: LectureNoteDepth; label: string }>
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          data-testid={`lecture-depth-${opt.id}`}
+                          onClick={() => {
+                            void hapticLight();
+                            setAnalysisDepth(opt.id);
+                          }}
+                          className={`rounded-lg px-2 py-1 text-[11px] font-extrabold transition ${
+                            analysisDepth === opt.id
+                              ? 'bg-violet-600 text-white shadow-2xs'
+                              : 'opacity-75 hover:opacity-100'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
                       <label className="block text-xs font-extrabold opacity-80">
-                        Ham Ders Notunu Buraya Yapıştır:
+                        Ham Ders Notu / Paragraf:
                       </label>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           data-testid="lecture-note-sample-btn"
@@ -742,8 +797,44 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                           }}
                           className="rounded-xl bg-violet-500/12 px-2.5 py-1 text-[11px] font-extrabold text-violet-700 hover:bg-violet-500/20 dark:text-violet-300"
                         >
-                          Örnek Not Dene
+                          🧬 Biyoloji Örneği
                         </button>
+                        <button
+                          type="button"
+                          data-testid="lecture-note-network-sample-btn"
+                          onClick={() => {
+                            void hapticLight();
+                            setRawLectureNote(SAMPLE_RAW_NETWORK_NOTE);
+                            setDeptHint('sistem_tasarimi');
+                          }}
+                          className="rounded-xl bg-sky-500/12 px-2.5 py-1 text-[11px] font-extrabold text-sky-700 hover:bg-sky-500/20 dark:text-sky-300"
+                        >
+                          🖧 TCP/IP Örneği
+                        </button>
+                        {isDictationSupported() && (
+                          <button
+                            type="button"
+                            data-testid="lecture-note-dictate-btn"
+                            onClick={() => void toggleOutlineDictation()}
+                            className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold active:scale-95 ${
+                              isDictating
+                                ? 'animate-pulse bg-rose-500 text-white'
+                                : 'bg-emerald-500/12 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300'
+                            }`}
+                          >
+                            {isDictating ? (
+                              <>
+                                <MicOff className="h-3 w-3" />
+                                <span>Durdur</span>
+                              </>
+                            ) : (
+                              <>
+                                <Mic className="h-3 w-3" />
+                                <span>Sesle Anlat</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                         {rawLectureNote.trim().length > 0 && (
                           <button
                             type="button"
@@ -761,16 +852,79 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       </div>
                     </div>
 
+                    {dictationError && (
+                      <div className="mb-1.5 rounded-xl bg-rose-500/12 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                        {dictationError}
+                      </div>
+                    )}
+
                     <textarea
-                      rows={kb.isKeyboardOpen ? 5 : 9}
+                      rows={kb.isKeyboardOpen ? 4 : 6}
                       value={rawLectureNote}
                       onChange={(e) => setRawLectureNote(e.target.value)}
                       data-testid="lecture-note-raw-input"
-                      placeholder={`Örnek:\nHücre Bölünmesi\nMitoz bölünme tek bir ana hücreden 2 yeni hücre oluşturur. Evreleri: Profaz, Metafaz, Anafaz ve Telofaz.\n\nMetafaz evresinde kromozomlar ekvator düzleminde dizilir (sınavda çıkar)...`}
+                      placeholder={`Dağınık ders notunu, kitap paragrafını veya slayt metnini buraya yapıştır...\nÖrnek: TCP/IP modeli 4 katmandan oluşur. Uygulama katmanı HTTP ve DNS protokollerini barındırır (Port 443).`}
                       className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-sm leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-violet-500 sm:text-base"
                       style={{ borderColor: 'var(--hud-border)' }}
                     />
                   </div>
+
+                  {/* Live Photo-6 Formatted Structure Output Box! */}
+                  {liveConvertedPreview && liveConvertedPreview.formattedOutline && (
+                    <div
+                      data-testid="lecture-note-live-output"
+                      className="space-y-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/6 p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
+                          <span className="rounded-lg bg-emerald-500/18 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
+                            ✓ Harita Yapısına Dönüştürüldü
+                          </span>
+                          <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
+                            {liveConvertedPreview.stats.mainBranches} Ana Dal
+                          </span>
+                          <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">
+                            {liveConvertedPreview.stats.subBranches} Alt Kavram
+                          </span>
+                          {liveConvertedPreview.stats.notedBranches > 0 && (
+                            <span className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
+                              📝 {liveConvertedPreview.stats.notedBranches} Açıklama
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="lecture-note-copy-btn"
+                          onClick={() => {
+                            void hapticLight();
+                            void navigator.clipboard?.writeText(liveConvertedPreview.formattedOutline);
+                            setCopiedConverted(true);
+                            window.setTimeout(() => setCopiedConverted(false), 1800);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-xl bg-slate-500/12 px-2.5 py-1 text-[11px] font-extrabold hover:bg-slate-500/20"
+                        >
+                          {copiedConverted ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-500" />
+                              <span>Kopyalandı</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              <span>Kopyala</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <pre
+                        data-testid="lecture-note-formatted-preview"
+                        className="max-h-44 overflow-y-auto rounded-xl border bg-white/75 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/60"
+                        style={{ borderColor: 'var(--hud-border)' }}
+                      >
+                        {liveConvertedPreview.formattedOutline}
+                      </pre>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                     <button
@@ -781,7 +935,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/12 px-4 py-2.5 text-xs font-extrabold text-violet-700 transition-transform hover:bg-violet-500/20 active:scale-95 disabled:opacity-45 dark:text-violet-200"
                     >
                       <ArrowRight className="h-4 w-4" />
-                      <span>Formata Çevir &amp; Düzenle</span>
+                      <span>Harita Formatında Düzenle</span>
                     </button>
                     <button
                       type="button"
@@ -795,7 +949,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       ) : (
                         <Wand2 className="h-4 w-4" />
                       )}
-                      <span>{isGenerating ? 'Harita Oluşturuluyor...' : 'Çevir & Haritayı Oluştur'}</span>
+                      <span>{isGenerating ? 'Harita Oluşturuluyor...' : 'Bu Yapıdan Harita Oluştur'}</span>
                     </button>
                   </div>
                 </div>

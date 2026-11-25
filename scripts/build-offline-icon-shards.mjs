@@ -10,19 +10,22 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT_DIR, 'public', 'offline-packs');
 const SHARDS_DIR = path.join(OUT_DIR, 'shards');
 const MANIFEST_PATH = path.join(OUT_DIR, 'search-manifest.json');
-const FAST_INDEX_PATH = path.join(OUT_DIR, 'fast-index-v7.json');
+const FAST_INDEX_PATH = path.join(OUT_DIR, 'fast-index-v8.json');
 const HASH_PATH = path.join(OUT_DIR, '.build-hash');
 
-const SHARD_COUNT = 40;
-const ICONS_PER_SHARD = 1420;
+const SHARD_COUNT = 44;
+const ICONS_PER_SHARD = 1400;
 
-// 100% Commercial-Safe & Properly Attributed Packs ONLY (MIT, Apache-2.0, ISC, CC-BY 4.0/3.0 — ZERO NC / SA packs!)
+// 100% Commercial-Safe & Properly Attributed Packs ONLY (MIT, Apache-2.0, ISC, CC0, CC-BY 4.0/3.0 — ZERO NC / SA packs!)
 const PACK_CONFIGS = [
   // ULTRA-VIBRANT GAMIFIED / 3D / PLUMP / GLOSSY PRO COLLECTIONS
   { prefix: 'fluent-emoji-flat', defaultMultiColor: true, qualityBoost: 1.52 },
   { prefix: 'streamline-plump-color', defaultMultiColor: true, qualityBoost: 1.50 },
   { prefix: 'fluent-color', defaultMultiColor: true, qualityBoost: 1.48 },
+  { prefix: 'streamline-ultimate-color', defaultMultiColor: true, qualityBoost: 1.48 },
   { prefix: 'streamline-color', defaultMultiColor: true, qualityBoost: 1.46 },
+  { prefix: 'streamline-cyber-color', defaultMultiColor: true, qualityBoost: 1.45 },
+  { prefix: 'streamline-kameleon-color', defaultMultiColor: true, qualityBoost: 1.44 },
   { prefix: 'emojione', defaultMultiColor: true, qualityBoost: 1.44 },
   { prefix: 'noto', defaultMultiColor: true, qualityBoost: 1.42 },
   { prefix: 'streamline-emojis', defaultMultiColor: true, qualityBoost: 1.40 },
@@ -31,8 +34,9 @@ const PACK_CONFIGS = [
   { prefix: 'icon-park', defaultMultiColor: true, qualityBoost: 1.32 },
   { prefix: 'meteocons', defaultMultiColor: true, qualityBoost: 1.32 },
   { prefix: 'circle-flags', defaultMultiColor: true, qualityBoost: 1.24 },
-  { prefix: 'healthicons', defaultMultiColor: false, qualityBoost: 1.24 },
-  { prefix: 'medical-icon', defaultMultiColor: false, qualityBoost: 1.22 },
+  { prefix: 'healthicons', defaultMultiColor: false, qualityBoost: 1.26 },
+  { prefix: 'medical-icon', defaultMultiColor: false, qualityBoost: 1.24 },
+  { prefix: 'covid', defaultMultiColor: false, qualityBoost: 1.24 },
   { prefix: 'game-icons', defaultMultiColor: false, qualityBoost: 1.24 },
   // CLEAN FREE COLORFUL STARTERS (Apache-2.0 / MIT — replaces CC-BY-SA OpenMoji!)
   { prefix: 'fxemoji', defaultMultiColor: true, qualityBoost: 1.34 },
@@ -42,9 +46,14 @@ const PACK_CONFIGS = [
   { prefix: 'logos', defaultMultiColor: true, qualityBoost: 1.18 },
   { prefix: 'devicon', defaultMultiColor: true, qualityBoost: 1.18 },
   { prefix: 'skill-icons', defaultMultiColor: true, qualityBoost: 1.18 },
-  // CRISP MODERN MONOCHROME / DUOTONE VECTOR PACKS (MIT / Apache-2.0 / ISC / CC-BY 4.0)
+  // CRISP MODERN MONOCHROME / DUOTONE STEM, ENGINEERING & GENERAL VECTOR PACKS (MIT / Apache-2.0 / CC0 / CC-BY 4.0)
+  { prefix: 'energy-icons', defaultMultiColor: false, qualityBoost: 1.24 },
+  { prefix: 'ix', defaultMultiColor: false, qualityBoost: 1.18 },
+  { prefix: 'temaki', defaultMultiColor: false, qualityBoost: 1.16 },
+  { prefix: 'gis', defaultMultiColor: false, qualityBoost: 1.16 },
   { prefix: 'ph', defaultMultiColor: false, qualityBoost: 1.14 },
-  { prefix: 'carbon', defaultMultiColor: false, qualityBoost: 1.10 },
+  { prefix: 'carbon', defaultMultiColor: false, qualityBoost: 1.12 },
+  { prefix: 'iconoir', defaultMultiColor: false, qualityBoost: 1.12 },
   { prefix: 'lucide', defaultMultiColor: false, qualityBoost: 1.08 },
   { prefix: 'tabler', defaultMultiColor: false, qualityBoost: 1.05 },
   { prefix: 'mdi', defaultMultiColor: false, qualityBoost: 1.04 },
@@ -66,6 +75,7 @@ function computeInputsHash() {
     'scripts/build-offline-icon-shards.mjs',
     'src/core/visuals/taxonomyData.js',
     'src/core/visuals/taxonomyBankExtra.js',
+    'src/core/visuals/academicLexiconTR.js',
     'src/core/visuals/cldrTrLexicon.js',
   ]) {
     const full = path.join(ROOT_DIR, rel);
@@ -221,12 +231,48 @@ function shouldKeepIcon(packPrefix, iconName, allKeysSet) {
     }
   }
 
+  // Energy-Icons (MIT STEM/Engineering): keep single crisp size per concept (`-48` > `-20`, skip `-bold` dupes!)
+  if (packPrefix === 'energy-icons') {
+    if (iconName.endsWith('-bold')) return false;
+    if (iconName.endsWith('-20') && allKeysSet.has(iconName.replace(/-20$/, '-48'))) {
+      return false;
+    }
+  }
+
+  // Siemens IX (MIT Industrial Engineering): skip `-filled` dupes when crisp base exists
+  if (packPrefix === 'ix') {
+    if (iconName.endsWith('-filled') && allKeysSet.has(iconName.replace(/-filled$/, ''))) {
+      return false;
+    }
+  }
+
+  // Iconoir (MIT): skip `-solid` dupes when base exists
+  if (packPrefix === 'iconoir') {
+    if (iconName.endsWith('-solid') && allKeysSet.has(iconName.replace(/-solid$/, ''))) {
+      return false;
+    }
+  }
+
+  // Streamline Kameleon Color: keep primary colorful base (skip `-duo`/`-pop` triples)
+  if (packPrefix === 'streamline-kameleon-color') {
+    if ((iconName.endsWith('-duo') || iconName.endsWith('-pop')) && allKeysSet.has(iconName.replace(/-(duo|pop)$/, ''))) {
+      return false;
+    }
+  }
+
+  // GIS: skip `-o` outline dupes when solid base exists
+  if (packPrefix === 'gis') {
+    if (iconName.endsWith('-o') && allKeysSet.has(iconName.replace(/-o$/, ''))) {
+      return false;
+    }
+  }
+
   return true;
 }
 
 function cleanIconDisplayName(rawName) {
   return rawName
-    .replace(/-(duotone|original|plain|light|dark|16|20|24|28|32|48)$/i, '')
+    .replace(/-(duotone|original|plain|light|dark|bold|filled|solid|16|20|24|28|32|48)$/i, '')
     .replace(/[-_]+/g, ' ')
     .trim();
 }
@@ -335,7 +381,12 @@ function buildShards() {
         cfg.prefix === 'skill-icons' ||
         cfg.prefix === 'vscode-icons' ||
         (!isMultiColor &&
-          (cfg.prefix === 'ph' ||
+          (cfg.prefix === 'energy-icons' ||
+            cfg.prefix === 'ix' ||
+            cfg.prefix === 'temaki' ||
+            cfg.prefix === 'gis' ||
+            cfg.prefix === 'iconoir' ||
+            cfg.prefix === 'ph' ||
             cfg.prefix === 'carbon' ||
             cfg.prefix === 'lucide' ||
             cfg.prefix === 'tabler' ||
@@ -450,7 +501,7 @@ function buildShards() {
   }
 
   const fastIndexPayload = {
-    version: 7,
+    version: 8,
     totalIcons: manifestItems.length,
     packs: packList,
     domains: domainList,
@@ -465,7 +516,7 @@ function buildShards() {
   const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
   const fastSizeMb = (fs.statSync(FAST_INDEX_PATH).size / (1024 * 1024)).toFixed(2);
   console.log(
-    `[offline-packs] SUCCESS: Compiled ${manifestItems.length} offline icons (${freeTierCounter} free + ${manifestItems.length - freeTierCounter} Pro) across ${SHARD_COUNT} locality-grouped shards (fast-index-v7: ${fastSizeMb} MB) in ${elapsed}s!`
+    `[offline-packs] SUCCESS: Compiled ${manifestItems.length} offline icons (${freeTierCounter} free + ${manifestItems.length - freeTierCounter} Pro) across ${SHARD_COUNT} locality-grouped shards (fast-index-v8: ${fastSizeMb} MB) in ${elapsed}s!`
   );
 }
 
