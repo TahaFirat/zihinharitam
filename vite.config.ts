@@ -42,7 +42,7 @@ export default defineConfig({
     },
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: null,
       manifest: {
         name: 'ZihinHaritam: Görsel Not & İkon',
         short_name: 'ZihinHaritam',

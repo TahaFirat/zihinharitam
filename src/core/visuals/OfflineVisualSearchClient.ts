@@ -12,11 +12,21 @@ import {
   mapDisciplineToOfflineDomain,
   type ExpandedSemanticQueryV3,
 } from './SemanticTaxonomyTR';
+import {
+  OfflineBM25Engine,
+  type FastIndexV7Payload,
+} from './offlineSearchCore.js';
 import type {
   HydratedOfflineHit,
   WorkerSearchResponse,
   WorkerStatusMessage,
 } from '../../workers/visualSearch.worker';
+
+interface MainThreadShardRec {
+  v: string;
+  b: string;
+  m: 0 | 1;
+}
 
 export interface OfflineEngineStatus {
   ready: boolean;
@@ -137,6 +147,118 @@ class OfflineVisualSearchManager {
   private listeners = new Set<(s: OfflineEngineStatus) => void>();
 
   private prewarmScheduled = false;
+  private workerFailureCount = 0;
+  private visibilityBound = false;
+
+  // Bulletproof In-Process Main-Thread Fallback Engine (auto-activates if iOS/Android OS kills the Web Worker!)
+  private fallbackEngine: OfflineBM25Engine | null = null;
+  private fallbackInitPromise: Promise<OfflineBM25Engine | null> | null = null;
+  private fallbackShards = new Map<number, Record<string, MainThreadShardRec>>();
+
+  private buildAssetUrl(relPath: string): string {
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.endsWith('/') ? base : `${base}/`;
+    const cleanRel = relPath.startsWith('/') ? relPath.slice(1) : relPath;
+    return `${cleanBase}${cleanRel}`;
+  }
+
+  private resetDeadWorker(reason: string): void {
+    if (this.worker) {
+      try {
+        this.worker.terminate();
+      } catch {
+        // Ignore terminate error
+      }
+      this.worker = null;
+    }
+    for (const [id, waiter] of this.pending.entries()) {
+      this.pending.delete(id);
+      waiter.reject(new Error(reason));
+    }
+  }
+
+  private async ensureFallbackEngine(): Promise<OfflineBM25Engine | null> {
+    if (this.fallbackEngine) return this.fallbackEngine;
+    if (this.fallbackInitPromise) return this.fallbackInitPromise;
+    this.fallbackInitPromise = (async () => {
+      try {
+        const res = await fetch(this.buildAssetUrl('offline-packs/fast-index-v8.json'));
+        if (!res.ok) return null;
+        const json = (await res.json()) as FastIndexV7Payload;
+        const eng = new OfflineBM25Engine();
+        eng.loadFastIndexV7(json);
+        this.fallbackEngine = eng;
+        const total = json.totalIcons || json.rows.length;
+        this.status = { ready: true, totalIndexed: total };
+        this.listeners.forEach((fn) => fn(this.status));
+        return eng;
+      } catch {
+        this.fallbackInitPromise = null;
+        return null;
+      }
+    })();
+    return this.fallbackInitPromise;
+  }
+
+  private async fetchFallbackShard(shardId: number): Promise<Record<string, MainThreadShardRec>> {
+    const cached = this.fallbackShards.get(shardId);
+    if (cached) return cached;
+    try {
+      const padded = String(shardId).padStart(2, '0');
+      const res = await fetch(this.buildAssetUrl(`offline-packs/shards/shard-${padded}.json?v=8`));
+      if (!res.ok) return {};
+      const data = (await res.json()) as Record<string, MainThreadShardRec>;
+      if (this.fallbackShards.size >= 20) {
+        const oldest = this.fallbackShards.keys().next().value;
+        if (oldest !== undefined) this.fallbackShards.delete(oldest);
+      }
+      this.fallbackShards.set(shardId, data);
+      return data;
+    } catch {
+      return {};
+    }
+  }
+
+  private async searchViaMainThreadFallback(
+    query: string,
+    discipline: DisciplineProfile,
+    activeOfflineDomain: ReturnType<typeof mapDisciplineToOfflineDomain>,
+    limit: number
+  ): Promise<WorkerSearchResponse | null> {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const eng = await this.ensureFallbackEngine();
+    if (!eng) return null;
+    const { hits, expanded } = eng.search(query, {
+      discipline,
+      activeOfflineDomain,
+      limit: Math.min(limit || 64, 96),
+    });
+    const neededShards = Array.from(new Set(hits.map((h) => h.shardId)));
+    await Promise.all(neededShards.map((sid) => this.fetchFallbackShard(sid)));
+    const hydrated: HydratedOfflineHit[] = [];
+    for (const hit of hits) {
+      const shardObj = this.fallbackShards.get(hit.shardId);
+      const rec = shardObj?.[hit.id];
+      if (!rec || !rec.b) continue;
+      hydrated.push({
+        ...hit,
+        isMultiColor: rec.m === 1,
+        viewBox: rec.v,
+        svgBody: rec.b,
+      });
+    }
+    const elapsedMs = Number(
+      (((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)).toFixed(2)
+    );
+    return {
+      type: 'SEARCH_RESULT',
+      seqId: 0,
+      totalIndexed: this.status.totalIndexed,
+      elapsedMs,
+      expanded,
+      hits: hydrated,
+    };
+  }
 
   public prewarm(): void {
     if (this.worker || this.prewarmScheduled || typeof window === 'undefined') return;
@@ -152,12 +274,32 @@ class OfflineVisualSearchManager {
   }
 
   public init(): void {
-    if (this.worker || typeof Worker === 'undefined') return;
+    if (typeof document !== 'undefined' && !this.visibilityBound) {
+      this.visibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && !this.worker && this.workerFailureCount < 2) {
+          this.init();
+        }
+      });
+    }
+    if (this.worker || typeof Worker === 'undefined' || this.workerFailureCount >= 2) return;
     try {
       this.worker = new Worker(
         new URL('../../workers/visualSearch.worker.ts', import.meta.url),
         { type: 'module' }
       );
+
+      this.worker.onerror = () => {
+        this.workerFailureCount++;
+        this.resetDeadWorker('Offline search worker crashed');
+        void this.ensureFallbackEngine();
+      };
+
+      this.worker.onmessageerror = () => {
+        this.workerFailureCount++;
+        this.resetDeadWorker('Offline search worker message error');
+        void this.ensureFallbackEngine();
+      };
 
       this.worker.onmessage = (
         ev: MessageEvent<WorkerSearchResponse | WorkerStatusMessage>
@@ -166,12 +308,14 @@ class OfflineVisualSearchManager {
         if (!data) return;
 
         if (data.type === 'STATUS') {
+          this.workerFailureCount = 0;
           this.status = { ready: data.ready, totalIndexed: data.totalIndexed };
           this.listeners.forEach((fn) => fn(this.status));
           return;
         }
 
         if (data.type === 'SEARCH_RESULT') {
+          this.workerFailureCount = 0;
           if (data.totalIndexed > 0 && !this.status.ready) {
             this.status = { ready: true, totalIndexed: data.totalIndexed };
             this.listeners.forEach((fn) => fn(this.status));
@@ -189,6 +333,7 @@ class OfflineVisualSearchManager {
         baseUrl: import.meta.env.BASE_URL || '/',
       });
     } catch {
+      this.workerFailureCount++;
       this.worker = null;
     }
   }
@@ -218,39 +363,58 @@ class OfflineVisualSearchManager {
     elapsedMs: number;
   }> {
     this.init();
-    if (!this.worker) {
-      return { results: [], expanded: null, elapsedMs: 0 };
-    }
-
-    const seqId = ++this.seqCounter;
     const activeOfflineDomain = mapDisciplineToOfflineDomain(discipline);
 
-    const response = await new Promise<WorkerSearchResponse>((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        this.pending.delete(seqId);
-        reject(new Error('Offline search worker timeout'));
-      }, 2500);
+    let response: WorkerSearchResponse | null = null;
+    if (this.worker && this.workerFailureCount < 2) {
+      const seqId = ++this.seqCounter;
+      response = await new Promise<WorkerSearchResponse>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          this.pending.delete(seqId);
+          this.workerFailureCount++;
+          this.resetDeadWorker('Offline search worker timeout');
+          reject(new Error('Offline search worker timeout'));
+        }, 1800);
 
-      this.pending.set(seqId, {
-        resolve: (r) => {
-          clearTimeout(timeout);
-          resolve(r);
-        },
-        reject: (e) => {
-          clearTimeout(timeout);
-          reject(e);
-        },
-      });
+        this.pending.set(seqId, {
+          resolve: (r) => {
+            clearTimeout(timeout);
+            resolve(r);
+          },
+          reject: (e) => {
+            clearTimeout(timeout);
+            reject(e);
+          },
+        });
 
-      this.worker!.postMessage({
-        type: 'SEARCH',
-        seqId,
+        try {
+          this.worker!.postMessage({
+            type: 'SEARCH',
+            seqId,
+            query,
+            discipline,
+            activeOfflineDomain,
+            limit,
+          });
+        } catch (err) {
+          clearTimeout(timeout);
+          this.pending.delete(seqId);
+          this.workerFailureCount++;
+          this.resetDeadWorker('Worker postMessage failed');
+          reject(err instanceof Error ? err : new Error('Worker postMessage failed'));
+        }
+      }).catch(() => null);
+    }
+
+    // Automatic zero-interruption fallback: if Worker was killed/suspended by mobile OS, serve from main-thread BM25 engine immediately!
+    if (!response) {
+      response = await this.searchViaMainThreadFallback(
         query,
         discipline,
         activeOfflineDomain,
-        limit,
-      });
-    }).catch(() => null);
+        limit
+      );
+    }
 
     if (!response) {
       return { results: [], expanded: null, elapsedMs: 0 };

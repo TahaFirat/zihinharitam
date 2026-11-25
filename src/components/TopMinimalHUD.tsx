@@ -228,9 +228,9 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
     >
       {/* MAIN SIMPLIFIED 3-ZONE TOP BAR (Left: Back+Title | Center: 3 Big Mode Tabs | Right: 4 Clean Actions) */}
       <div className="relative z-20 flex w-full items-center justify-between gap-1.5 sm:gap-2">
-        {/* Zone 1: Back + Map Title (On compact phones <640px, keep clean Back pill to avoid clipping; title rename lives in ⋯ menu) */}
+        {/* Zone 1: Back + Map Title (Liquid Glass Split-Capsule HUD) */}
         <div
-          className="pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl border px-1 py-1 shadow-sm sm:px-1.5"
+          className="pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl border px-1 py-1 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.03] backdrop-blur-md sm:px-1.5 dark:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.48)] dark:ring-white/[0.07]"
           style={{
             backgroundColor: 'var(--hud-bg)',
             borderColor: 'var(--hud-border)',
@@ -286,10 +286,10 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           )}
         </div>
 
-        {/* Zone 2: 3 BIG, CLEAR MODE TABS (`Harita` | `Çiz` | `Çalış`) */}
+        {/* Zone 2: 3 BIG, CLEAR MODE TABS (`Harita` | `Çiz` | `Çalış`) — Apple Liquid Glass Capsule */}
         <div
           data-testid="hud-mode-tabs"
-          className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border p-1 shadow-sm sm:gap-1"
+          className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border p-1 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.03] backdrop-blur-md sm:gap-1 dark:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.48)] dark:ring-white/[0.07]"
           style={{
             backgroundColor: 'var(--hud-bg)',
             borderColor: 'var(--hud-border)',
@@ -353,7 +353,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
 
         {/* Zone 3: Ultra-Clean Right Actions (Undo, Search, Export, More Menu) */}
         <div
-          className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border px-1 py-1 shadow-sm sm:gap-1 sm:px-1.5"
+          className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border px-1 py-1 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.03] backdrop-blur-md sm:gap-1 sm:px-1.5 dark:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.48)] dark:ring-white/[0.07]"
           style={{
             backgroundColor: 'var(--hud-bg)',
             borderColor: 'var(--hud-border)',

@@ -2,6 +2,11 @@ import {
   BRANCH_PALETTE,
   type NodePriorityTag,
 } from '../../types/mindmap';
+import {
+  structureRawLectureNoteToOutline,
+  type LectureNoteConversionOptions,
+  type LectureNoteDepth,
+} from './LectureNoteStructurer';
 
 export interface ParsedOutlineNode {
   id: string;
@@ -595,19 +600,31 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
     return buildStatsResult(rootId, nodes, isSeed);
   }
 
-  // Stack of `{ node, rank }` to support arbitrary nesting depth (1, 2, 3, 4+ levels!)
-  const stack: Array<{ node: ParsedOutlineNode; rank: number }> = [
-    { node: rootNode, rank: -1 },
+  // Stack of `{ node, rank, indent }` to support arbitrary nesting depth (1, 2, 3, 4+ levels!)
+  const stack: Array<{ node: ParsedOutlineNode; rank: number; indent: number }> = [
+    { node: rootNode, rank: -1, indent: -1 },
   ];
   let lastCreatedNode: ParsedOutlineNode = rootNode;
+  let lastCreatedIndent = -1;
   let activeHeadingRank = 0;
 
   for (let i = startIdx; i < classified.length; i++) {
     const line = classified[i];
 
-    // 1. Explicit Note / Description line (`Not:`, `Açıklama:`, `Örnek:`, `> ...`) -> attach directly to `lastCreatedNode.note`!
+    // 1. Explicit Note / Description line (`Not:`, `Açıklama:`, `Örnek:`, `> ...`) -> attach cleanly by indentation!
+    //    - Indented deeper than previous item (`    Not:` under `  - Alt Kavram:`) -> attaches to `lastCreatedNode` (`Alt Kavram`).
+    //    - Indented equal to/shallower than previous item (`  Not:` after `  - FTP:` under `- Uygulama Katmanı:`) -> attaches to enclosing parent (`Uygulama Katmanı`)!
     if (line.kind === 'note') {
-      lastCreatedNode.note = appendNote(lastCreatedNode.note, line.content);
+      let targetNode = lastCreatedNode;
+      if (line.indent <= lastCreatedIndent && stack.length > 1) {
+        for (let s = stack.length - 1; s >= 1; s--) {
+          if (stack[s].indent < line.indent) {
+            targetNode = stack[s].node;
+            break;
+          }
+        }
+      }
+      targetNode.note = appendNote(targetNode.note, line.content);
       continue;
     }
 
@@ -678,8 +695,9 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
     };
 
     nodes.push(newNode);
-    stack.push({ node: newNode, rank });
+    stack.push({ node: newNode, rank, indent: line.indent });
     lastCreatedNode = newNode;
+    lastCreatedIndent = line.indent;
   }
 
   return buildStatsResult(rootId, nodes, false);
@@ -691,11 +709,7 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
 // editable ZihinHaritam outline syntax (`- Ana Dal` / `  - Alt Dal: Açıklama [Rozet]`).
 // =============================================================================
 
-export type LectureNoteDepth = 'compact' | 'balanced' | 'detailed';
-
-export interface LectureNoteConversionOptions {
-  depth?: LectureNoteDepth;
-}
+export type { LectureNoteConversionOptions, LectureNoteDepth };
 
 export interface LectureNoteConversionResult {
   formattedOutline: string;
@@ -1106,7 +1120,28 @@ export function convertLectureNoteToMindMapFormat(
 
   const isMostlyStructured =
     structuredLineCount >= 2 ||
-    (nonEmptyLines.length >= 4 && structuredLineCount >= 1);
+    (nonEmptyLines.length >= 4 && structuredLineCount >= 1) ||
+    /^(?:Başlık|Alan|Terim|Kavram|Özellik|Parametre|Ad|Komut|Bileşen|Organel|Madde|Bölüm|Field|Header)(?:\s*\t|\s{0,2})(?:Açıklama|Tanım|Görev|Görevi|Değer|Anlamı|Description)/imu.test(
+      cleaned
+    );
+
+  // Use the deep domain-agnostic multi-level structurer for ALL structured / mixed / bulleted / tabular lecture notes!
+  if (isMostlyStructured) {
+    const structured = structureRawLectureNoteToOutline(rawLectureNote, { depth });
+    if (structured.formattedOutline) {
+      const parsedVerify = parseTextToMindMapOutline(structured.formattedOutline);
+      return {
+        formattedOutline: structured.formattedOutline,
+        stats: {
+          totalNodes: parsedVerify.stats.totalNodes,
+          mainBranches: parsedVerify.stats.mainBranches,
+          subBranches: parsedVerify.stats.subBranches,
+          notedBranches: parsedVerify.stats.notedBranches,
+          badgesCount: structured.badgesCount,
+        },
+      };
+    }
+  }
 
   const outputLines: string[] = [];
   let badgesCount = 0;

@@ -462,7 +462,11 @@ export class VisualSearchOrchestrator {
       allWordsMatched: Boolean(expanded.allWordsMatched),
     };
 
-    if (!signal?.aborted && response.results.length > 0) {
+    if (!signal?.aborted && response.results.length >= 6) {
+      if (federatedCache.size > 120) {
+        const oldest = federatedCache.keys().next().value;
+        if (oldest) federatedCache.delete(oldest);
+      }
       federatedCache.set(cacheKey, response);
     }
 

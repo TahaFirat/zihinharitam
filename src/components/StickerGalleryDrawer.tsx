@@ -94,6 +94,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
 
   useEffect(() => {
     setDisplayLimit(60);
+    setBrokenIds(new Set());
   }, [query, category, tierFilter]);
 
   useEffect(() => {
@@ -527,7 +528,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                     title={`${item.title} • ${item.providerName}${
                       isProLocked ? ' • PRO 3D & Atlas' : ' • Ücretsiz'
                     }`}
-                    className={`group relative flex flex-col items-center justify-between overflow-hidden rounded-2xl border p-2 text-center transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                    className={`icon-grid-tile group relative flex flex-col items-center justify-between overflow-hidden rounded-2xl border p-2 text-center transition hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-sky-500 active:scale-95 ${
                       isProLocked
                         ? 'border-amber-400/65 bg-gradient-to-br from-amber-500/14 via-violet-500/8 to-amber-400/20 hover:border-amber-400'
                         : isProCraft
@@ -556,7 +557,9 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                         alt={item.title}
                         loading="lazy"
                         onError={() => {
-                          setBrokenIds((prev) => new Set(prev).add(item.id));
+                          if (!displaySrc.startsWith('data:')) {
+                            setBrokenIds((prev) => new Set(prev).add(item.id));
+                          }
                         }}
                         className={`max-h-full max-w-full object-contain transition-transform group-hover:scale-110 ${
                           isProLocked

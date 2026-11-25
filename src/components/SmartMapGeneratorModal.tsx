@@ -430,6 +430,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [outlineText, setOutlineText] = useState('');
   const [rawLectureNote, setRawLectureNote] = useState('');
   const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('balanced');
+  const [converterPreviewMode, setConverterPreviewMode] = useState<'text' | 'tree'>('text');
   const [copiedConverted, setCopiedConverted] = useState(false);
   const [convertFeedback, setConvertFeedback] = useState<
     LectureNoteConversionResult['stats'] | null
@@ -506,6 +507,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     if (!trimmed) return null;
     return convertLectureNoteToMindMapFormat(trimmed, { depth: analysisDepth });
   }, [rawLectureNote, analysisDepth]);
+
+  const liveConvertedTree = useMemo(() => {
+    if (!liveConvertedPreview?.formattedOutline) return null;
+    return parseTextToMindMapOutline(liveConvertedPreview.formattedOutline);
+  }, [liveConvertedPreview]);
 
   useEffect(() => {
     if (isOpen) {
@@ -892,37 +898,116 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                             </span>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          data-testid="lecture-note-copy-btn"
-                          onClick={() => {
-                            void hapticLight();
-                            void navigator.clipboard?.writeText(liveConvertedPreview.formattedOutline);
-                            setCopiedConverted(true);
-                            window.setTimeout(() => setCopiedConverted(false), 1800);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-xl bg-slate-500/12 px-2.5 py-1 text-[11px] font-extrabold hover:bg-slate-500/20"
-                        >
-                          {copiedConverted ? (
-                            <>
-                              <Check className="h-3 w-3 text-emerald-500" />
-                              <span>Kopyalandı</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-3 w-3" />
-                              <span>Kopyala</span>
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <div className="inline-flex items-center rounded-xl border border-slate-500/20 bg-white/70 p-0.5 dark:bg-slate-900/70">
+                            <button
+                              type="button"
+                              data-testid="lecture-preview-text-btn"
+                              onClick={() => {
+                                void hapticLight();
+                                setConverterPreviewMode('text');
+                              }}
+                              className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
+                                converterPreviewMode === 'text'
+                                  ? 'bg-emerald-600 text-white shadow-2xs'
+                                  : 'opacity-70 hover:opacity-100'
+                              }`}
+                            >
+                              Format
+                            </button>
+                            <button
+                              type="button"
+                              data-testid="lecture-preview-tree-btn"
+                              onClick={() => {
+                                void hapticLight();
+                                setConverterPreviewMode('tree');
+                              }}
+                              className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
+                                converterPreviewMode === 'tree'
+                                  ? 'bg-violet-600 text-white shadow-2xs'
+                                  : 'opacity-70 hover:opacity-100'
+                              }`}
+                            >
+                              Ağaç
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid="lecture-note-copy-btn"
+                            onClick={() => {
+                              void hapticLight();
+                              void navigator.clipboard?.writeText(liveConvertedPreview.formattedOutline);
+                              setCopiedConverted(true);
+                              window.setTimeout(() => setCopiedConverted(false), 1800);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-xl bg-slate-500/12 px-2.5 py-1 text-[11px] font-extrabold hover:bg-slate-500/20"
+                          >
+                            {copiedConverted ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-500" />
+                                <span>Kopyalandı</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3" />
+                                <span>Kopyala</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <pre
-                        data-testid="lecture-note-formatted-preview"
-                        className="max-h-44 overflow-y-auto rounded-xl border bg-white/75 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/60"
-                        style={{ borderColor: 'var(--hud-border)' }}
-                      >
-                        {liveConvertedPreview.formattedOutline}
-                      </pre>
+                      {converterPreviewMode === 'tree' && liveConvertedTree ? (
+                        <div
+                          data-testid="lecture-note-tree-preview"
+                          className="max-h-52 space-y-1.5 overflow-y-auto rounded-xl border bg-white/85 p-2.5 text-xs dark:bg-slate-950/70"
+                          style={{ borderColor: 'var(--hud-border)' }}
+                        >
+                          {liveConvertedTree.nodes.slice(0, 48).map((n) => (
+                            <div
+                              key={n.id}
+                              style={{
+                                marginLeft: `${Math.min(n.level, 3) * 14}px`,
+                                borderLeftColor: n.level === 0 ? '#0EA5E9' : n.branchColor,
+                              }}
+                              className={`rounded-r-lg border-l-[3px] py-0.5 pl-2.5 ${
+                                n.level === 0
+                                  ? 'bg-sky-500/10 py-1 font-black'
+                                  : n.level === 1
+                                  ? 'bg-slate-500/6 font-extrabold'
+                                  : 'font-bold'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span>{n.title}</span>
+                                {n.techBadge && (
+                                  <span
+                                    className="rounded-md px-1.5 py-0.2 font-mono text-[9.5px] font-bold"
+                                    style={{
+                                      backgroundColor: `${n.branchColor}22`,
+                                      color: n.branchColor,
+                                    }}
+                                  >
+                                    {n.techBadge}
+                                  </span>
+                                )}
+                              </div>
+                              {n.note && (
+                                <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug font-medium opacity-75">
+                                  {n.note}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <pre
+                          data-testid="lecture-note-formatted-preview"
+                          className="max-h-52 overflow-y-auto rounded-xl border bg-white/80 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/65"
+                          style={{ borderColor: 'var(--hud-border)' }}
+                        >
+                          {liveConvertedPreview.formattedOutline}
+                        </pre>
+                      )}
                     </div>
                   )}
 

@@ -128,6 +128,32 @@ export const EN_CONCEPT_INTENT_MAP = {
   lighthouse: ['lighthouse', 'ocean', 'ship'],
   stadium: ['stadium', 'soccer-ball', 'trophy'],
   glacier: ['ice', 'snowflake', 'snow-capped-mountain', 'penguin'],
+  sheep: ['sheep', 'ewe', 'ram'],
+  lamb: ['sheep', 'ewe', 'ram'],
+  cow: ['cow', 'cow-face', 'ox'],
+  dog: ['dog', 'dog-face', 'guide-dog'],
+  cat: ['cat', 'cat-face'],
+  horse: ['horse', 'horse-face'],
+  pig: ['pig', 'pig-face'],
+  rabbit: ['rabbit', 'rabbit-face'],
+  mouse: ['mouse-face', 'mouse'],
+  bird: ['bird', 'dove', 'eagle'],
+  bee: ['honeybee', 'bee'],
+  fish: ['fish', 'tropical-fish'],
+  money: ['money-bag', 'dollar-banknote', 'coin', 'coins'],
+  book: ['open-book', 'books', 'book', 'blue-book'],
+  phone: ['mobile-phone', 'telephone', 'smartphone'],
+  computer: ['laptop', 'desktop-computer', 'computer'],
+  heart: ['red-heart', 'anatomical-heart', 'heart'],
+  tree: ['deciduous-tree', 'evergreen-tree', 'tree'],
+  flower: ['blossom', 'rose', 'tulip', 'sunflower'],
+  star: ['star', 'glowing-star', 'sparkles'],
+  sun: ['sun', 'sun-with-face'],
+  moon: ['crescent-moon', 'full-moon'],
+  rain: ['cloud-with-rain', 'umbrella-with-rain-drops', 'rain'],
+  snow: ['snow', 'snowflake', 'snowman', 'cloud-with-snow'],
+  house: ['house', 'house-with-garden', 'home'],
+  school: ['school', 'graduation-cap', 'books'],
 };
 
 /**
@@ -1203,7 +1229,10 @@ export const DIRECT_TR_EN_PAIRS = {
   ananas: ['pineapple'],
   kivi: ['kiwi-fruit'],
   inek: ['cow', 'cow-face'],
-  koyun: ['ewe', 'ram'],
+  koyun: ['sheep', 'ewe', 'ram'],
+  vana: ['valve', 'ball-valve', 'butterfly-valve', 'check-valve', 'pipe'],
+  valf: ['valve', 'ball-valve', 'butterfly-valve', 'check-valve'],
+  kuzu: ['sheep', 'ewe', 'ram'],
   keci: ['goat'],
   tavuk: ['chicken', 'rooster'],
   ordek: ['duck'],
@@ -1912,8 +1941,7 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     // STRICT TIER-1 ISOLATION: When a curated 1-to-1 entry (`isDirect1to1`) matched (e.g. `kar -> snow`),
     // NEVER let unrelated multi-topic clusters (`kâr/ekonomi/enflasyon/faiz`) contaminate `secondaryEn` or `expandedTr`!
     if (hasDirectPhraseHit && !c.isDirect1to1) {
-      for (const b of c.blockedTokens) blocked.add(b);
-      for (const p of c.packIds) atlasIds.add(p);
+      // Do NOT inject unrelated multi-concept cluster atlas packIds (e.g. `lambda -> lamb` injecting Cloud/VPC into sheep!)
       continue;
     }
     domains.add(c.domain);

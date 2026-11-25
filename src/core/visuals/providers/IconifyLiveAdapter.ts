@@ -400,13 +400,37 @@ export async function searchIconifyLive(
 
     const cleanName = name
       .toLowerCase()
-      .replace(/-(duotone|original|plain|light|dark|16|20|24|28|32|48)$/i, '')
+      .replace(/-(duotone|original|plain|light|dark|bold|filled|solid|16|20|24|28|32|48)$/i, '')
       .replace(/[-_]+/g, ' ')
       .trim();
     const nameWords = cleanName.split(/\s+/).filter(Boolean);
 
     if (nameWords.some((w) => blockedSet.has(w))) continue;
     if (!allowNoisy && nameWords.some((w) => NOISY_LIVE_WORDS.has(w))) continue;
+
+    // STRICT WHOLE-WORD / PREFIX RELEVANCE GATE:
+    // Rejects substring false positives from Iconify's server (e.g. `query=ram` returning `deepgram`, `tram`, `telegram`, `instagram`, `hexagram`!)
+    const allowedMatchWords = Array.from(
+      new Set([
+        ...primaryWords,
+        ...headWordSet,
+        ...(secondaryQuery ? secondaryQuery.split(/[\s-_]+/).filter((w) => w.length >= 2) : []),
+      ])
+    );
+    const hasLegitWordMatch = allowedMatchWords.some((qw) =>
+      nameWords.some((nw) => nw === qw || (qw.length >= 4 && nw.startsWith(qw)))
+    );
+    if (!hasLegitWordMatch) continue;
+
+    // STRICT BRAND / TECH LOGO GUARD:
+    // Never let `logos` / `devicon` / `skill-icons` / `vscode-icons` hijack everyday or non-brand queries (e.g. `koyun -> logos:deepgram`!)
+    if (TRADEMARK_REFERENCE_SETS.has(prefix)) {
+      const literalTyped = normalizedClean.replace(/[-_]+/g, ' ').trim();
+      const isDirectBrandSearch =
+        cleanName === literalTyped ||
+        (literalTyped.length >= 4 && cleanName.startsWith(literalTyped));
+      if (!isDirectBrandSearch) continue;
+    }
 
     const cKey = cleanName
       .replace(/\b(outline|solid|fill|filled|flat|color|colour|alt|regular|bold|1|2|3|4|5)\b/g, '')

@@ -2876,7 +2876,11 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
               node.title.trim() === 'Yeni Zihin Haritası' ||
               node.title.trim() === 'Merkez Konu');
 
-          // Compute unified Card vs Organic surface, border, and premium priority glow without unmounting DOM!
+          const nodeDepth = treeMeta.depthMap.get(node.id) ?? (isRoot ? 0 : 1);
+          const isMainBranch = !isRoot && nodeDepth === 1;
+          const isDeepBranch = !isRoot && nodeDepth >= 2;
+
+          // Compute unified 3-Tier Card vs Organic surface, rim-lit dark shadows, and premium priority glow without unmounting DOM!
           let cardBackground: string;
           let cardBorderColor: string;
           let cardBoxShadow: string;
@@ -2889,8 +2893,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
             cardBackground =
               isSelected || isEditing
                 ? darkMode
-                  ? 'rgba(30,41,59,0.95)'
-                  : 'rgba(255,255,255,0.96)'
+                  ? 'rgba(30,41,59,0.96)'
+                  : 'rgba(255,255,255,0.97)'
                 : darkMode
                 ? 'rgba(15,20,29,0.90)'
                 : 'rgba(250,249,245,0.92)';
@@ -2901,20 +2905,61 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
               : 'transparent';
             cardBoxShadow =
               isSelected || isEditing
-                ? `0 0 0 2px ${node.branchColor}55, 0 6px 16px rgba(15,23,42,0.10)`
+                ? `0 0 0 2px ${node.branchColor}55, 0 8px 20px rgba(15,23,42,0.14)`
                 : 'none';
-          } else {
+          } else if (isRoot) {
+            cardBackground = darkMode
+              ? 'linear-gradient(180deg, rgba(30,41,59,0.98) 0%, rgba(20,27,40,0.98) 100%)'
+              : 'linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)';
+            cardBorderColor = isLinkSource
+              ? '#8B5CF6'
+              : isEditing || isSelected
+              ? node.branchColor
+              : darkMode
+              ? 'rgba(148,163,184,0.34)'
+              : 'rgba(15,23,42,0.14)';
+            cardBoxShadow = isEditing
+              ? `0 0 0 3.5px ${node.branchColor}45, 0 14px 32px -6px rgba(15,23,42,0.24)`
+              : isSelected
+              ? `0 0 0 2.5px ${node.branchColor}58, 0 12px 26px -6px rgba(15,23,42,0.18)`
+              : darkMode
+              ? 'inset 0 1px 0 rgba(255,255,255,0.14), 0 10px 28px -6px rgba(0,0,0,0.52)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.95), 0 8px 24px -6px rgba(15,23,42,0.12)';
+          } else if (isMainBranch) {
             cardBackground = 'var(--node-pill-bg)';
             cardBorderColor = isLinkSource
               ? '#8B5CF6'
               : isEditing || isSelected
               ? node.branchColor
-              : 'rgba(148,163,184,0.28)';
+              : darkMode
+              ? 'rgba(148,163,184,0.26)'
+              : 'rgba(15,23,42,0.12)';
             cardBoxShadow = isEditing
               ? `0 0 0 3px ${node.branchColor}40, 0 10px 25px -5px rgba(15,23,42,0.18)`
               : isSelected
               ? `0 0 0 2.5px ${node.branchColor}55, 0 8px 20px -4px rgba(15,23,42,0.14)`
-              : '0 4px 14px rgba(15, 23, 42, 0.08)';
+              : darkMode
+              ? 'inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px -4px rgba(0,0,0,0.42)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.9), 0 5px 16px -4px rgba(15,23,42,0.09)';
+          } else {
+            // Level 2+ deep branches: lighter, cleaner rounded pill-card with less box clutter!
+            cardBackground = darkMode
+              ? 'rgba(22, 29, 43, 0.94)'
+              : 'rgba(255, 255, 255, 0.96)';
+            cardBorderColor = isLinkSource
+              ? '#8B5CF6'
+              : isEditing || isSelected
+              ? node.branchColor
+              : darkMode
+              ? 'rgba(148,163,184,0.20)'
+              : 'rgba(148,163,184,0.32)';
+            cardBoxShadow = isEditing
+              ? `0 0 0 3px ${node.branchColor}38, 0 8px 20px -4px rgba(15,23,42,0.16)`
+              : isSelected
+              ? `0 0 0 2px ${node.branchColor}50, 0 6px 16px -4px rgba(15,23,42,0.12)`
+              : darkMode
+              ? 'inset 0 1px 0 rgba(255,255,255,0.07), 0 3px 10px rgba(0,0,0,0.32)'
+              : '0 2px 10px rgba(15, 23, 42, 0.06)';
           }
 
           return (
@@ -3002,25 +3047,40 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                   style={{
                     background: cardBackground,
                     borderColor: cardBorderColor,
-                    borderWidth: priorityMeta ? '2.5px' : '2px',
+                    borderWidth: priorityMeta ? '2.5px' : isDeepBranch && !isSelected && !isEditing ? '1.5px' : '2px',
                     boxShadow: cardBoxShadow,
                   }}
                   className={`relative flex flex-col items-center rounded-2xl border-solid text-center ${
                     isRoot
-                      ? 'min-w-[180px] max-w-[316px] px-5 py-2.5'
+                      ? 'min-w-[188px] max-w-[324px] px-5.5 py-3'
                       : isOrganic && !priorityMeta
                       ? 'min-w-[118px] max-w-[308px] px-3.5 py-1.5'
-                      : 'min-w-[124px] max-w-[312px] px-4 py-2'
+                      : isMainBranch
+                      ? 'min-w-[138px] max-w-[316px] py-2.5 pr-4 pl-5'
+                      : 'min-w-[120px] max-w-[304px] px-3.5 py-1.5'
                   } ${
                     linkingFromNodeId && !isLinkSource
                       ? 'hover:ring-2 hover:ring-violet-500'
                       : ''
                   }`}
                 >
-                  {/* Top Color Bar (Card mode) */}
-                  {!isOrganic && !priorityMeta && (
+                  {/* 3-Tier Visual Hierarchy Accent: Root top crown pill | Main Branch crisp vertical left rail | Deep Branch subtle top dot-bar */}
+                  {!isOrganic && !priorityMeta && isRoot && (
                     <div
-                      className="mb-1 h-1 w-8 rounded-full"
+                      className="mb-1.5 h-1.5 w-11 rounded-full"
+                      style={{ backgroundColor: node.branchColor }}
+                    />
+                  )}
+                  {!isOrganic && !priorityMeta && isMainBranch && (
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute top-2.5 bottom-2.5 left-1.5 w-1 rounded-full"
+                      style={{ backgroundColor: node.branchColor }}
+                    />
+                  )}
+                  {!isOrganic && !priorityMeta && isDeepBranch && (
+                    <div
+                      className="mb-1 h-0.5 w-6 rounded-full opacity-80"
                       style={{ backgroundColor: node.branchColor }}
                     />
                   )}

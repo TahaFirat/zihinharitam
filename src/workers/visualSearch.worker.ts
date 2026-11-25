@@ -54,7 +54,6 @@ const engine = new OfflineBM25Engine();
 let baseUrlPrefix = '/';
 let totalIndexed = 0;
 let initPromise: Promise<void> | null = null;
-let latestSearchSeqId = 0;
 
 const shardCache = new Map<number, Record<string, ShardSvgRecord>>();
 const shardInflight = new Map<number, Promise<Record<string, ShardSvgRecord>>>();
@@ -161,33 +160,8 @@ self.onmessage = async (ev: MessageEvent<WorkerInitMessage | WorkerSearchRequest
   }
 
   if (msg.type === 'SEARCH') {
-    if (msg.seqId > latestSearchSeqId) {
-      latestSearchSeqId = msg.seqId;
-    }
     const t0 = performance.now();
     await ensureInitialized();
-
-    // Skip stale intermediate keystrokes immediately so typing fast never queues shard fetches!
-    if (msg.seqId < latestSearchSeqId) {
-      self.postMessage({
-        type: 'SEARCH_RESULT',
-        seqId: msg.seqId,
-        totalIndexed,
-        elapsedMs: 0,
-        expanded: {
-          normalizedQuery: '',
-          stemmedTokens: [],
-          expandedEnTokens: [],
-          expandedTrTokens: [],
-          blockedTokens: [],
-          matchedAtlasIds: [],
-          detectedDomains: [],
-          isHomonym: false,
-        },
-        hits: [],
-      } satisfies WorkerSearchResponse);
-      return;
-    }
 
     const cappedLimit = Math.min(msg.limit || 64, 96);
     const { hits, expanded } = engine.search(msg.query, {

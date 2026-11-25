@@ -178,6 +178,11 @@ svg {
   contain: layout style;
 }
 
+/* Native 120Hz layout-isolated rendering for icon picker tiles (immediate frame-1 paint!) */
+.icon-grid-tile {
+  contain: layout style;
+}
+
 /* Zero-Jitter Interaction Lock + Mobile GPU Drop-Shadow Bypass during active pan/zoom/drag */
 .canvas-stage[data-interacting="true"],
 .canvas-stage[data-interacting="true"] * {
