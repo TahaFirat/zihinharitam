@@ -233,6 +233,10 @@ function classifyLivePrefix(prefix: string): {
  */
 export interface SearchIconifyLiveOptions {
   hasExactOfflineLexicon?: boolean;
+  allWordsMatched?: boolean;
+  hasExactPhraseMatch?: boolean;
+  preTranslatedEn?: string | null;
+  headEnTerms?: string[];
   blockedTokens?: string[];
 }
 
@@ -246,63 +250,106 @@ export async function searchIconifyLive(
   const clean = rawQuery.trim();
   if (clean.length < 2) return [];
 
-  const cacheKey = `v7::${clean.toLowerCase()}::${enTerms.slice(0, 2).join(',')}::${branchColor}`;
+  const cacheKey = `v8::${clean.toLowerCase()}::${options?.preTranslatedEn || ''}::${enTerms.slice(0, 2).join(',')}::${branchColor}`;
   const cached = searchResponseCache.get(cacheKey);
   if (cached) return cached;
 
-  // Build candidate English search terms; ALWAYS translate live when the Turkish word wasn't in our offline lexicon!
+  // Build candidate English search terms; ALWAYS translate live when the full phrase wasn't matched locally!
   const candidateQueries: string[] = [];
+  const pushQuery = (q?: string | null, front = false) => {
+    const t = (q || '').trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ');
+    if (t.length < 2) return;
+    if (candidateQueries.includes(t)) return;
+    if (front) candidateQueries.unshift(t);
+    else candidateQueries.push(t);
+  };
+
   for (const term of enTerms) {
-    const t = term.trim().toLowerCase();
-    if (t.length >= 2 && !candidateQueries.includes(t)) {
-      candidateQueries.push(t);
-    }
-    if (candidateQueries.length >= 2) break;
+    pushQuery(term);
+    if (candidateQueries.length >= 3) break;
   }
 
   const normalizedClean = clean.toLowerCase();
+  const isMultiWord = normalizedClean.includes(' ');
   const needsLiveTrTranslation =
-    !options?.hasExactOfflineLexicon ||
-    candidateQueries.length === 0 ||
-    candidateQueries[0] === normalizedClean;
+    !options?.preTranslatedEn &&
+    (!options?.hasExactOfflineLexicon ||
+      options?.allWordsMatched === false ||
+      (isMultiWord && !options?.hasExactPhraseMatch) ||
+      candidateQueries.length === 0 ||
+      candidateQueries[0] === normalizedClean);
 
-  let liveTranslatedEn: string | null = null;
+  let liveTranslatedEn: string | null = options?.preTranslatedEn ?? null;
   if (needsLiveTrTranslation) {
     liveTranslatedEn = await Promise.race([
       translateTurkishToEnglishLive(clean, signal),
-      new Promise<null>((r) => setTimeout(() => r(null), 820)),
+      new Promise<null>((r) => setTimeout(() => r(null), 1100)),
     ]);
-    if (liveTranslatedEn && !candidateQueries.includes(liveTranslatedEn)) {
-      candidateQueries.unshift(liveTranslatedEn);
+  }
+  if (liveTranslatedEn) {
+    pushQuery(liveTranslatedEn, true);
+  }
+
+  // Extract Head Noun (LAST word of multi-word English phrase — e.g. `tablet case` -> `case`, `coffee maker` -> `maker`)
+  // so 2+ word queries ALWAYS fetch crisp icons for the actual target object, NEVER just the first word!
+  const headQueryCandidates: string[] = [];
+  const activeMultiPhrase =
+    (liveTranslatedEn && liveTranslatedEn.includes(' ') ? liveTranslatedEn : null) ||
+    (candidateQueries[0] && candidateQueries[0].includes(' ') ? candidateQueries[0] : null);
+
+  if (activeMultiPhrase) {
+    const phraseParts = activeMultiPhrase.split(/\s+/).filter((w) => w.length >= 2);
+    const lastPart = phraseParts[phraseParts.length - 1];
+    if (lastPart && lastPart.length >= 3) {
+      headQueryCandidates.push(lastPart);
+    }
+  }
+  for (const ht of options?.headEnTerms ?? []) {
+    const cleanHt = ht.replace(/-/g, ' ').trim().toLowerCase();
+    if (cleanHt.length >= 2 && !headQueryCandidates.includes(cleanHt)) {
+      headQueryCandidates.push(cleanHt);
     }
   }
 
-  // Expand translated/English abstract nouns via `EN_CONCEPT_INTENT_MAP` (e.g. `commander` -> `military-medal`, `shield`, `sword`)
+  // Expand translated/English abstract nouns via `EN_CONCEPT_INTENT_MAP`
   const intentMap = EN_CONCEPT_INTENT_MAP as Record<string, string[]>;
-  for (const q of [...candidateQueries]) {
-    const firstWord = q.split(/\s+/)[0];
-    const proxies = intentMap[q] || intentMap[firstWord];
+  for (const q of [...candidateQueries, ...headQueryCandidates]) {
+    const wordsOfQ = q.split(/\s+/);
+    const lastWord = wordsOfQ[wordsOfQ.length - 1];
+    const proxies = intentMap[q] || intentMap[lastWord] || intentMap[wordsOfQ[0]];
     if (proxies) {
       for (const px of proxies.slice(0, 2)) {
-        const cleanPx = px.replace(/-/g, ' ');
-        if (!candidateQueries.includes(cleanPx)) {
-          candidateQueries.push(cleanPx);
-        }
+        pushQuery(px);
       }
     }
   }
 
   if (candidateQueries.length === 0) {
-    candidateQueries.push(normalizedClean);
+    pushQuery(normalizedClean);
   }
 
   const primaryQuery = candidateQueries[0];
-  const secondaryQuery = candidateQueries[1];
+  const headQuery = headQueryCandidates.find((h) => h !== primaryQuery) || '';
+  const secondaryQuery =
+    candidateQueries.find((q) => q !== primaryQuery && q !== headQuery) || '';
+
   const colorHex = branchColor.replace('#', '');
   const blockedSet = new Set(
     (options?.blockedTokens ?? []).map((b) => b.toLowerCase())
   );
   const primaryWords = primaryQuery.split(/[\s-_]+/).filter((w) => w.length >= 2);
+  const headWordSet = new Set(
+    [
+      ...(primaryWords.length >= 2 ? [primaryWords[primaryWords.length - 1]] : []),
+      ...headQueryCandidates.flatMap((h) => h.split(/\s+/)),
+    ].filter((w) => w.length >= 2)
+  );
+  const modWordSet = new Set(
+    primaryWords.length >= 2
+      ? primaryWords.slice(0, -1).filter((w) => !headWordSet.has(w))
+      : []
+  );
+  const isCompoundLive = headWordSet.size > 0 && modWordSet.size > 0;
   const allowNoisy = primaryWords.some((w) => NOISY_LIVE_WORDS.has(w));
 
   const COLORFUL_PREFIX_FILTER =
@@ -325,23 +372,23 @@ export async function searchIconifyLive(
     }
   };
 
-  // Query colorful/3D collections FIRST so live search never floods top slots with monochrome UI glyphs!
+  // Query FULL PHRASE (colorful + full 546K catalog) AND HEAD NOUN in parallel!
   const batches = await Promise.all([
     fetchBatch(primaryQuery, 32, COLORFUL_PREFIX_FILTER),
     fetchBatch(primaryQuery, 32),
-    secondaryQuery && secondaryQuery !== primaryQuery
-      ? fetchBatch(secondaryQuery, 24, COLORFUL_PREFIX_FILTER)
-      : Promise.resolve([]),
+    headQuery ? fetchBatch(headQuery, 24, COLORFUL_PREFIX_FILTER) : Promise.resolve([]),
+    headQuery ? fetchBatch(headQuery, 20) : Promise.resolve([]),
+    secondaryQuery ? fetchBatch(secondaryQuery, 20, COLORFUL_PREFIX_FILTER) : Promise.resolve([]),
   ]);
 
   if (signal?.aborted) return [];
 
   const allIconIds = Array.from(
-    new Set([...batches[0], ...batches[2], ...batches[1]])
+    new Set([...batches[0], ...batches[1], ...batches[2], ...batches[4], ...batches[3]])
   );
   if (allIconIds.length === 0) return [];
 
-  // Score with Iconify Exact-Name + Short-Name Specificity + Concept Deduplication (max 2 per exact concept!)
+  // Score with Compound-AND Intersection + Head-Noun Priority + Short-Name Specificity + Concept Deduplication
   const prefixCounts = new Map<string, number>();
   const conceptCounts = new Map<string, number>();
   const scored: VisualSearchResult[] = [];
@@ -379,10 +426,12 @@ export async function searchIconifyLive(
     const { category, mode, isColor } = classifyLivePrefix(prefix);
     const boost = SET_PRIORITY_BOOST[prefix] ?? (isColor ? 1.15 : 1.0);
 
-    const isExactName =
-      cleanName === primaryQuery.replace(/-/g, ' ') ||
-      (liveTranslatedEn && cleanName === liveTranslatedEn.replace(/-/g, ' ')) ||
-      (secondaryQuery && cleanName === secondaryQuery.replace(/-/g, ' '));
+    const isExactPhrase =
+      cleanName === primaryQuery ||
+      Boolean(liveTranslatedEn && cleanName === liveTranslatedEn.replace(/-/g, ' '));
+    const isExactHead = Boolean(headQuery && cleanName === headQuery);
+    const hasHeadHit = isCompoundLive && nameWords.some((w) => headWordSet.has(w));
+    const hasModHit = isCompoundLive && nameWords.some((w) => modWordSet.has(w));
 
     const matchedWordCount = primaryWords.filter((pw) =>
       nameWords.includes(pw)
@@ -390,11 +439,21 @@ export async function searchIconifyLive(
     const extraWords = Math.max(0, nameWords.length - Math.max(1, matchedWordCount));
 
     let rankScore: number;
-    if (isExactName && isColor) {
-      // Exact colorful hit in 546K catalog -> promotes right into Top #1..#6 when offline had no exact primary match!
-      rankScore = Math.min(0.994, 0.965 + (boost - 1) * 0.08);
-    } else if (isExactName) {
-      rankScore = 0.915;
+    if ((isExactPhrase || (hasHeadHit && hasModHit)) && isColor) {
+      // Exact compound/phrase colorful match -> STRICTLY #1!
+      rankScore = Math.min(0.996, 0.972 + (boost - 1) * 0.08);
+    } else if (isExactPhrase || (hasHeadHit && hasModHit)) {
+      rankScore = 0.955;
+    } else if (isExactHead && isColor) {
+      rankScore = Math.min(0.96, 0.935 + (boost - 1) * 0.06);
+    } else if (isExactHead) {
+      rankScore = 0.91;
+    } else if (isCompoundLive && hasHeadHit) {
+      const base = Math.max(0.55, 0.88 - i * 0.004 - extraWords * 0.035);
+      rankScore = Math.min(0.935, base * (isColor ? 1.08 : 0.98));
+    } else if (isCompoundLive && hasModHit && !hasHeadHit) {
+      // Modifier-only match (e.g. `tablet` alone for `tablet kılıfı`): sits cleanly below `case`/`cover`!
+      rankScore = Math.max(0.45, 0.76 - i * 0.004 - extraWords * 0.03);
     } else {
       const base = Math.max(0.45, 0.85 - i * 0.005 - extraWords * 0.045);
       rankScore = Math.min(0.925, base * (isColor ? 1.08 : 0.96));

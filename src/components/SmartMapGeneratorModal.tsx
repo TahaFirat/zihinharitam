@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2 } from 'lucide-react';
+import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2, Eye } from 'lucide-react';
 import {
   BRANCH_PALETTE,
   type AcademicDepartment,
@@ -9,6 +9,7 @@ import {
   type ProactiveBranchSuggestion,
 } from '../types/mindmap';
 import { computeRadialAutoLayout } from '../core/canvas/RadialAutoLayout';
+import { parseTextToMindMapOutline } from '../core/smartmap/TextToMindMapParser';
 import {
   TopicContextIntelligence,
   type MapContextAnalysis,
@@ -37,49 +38,46 @@ const QUICK_SAMPLE_NOTES: Array<{
   text: string;
 }> = [
   {
-    label: '🖧 E-Ticaret Sistem Tasarımı',
-    dept: 'sistem_tasarimi',
-    text: `Yüksek Trafikli E-Ticaret Sistem Mimarisi
-- Trafik & Kenar Katmanı
-  - CDN Statik Medya Dağıtımı [Edge PoP]
-  - Yük Dengeleyici (Load Balancer) [Port 443 • HTTPS]
-  - API Gateway & Rate Limiter [OAuth2 JWT]
-- Çekirdek Mikroservisler
-  - Ürün Katalog & Elasticsearch Arama [Full-Text]
-  - Sepet Servisi & Redis Önbellek [<1ms Hit]
-  - Ödeme Geçidi & Finansal Defter [PCI-DSS]
-- Veri & Olay Akışı
-  - Veritabanı Sharding Kümesi [Consistent Hash]
-  - Kafka Sipariş Kuyruğu [Async Stream]`,
-  },
-  {
-    label: '📜 Osmanlı Tımar & İltizam',
-    dept: 'sosyal_bilimler',
-    text: `Osmanlı Tımar ve Toprak Sistemi
-- Dirlik Kademeleri
-  - Has Topraklar [100.000+ Akçe]
-  - Zeamet Dirlikleri [Orta Kademe]
-  - Tımarlı Sipahi Ordusu [Cebelü Atlı Asker]
-- Mali & Hukuki Yapı
-  - Örfi ve Şer'i Vergi Toplama [Üretim Sürekliliği]
-  - İltizam & Mültezim Sistemi [Nakit Hazine Geliri]
-- İdari Sonuçlar
-  - Taşra Güvenliği ve Asayiş
-  - Merkezi Otorite Dengesi`,
-  },
-  {
-    label: '🫀 Kardiyak İletim & EKG',
+    label: '📝 Açıklamalı Ders Notu',
     dept: 'tip',
     text: `Kalp İletim Sistemi ve EKG Analizi
 - Elektriksel Odaklar
-  - Sinoatriyal (SA) Düğüm [60-100 atım/dk]
-  - Atriyoventriküler (AV) Düğüm [0.09 sn Gecikme]
-  - His Demeti ve Purkinje Lifleri [Hızlı Ventriküler İletim]
+  - Sinoatriyal (SA) Düğüm: Kalbin doğal pilidir, dakikada 60-100 kez uyarı üretir. [60-100 atım/dk]
+  - Atriyoventriküler (AV) Düğüm: Kulakçıkların kasılması için 0.09 sn fizyolojik gecikme sağlar.
+  - His Demeti ve Purkinje Lifleri: Uyarıyı karıncıklara hızla iletir. [Hızlı İletim]
 - Klinik EKG Dalgaları
-  - P Dalgası: Atriyal Depolarizasyon
-  - QRS Kompleksi: Ventriküler Sistol
+  - P Dalgası: Atriyal depolarizasyonu gösterir. [SINAV]
+    Not: Normal süresi 0.08-0.12 saniyedir.
+  - QRS Kompleksi: Ventriküler depolarizasyonu temsil eder. [ÖNEMLİ]
 - Kapak & Oskültasyon İlişkisi
-  - Mitral ve Triküspit Kapanması [S1 Kalp Sesi]`,
+  - Mitral ve Triküspit Kapanması: S1 kalp sesini oluşturur. [S1 Sesi]`,
+  },
+  {
+    label: '📄 Paragraftan Harita',
+    dept: 'sosyal_bilimler',
+    text: `Osmanlı Tımar ve Toprak Sistemi
+
+Osmanlı Devleti'nde miri arazilerin gelirleri, hizmet karşılığı devlet görevlilerine ve askerlere dirlik olarak verilirdi. Bu sistem hem tarımsal üretimin sürekliliğini hem de hazineden para çıkmadan büyük bir atlı ordunun beslenmesini sağladı.
+
+Dirlik Toprakları: Gelir büyüklüğüne göre Has, Zeamet ve Tımar olmak üzere üçe ayrılırdı. Tımar sahipleri her 3.000 akçe için devlete cebelü adı verilen tam donanımlı bir atlı asker yetiştirirdi.
+
+İltizam Sistemi: 17. yüzyıldan itibaren merkez hazinenin nakit ihtiyacını karşılamak için vergi toplama hakkının açık artırmayla mültezimlere kiralanmasıyla yaygınlaştı.`,
+  },
+  {
+    label: '🖧 E-Ticaret Mimarisi',
+    dept: 'sistem_tasarimi',
+    text: `Yüksek Trafikli E-Ticaret Sistem Mimarisi
+- Trafik & Kenar Katmanı
+  - CDN Statik Medya Dağıtımı: Görsel ve JS dosyalarını kullanıcıya en yakın noktadan sunar. [Edge PoP]
+  - Yük Dengeleyici (Load Balancer): Gelen trafiği sağlıklı sunuculara dağıtır. [Port 443 • HTTPS]
+  - API Gateway & Rate Limiter: Kimlik doğrulama ve hız sınırlama uygular. [OAuth2 JWT]
+- Çekirdek Mikroservisler
+  - Ürün Katalog & Elasticsearch: Milisaniye altı tam metin ürün araması yapar. [Full-Text]
+  - Sepet Servisi & Redis Önbellek: Aktif sepetleri bellek içi tutar. [<1ms Hit]
+  - Ödeme Geçidi: 3D Secure ve finansal mutabakat işlemlerini yönetir. [PCI-DSS]
+- Veri & Olay Akışı
+  - Veritabanı Sharding Kümesi: Sipariş verisini kullanıcı kimliğine göre böler. [Consistent Hash]
+  - Kafka Sipariş Kuyruğu: Stok, kargo ve e-posta servislerini asenkron tetikler. [Async Stream]`,
   },
 ];
 
@@ -87,47 +85,35 @@ async function buildSmartMapFromOutlineText(
   rawInput: string,
   deptHint: AcademicDepartment = 'genel'
 ): Promise<MindMapDocument> {
-  const lines = rawInput
-    .split(/\r?\n/)
-    .map((l) => l.replace(/\t/g, '  '))
-    .filter((l) => l.trim().length > 0);
-
   const now = Date.now();
-  const rootId = 'root';
-  const rawRootLine = lines[0]?.replace(/^[-*•#\d.)\s]+/, '').trim() || 'Akademik Zihin Haritası';
+  const parsed = parseTextToMindMapOutline(rawInput);
+  const rootId = parsed.rootId;
 
-  const extractTitleAndBadge = (lineText: string): { title: string; techBadge?: string } => {
-    const clean = lineText.replace(/^[-*•#\d.)\s]+/, '').trim();
-    const bracketMatch = clean.match(/^(.*?)\s*\[([^\]]+)\]\s*$/);
-    if (bracketMatch) {
-      return {
-        title: bracketMatch[1].trim(),
-        techBadge: bracketMatch[2].trim(),
-      };
-    }
-    return { title: clean };
-  };
-
-  const rootParsed = extractTitleAndBadge(rawRootLine);
-  const nodes: Record<string, MindNode> = {
-    [rootId]: {
-      id: rootId,
-      parentId: null,
-      title: rootParsed.title,
-      subtitle: 'Otomatik Görsel Harita Sentezi',
-      techBadge: rootParsed.techBadge,
-      x: 0,
-      y: 0,
-      branchColor: BRANCH_PALETTE[0],
+  const nodes: Record<string, MindNode> = {};
+  parsed.nodes.forEach((p, idx) => {
+    nodes[p.id] = {
+      id: p.id,
+      parentId: p.parentId,
+      title: p.title,
+      subtitle: p.id === rootId ? 'Akıllı Metin Haritası' : undefined,
+      note: p.note,
+      techBadge: p.techBadge,
+      checked: p.checked,
+      priorityTag: p.priorityTag,
+      linkUrl: p.linkUrl,
+      x: p.id === rootId ? 0 : idx % 2 === 0 ? 320 * p.level : -320 * p.level,
+      y: p.id === rootId ? 0 : (idx - 2) * 120,
+      branchColor: p.branchColor,
       collapsed: false,
-    },
-  };
+    };
+  });
 
   // If user only typed a 1-line topic title, expand it automatically via `TopicContextIntelligence.getProactiveSubBranches`!
-  if (lines.length === 1) {
+  if (parsed.isSingleTopicSeed && parsed.nodes.length === 1) {
+    const rootNode = nodes[rootId];
     const baseCtx = TopicContextIntelligence.analyzeMapContext(nodes, rootId, rootId, deptHint);
     const autoBranches = TopicContextIntelligence.getProactiveSubBranches(
-      rootParsed.title,
+      rootNode.title,
       baseCtx,
       []
     );
@@ -145,51 +131,10 @@ async function buildSmartMapFromOutlineText(
         sticker: sug.sticker,
       };
     });
-  } else {
-    // Parse multi-line indented outline / bullets into tree hierarchy
-    let lastLevel1Id: string | null = null;
-    let mainBranchIdx = 0;
-
-    for (let i = 1; i < lines.length; i++) {
-      const rawLine = lines[i];
-      const leadingSpaces = rawLine.match(/^\s*/)?.[0].length ?? 0;
-      const isSubBullet = leadingSpaces >= 2 && lastLevel1Id !== null;
-      const parsed = extractTitleAndBadge(rawLine);
-      if (!parsed.title) continue;
-
-      const nodeId = `gen_${i}`;
-      if (!isSubBullet) {
-        const col = BRANCH_PALETTE[mainBranchIdx % BRANCH_PALETTE.length];
-        mainBranchIdx++;
-        lastLevel1Id = nodeId;
-        nodes[nodeId] = {
-          id: nodeId,
-          parentId: rootId,
-          title: parsed.title,
-          techBadge: parsed.techBadge,
-          x: mainBranchIdx % 2 === 1 ? 320 : -320,
-          y: 0,
-          branchColor: col,
-          collapsed: false,
-        };
-      } else {
-        const parent = nodes[lastLevel1Id!];
-        nodes[nodeId] = {
-          id: nodeId,
-          parentId: parent.id,
-          title: parsed.title,
-          techBadge: parsed.techBadge,
-          x: parent.x >= 0 ? parent.x + 280 : parent.x - 280,
-          y: 0,
-          branchColor: parent.branchColor,
-          collapsed: false,
-        };
-      }
-    }
   }
 
-  // Assign distinct, semantically accurate stickers to EVERY generated node using ALL 43,487 Offline + 546,996 Live Icons!
-  // Process Root + specific Leaf concepts BEFORE generic category headers so specific leaves always claim their #1 exact icon!
+  // Assign distinct, semantically accurate stickers to EVERY generated node using ALL 43,722 Offline + 546,996 Live Icons!
+  // Reads BOTH `node.title` AND `node.note` (explanation box) so nodes with rich descriptions always match accurately!
   const mapContext = TopicContextIntelligence.analyzeMapContext(nodes, rootId, rootId, deptHint);
   const usedUrls = new Set<string>();
   const parentIdsWithKids = new Set<string>();
@@ -202,47 +147,73 @@ async function buildSmartMapFromOutlineText(
     return rank(a) - rank(b);
   });
 
-  for (const node of orderedNodesForStickers) {
+  // Wave A: Instant parallel <50ms Offline Search across ALL nodes (reading BOTH `node.title` AND `node.note`!)
+  const offlinePools = await Promise.all(
+    orderedNodesForStickers.map(async (node) => {
+      if (node.sticker) return { node, pool: [] as Awaited<ReturnType<typeof VisualSearchOrchestrator.searchOfflineWave>>['results'] };
+      const noteSnippet = (node.note || '')
+        .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length >= 3)
+        .slice(0, 4)
+        .join(' ');
+      const richQuery = [node.title, node.techBadge, noteSnippet]
+        .filter(Boolean)
+        .join(' ');
+
+      let pool = (
+        await VisualSearchOrchestrator.searchOfflineWave(
+          node.title,
+          mapContext,
+          node.branchColor,
+          20
+        )
+      ).results;
+
+      if ((pool.length < 3 || (pool[0]?.score ?? 0) < 0.78) && (node.note || node.techBadge)) {
+        const withNote = await VisualSearchOrchestrator.searchOfflineWave(
+          richQuery,
+          mapContext,
+          node.branchColor,
+          20
+        );
+        pool = [...pool, ...withNote.results];
+      }
+      return { node, pool };
+    })
+  );
+
+  // Wave B: Fast parallel live boost (hard-capped at 1200ms total) ONLY for up to 4 nodes that had weak offline hits
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    const weakEntries = offlinePools
+      .filter(({ node, pool }) => !node.sticker && (pool.length < 2 || (pool[0]?.score ?? 0) < 0.72))
+      .slice(0, 4);
+    if (weakEntries.length > 0) {
+      const liveCtrl = new AbortController();
+      const liveTimer = window.setTimeout(() => liveCtrl.abort(), 1200);
+      try {
+        await Promise.allSettled(
+          weakEntries.map(async (entry) => {
+            const liveFed = await VisualSearchOrchestrator.searchFederatedGallery(
+              entry.node.title,
+              mapContext,
+              entry.node.branchColor,
+              liveCtrl.signal
+            );
+            entry.pool = [...liveFed.results, ...entry.pool];
+          })
+        );
+      } finally {
+        window.clearTimeout(liveTimer);
+      }
+    }
+  }
+
+  for (const { node, pool } of offlinePools) {
     if (node.sticker) {
       usedUrls.add(node.sticker.url);
       continue;
     }
-    const richQuery = node.techBadge
-      ? `${node.title} ${node.techBadge}`
-      : node.title;
-
-    let pool = (
-      await VisualSearchOrchestrator.searchOfflineWave(
-        node.title,
-        mapContext,
-        node.branchColor,
-        24
-      )
-    ).results;
-
-    if (pool.length < 3 && node.techBadge) {
-      const withBadge = await VisualSearchOrchestrator.searchOfflineWave(
-        richQuery,
-        mapContext,
-        node.branchColor,
-        24
-      );
-      pool = [...pool, ...withBadge.results];
-    }
-
-    if (
-      pool.length < 2 &&
-      typeof navigator !== 'undefined' &&
-      navigator.onLine
-    ) {
-      const liveFed = await VisualSearchOrchestrator.searchFederatedGallery(
-        node.title,
-        mapContext,
-        node.branchColor
-      );
-      pool = [...liveFed.results, ...pool];
-    }
-
     const chosen =
       pool.find((r) => r.isVectorSvg && !usedUrls.has(r.previewUrl)) ??
       pool.find((r) => !usedUrls.has(r.previewUrl)) ??
@@ -285,7 +256,7 @@ async function buildSmartMapFromOutlineText(
 
   return {
     id: `map_smart_${now}`,
-    title: rootParsed.title,
+    title: nodes[rootId].title,
     department: deptHint,
     rootNodeId: rootId,
     nodes: laidOutNodes,
@@ -421,23 +392,37 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [liveWikiBranches, setLiveWikiBranches] = useState<ProactiveBranchSuggestion[]>([]);
   const [loadingLiveBranches, setLoadingLiveBranches] = useState(false);
+  const [showLivePreview, setShowLivePreview] = useState(false);
+
+  const liveParsedPreview = useMemo(() => {
+    const trimmed = outlineText.trim();
+    if (!trimmed) return null;
+    return parseTextToMindMapOutline(trimmed);
+  }, [outlineText]);
 
   useEffect(() => {
     if (isOpen) {
       setTab(initialTab);
       setAddedIds(new Set());
+      setShowLivePreview(false);
     }
   }, [isOpen, initialTab]);
 
   const targetTitle = activeNode?.title || mapContext.parentTitle || mapContext.label;
+  // Combine title + branch note (`activeNode.note`) so proactive sub-branches understand the description inside the branch box!
+  const targetContextQuery = useMemo(() => {
+    const notePart = activeNode?.note?.trim();
+    if (!notePart) return targetTitle;
+    return `${targetTitle} ${notePart.slice(0, 90)}`;
+  }, [targetTitle, activeNode?.note]);
 
   const baseProactiveList = useMemo(() => {
     return TopicContextIntelligence.getProactiveSubBranches(
-      targetTitle,
+      targetContextQuery,
       mapContext,
       existingSiblingTitles
     );
-  }, [targetTitle, mapContext, existingSiblingTitles]);
+  }, [targetContextQuery, mapContext, existingSiblingTitles]);
 
   useEffect(() => {
     if (!isOpen || tab !== 'proactive_branches') {
@@ -580,7 +565,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                 <div className="mb-1.5 text-xs font-extrabold opacity-75">
                   Hızlı Tek Tıkla Örnek Ders Notları:
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap">
                   {QUICK_SAMPLE_NOTES.map((sample) => (
                     <button
                       key={sample.label}
@@ -589,7 +574,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                         setOutlineText(sample.text);
                         setDeptHint(sample.dept);
                       }}
-                      className="rounded-xl border px-2.5 py-1 text-xs font-bold transition-colors hover:bg-sky-500/10 hover:text-sky-600 dark:hover:text-sky-300"
+                      className="shrink-0 rounded-xl border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors hover:bg-sky-500/10 hover:text-sky-600 dark:hover:text-sky-300"
                       style={{ borderColor: 'var(--hud-border)' }}
                     >
                       {sample.label}
@@ -600,28 +585,106 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
               <div>
                 <label className="mb-1 block text-xs font-extrabold opacity-75">
-                  Konu Başlığı veya Maddeli Ders Özeti Yapıştırın:
+                  Konu, Paragraf veya Açıklamalı Madde Listesi Yapıştırın:
                 </label>
                 <textarea
                   rows={kb.isKeyboardOpen ? 4 : 8}
                   value={outlineText}
                   onChange={(e) => setOutlineText(e.target.value)}
-                  placeholder={`Tek bir konu yazabilir (örn: "Dağıtık Sistem Mimarisi" veya "Mitral Kapak Darlığı")\nveya maddeli not yapıştırabilirsiniz:\n\nMerkezi Konu\n- Ana Dal 1 [Teknik Rozet]\n  - Alt Kavram A\n  - Alt Kavram B`}
+                  data-testid="smart-map-outline-textarea"
+                  placeholder={`Paragraf, başlık (# / 1.1) veya açıklamalı liste yapıştırabilirsiniz:\n\nMerkezi Konu\n- Ana Dal: Bu kısım dalın açıklama kutucuğuna otomatik eklenir [Rozet]\n  - Alt Kavram: Kısa tanım veya örnek\n    Not: Ekstra notlar da üst dalın açıklamasına eklenir`}
                   className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                   style={{ borderColor: 'var(--hud-border)' }}
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2">
+              {/* Live Smart Structure & Note Detection Bar */}
+              {liveParsedPreview && (
+                <div
+                  data-testid="smart-map-live-preview"
+                  className="rounded-2xl border p-2.5"
+                  style={{
+                    backgroundColor: 'var(--hud-bg)',
+                    borderColor: 'var(--hud-border)',
+                  }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
+                      <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
+                        🧠 {liveParsedPreview.stats.totalNodes} Dal
+                      </span>
+                      {liveParsedPreview.stats.mainBranches > 0 && (
+                        <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
+                          🌿 {liveParsedPreview.stats.mainBranches} Ana Dal
+                        </span>
+                      )}
+                      {liveParsedPreview.stats.subBranches > 0 && (
+                        <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">
+                          📌 {liveParsedPreview.stats.subBranches} Alt Dal
+                        </span>
+                      )}
+                      {liveParsedPreview.stats.notedBranches > 0 && (
+                        <span
+                          data-testid="smart-map-noted-count"
+                          className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300"
+                        >
+                          📝 {liveParsedPreview.stats.notedBranches} Açıklamalı Kart
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowLivePreview((v) => !v)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-slate-500/10 px-2 py-1 text-[11px] font-extrabold opacity-80 hover:opacity-100"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>{showLivePreview ? 'Gizle' : 'Önizle'}</span>
+                    </button>
+                  </div>
+
+                  {showLivePreview && (
+                    <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border-t pt-2 text-xs" style={{ borderColor: 'var(--hud-border)' }}>
+                      {liveParsedPreview.nodes.slice(0, 18).map((n) => (
+                        <div
+                          key={n.id}
+                          style={{ paddingLeft: `${Math.min(n.level, 3) * 14}px` }}
+                          className="flex flex-col gap-0.5"
+                        >
+                          <div className="flex items-center gap-1.5 font-extrabold">
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: n.branchColor }}
+                            />
+                            <span className="truncate">{n.title}</span>
+                            {n.techBadge && (
+                              <span className="rounded bg-sky-500/15 px-1 text-[10px] text-sky-600 dark:text-sky-300">
+                                {n.techBadge}
+                              </span>
+                            )}
+                          </div>
+                          {n.note && (
+                            <p className="line-clamp-2 pl-3.5 text-[11px] font-medium opacity-75">
+                              📝 {n.note}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleCloseClean}
                   className="rounded-xl px-4 py-2.5 text-xs font-bold hover:bg-slate-500/10"
                 >
                   Vazgeç
                 </button>
                 <button
                   type="submit"
+                  data-testid="smart-map-submit-btn"
                   disabled={isGenerating}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-60"
                 >

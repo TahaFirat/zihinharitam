@@ -865,7 +865,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
 
     const prev = lastCullTransformRef.current;
-    const crossedSemanticZoom = (prev.scale < 0.44) !== (vp.scale < 0.44);
+    const crossedSemanticZoom = (prev.scale < 0.14) !== (vp.scale < 0.14);
     const totalNodeCount = Object.keys(renderDataRef.current.nodes).length;
     if (crossedSemanticZoom) {
       lastCullTransformRef.current = vp;
@@ -2255,7 +2255,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     };
   };
 
-  const isSemanticFarZoom = currentScale < 0.24;
+  const isSemanticFarZoom = currentScale < 0.14;
 
   return (
     <div
@@ -3099,8 +3099,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     </a>
                   )}
 
-                  {/* RESPONSIVE MULTI-LINE BRANCH DESCRIPTION (`node.note`) */}
-                  {showSecondaryMeta && cleanNote.length > 0 && (
+                  {/* RESPONSIVE MULTI-LINE BRANCH DESCRIPTION (`node.note`) — stays live-visible even while editing so users see their description immediately! */}
+                  {(showSecondaryMeta || isEditing) && cleanNote.length > 0 && (
                     <div
                       data-testid="node-note-block"
                       style={{
@@ -3111,7 +3111,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                           ? 'rgba(15,23,42,0.62)'
                           : 'rgba(248,250,252,0.94)',
                       }}
-                      className="mt-1.5 w-full min-w-[228px] max-w-[292px] rounded-xl border px-3 py-2 text-left sm:min-w-[256px]"
+                      className="mt-1.5 w-full min-w-[200px] max-w-[280px] rounded-xl border px-3 py-2 text-left sm:min-w-[240px]"
                     >
                       <p
                         style={{ color: 'var(--node-subtext)' }}

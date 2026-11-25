@@ -206,12 +206,37 @@ export class OfflineBM25Engine {
     const blockedSet = new Set(expanded.blockedTokens);
     const primaryRaw = expanded.primaryEnTokens || expanded.expandedEnTokens || [];
     const secondaryRaw = expanded.secondaryEnTokens || [];
+    const headRaw = expanded.headEnTokens || [];
+    const modifierRaw = expanded.modifierEnTokens || [];
+    const isCompoundSplit =
+      Boolean(expanded.isMultiWord) && headRaw.length > 0 && modifierRaw.length > 0;
 
-    // Build exact phrase set & atomic primary/secondary word sets
+    // Build exact phrase set & atomic primary/secondary/head/modifier word sets
     const primaryExactPhrases = new Set([normQuery]);
     const topLeadPhrase = primaryRaw[0] ? primaryRaw[0].replace(/-/g, ' ').trim() : '';
     const primaryWords = new Set();
     const secondaryWords = new Set();
+    const headExactPhrases = new Set();
+    const headWords = new Set();
+    const modifierWords = new Set();
+
+    for (const h of headRaw) {
+      const sp = h.replace(/-/g, ' ').trim();
+      if (sp.length >= 2 && !blockedSet.has(sp)) {
+        headExactPhrases.add(sp);
+        sp.split(/\s+/).forEach((w) => {
+          if (w.length >= 2 && !blockedSet.has(w)) headWords.add(w);
+        });
+      }
+    }
+    for (const m of modifierRaw) {
+      const sp = m.replace(/-/g, ' ').trim();
+      if (sp.length >= 2 && !blockedSet.has(sp)) {
+        sp.split(/\s+/).forEach((w) => {
+          if (w.length >= 2 && !blockedSet.has(w) && !headWords.has(w)) modifierWords.add(w);
+        });
+      }
+    }
 
     for (const p of primaryRaw) {
       const spaceNorm = p.replace(/-/g, ' ').trim();
@@ -372,9 +397,24 @@ export class OfflineBM25Engine {
       const hitNameWords = matchedNameCount.get(idx) || 0;
       const hitPrimWords = matchedPrimaryNameCount.get(idx) || 0;
 
-      // Tier 1: Exact Full Icon Name Match (`soccer ball`, `rock`, `table`, `fire`, `automobile`, `droplet`)
-      if (topLeadPhrase && lowerName === topLeadPhrase) {
+      // Tier 1: Exact Full Icon Name Match + Head-Final Compound-AND Intersection!
+      // For multi-word compounds (`tablet kılıfı` / `tablet case`), BOTH words together rank #1 (+2350),
+      // HEAD NOUN (`case`/`cover`/`sleeve`) ranks #2 (+1150/+640), and modifier-only (`tablet` alone) NEVER hijacks #1!
+      const hitHead = isCompoundSplit && nameToks.some((t) => headWords.has(t));
+      const hitMod = isCompoundSplit && nameToks.some((t) => modifierWords.has(t));
+
+      if (isCompoundSplit && hitHead && hitMod) {
+        score += 2350;
+      } else if (topLeadPhrase && lowerName === topLeadPhrase && (!isCompoundSplit || hitHead || !hitMod)) {
         score += 1780;
+      } else if (isCompoundSplit && headExactPhrases.has(lowerName)) {
+        score += 1480;
+      } else if (isCompoundSplit && hitHead) {
+        score += 680;
+      } else if (isCompoundSplit && hitMod && !hitHead) {
+        // Modifier-only match in a 2-word compound (e.g. plain `tablet` when user asked for `tablet kılıfı`):
+        // keep visible as fallback below head-noun matches, never above `case`/`cover`!
+        score *= 0.62;
       } else if (primaryExactPhrases.has(lowerName)) {
         score += 1380;
       } else if (

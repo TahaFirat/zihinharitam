@@ -310,8 +310,8 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
           className="shrink-0 space-y-2 border-b px-3.5 py-2 sm:px-5"
           style={{ borderColor: 'var(--hud-border)' }}
         >
-          <div className="flex items-center gap-1.5 sm:flex-row">
-            <div className="relative flex-1">
+          <div className={`flex gap-2 ${kb.isKeyboardOpen ? 'flex-row items-center' : 'flex-col sm:flex-row sm:items-center'}`}>
+            <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-45" />
               <input
                 type="text"
@@ -347,7 +347,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
             )}
 
             {/* Free vs Pro Tier Filter Pills (Hidden in single-row compact mode on phones while typing; shown on tablets or when keyboard closed!) */}
-            <div className={`${kb.isKeyboardOpen ? 'hidden sm:flex' : 'flex'} shrink-0 items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-1`}>
+            <div className={`${kb.isKeyboardOpen ? 'hidden sm:flex' : 'flex w-full justify-between sm:w-auto sm:justify-start'} shrink-0 items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-1`}>
               <button
                 type="button"
                 data-testid="gallery-tier-all-btn"

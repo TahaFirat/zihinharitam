@@ -28,7 +28,11 @@ import {
 } from './SemanticTaxonomyTR';
 import type { MapContextAnalysis } from './TopicContextIntelligence';
 import { searchBuiltInAtlasV3 } from './providers/BuiltInMultiColorAtlas';
-import { searchIconifyLive } from './providers/IconifyLiveAdapter';
+import { searchArasaacPictograms } from './providers/ArasaacPictogramAdapter';
+import {
+  searchIconifyLive,
+  translateTurkishToEnglishLive,
+} from './providers/IconifyLiveAdapter';
 
 export interface FederatedGalleryResponse {
   results: VisualSearchResult[];
@@ -36,6 +40,7 @@ export interface FederatedGalleryResponse {
   resolvedEnglish: string;
   elapsedMs?: number;
   hasLexiconMatch?: boolean;
+  allWordsMatched?: boolean;
 }
 
 const DISCIPLINE_DEFAULT_OFFLINE_SEEDS: Record<DisciplineProfile, string> = {
@@ -214,12 +219,16 @@ export class VisualSearchOrchestrator {
         expanded.expandedEnTokens[0] || wave1.resolvedEnglish || clean,
       elapsedMs,
       hasLexiconMatch: Boolean(expanded.hasLexiconMatch),
+      allWordsMatched: Boolean(expanded.allWordsMatched),
     };
   }
 
   /**
-   * Full Gallery Search (100% Offline Primary `<8ms` + Optional Cancelable Online Enrichment when `navigator.onLine`).
-   * NEVER calls `api.iconify.design` per keystroke and strictly filters online results against `blockedTokens`.
+   * Full Gallery Search (100% Offline Primary `<8ms` + Universal Turkish->English Parity Enrichment):
+   * - If ANY Turkish word was unmatched locally OR it's a multi-word compound (`tablet kılıfı`):
+   *   1) Live-translates the FULL Turkish phrase to natural English (`tablet case`),
+   *   2) Re-queries our 43,722-icon Vibrant Offline Index with that English phrase (100% TR=EN parity!),
+   *   3) Queries Iconify's 546,996+ global vector icons (full phrase + head noun) + ARASAAC 14,000+ everyday pictograms!
    */
   public static async searchFederatedGallery(
     query: string,
@@ -228,7 +237,7 @@ export class VisualSearchOrchestrator {
     signal?: AbortSignal
   ): Promise<FederatedGalleryResponse> {
     const clean = sanitizeNodeSearchQuery(query);
-    const cacheKey = `v7::${mapContext.discipline}::${branchColor}::${clean.toLocaleLowerCase('tr-TR')}`;
+    const cacheKey = `v8::${mapContext.discipline}::${branchColor}::${clean.toLocaleLowerCase('tr-TR')}`;
     const cached = federatedCache.get(cacheKey);
     if (cached && cached.results.length >= 20) {
       return cached;
@@ -251,34 +260,76 @@ export class VisualSearchOrchestrator {
       expanded.blockedTokens.map((b) => normalizeTrToken(b))
     );
 
-    // Optional Cross-Lingual Wiki Bridge ONLY when offline dictionary had no match (text translation only — zero random Wikipedia photos!)
-    const wikiBridge =
-      !expanded.hasLexiconMatch && clean.length >= 3
-        ? await Promise.race([
-            resolveViaTurkishWikipedia(clean, signal),
-            new Promise<null>((r) => setTimeout(() => r(null), 320)),
+    const needsFullPhraseTranslation =
+      !expanded.allWordsMatched ||
+      !expanded.hasLexiconMatch ||
+      (Boolean(expanded.isMultiWord) && !expanded.hasExactPhraseMatch);
+
+    // Step 2: Parallel Live Turkish->English Full-Phrase Translation + optional Wiki bridge
+    const [liveTranslatedEn, wikiBridge] = await Promise.all([
+      needsFullPhraseTranslation
+        ? Promise.race([
+            translateTurkishToEnglishLive(clean, signal),
+            new Promise<null>((r) => setTimeout(() => r(null), 1050)),
           ])
-        : null;
+        : Promise.resolve(null),
+      !expanded.hasLexiconMatch && clean.length >= 3
+        ? Promise.race([
+            resolveViaTurkishWikipedia(clean, signal),
+            new Promise<null>((r) => setTimeout(() => r(null), 350)),
+          ])
+        : Promise.resolve(null),
+    ]);
 
     if (signal?.aborted) return offlineWave;
 
     const primaryEnList = expanded.primaryEnTokens ?? expanded.expandedEnTokens;
-    const enTerms = [
-      ...(wikiBridge?.enTitle ? [wikiBridge.enTitle.toLowerCase()] : []),
-      ...primaryEnList.slice(0, 4),
-    ];
+    const enTerms = Array.from(
+      new Set(
+        [
+          ...(liveTranslatedEn ? [liveTranslatedEn.toLowerCase()] : []),
+          ...(wikiBridge?.enTitle ? [wikiBridge.enTitle.toLowerCase()] : []),
+          ...primaryEnList.slice(0, 4),
+        ].filter((t) => t && t.length >= 2)
+      )
+    );
     const primaryEn = enTerms[0] || clean;
+    const translatedHeadWord =
+      liveTranslatedEn && liveTranslatedEn.includes(' ')
+        ? liveTranslatedEn.split(/\s+/).slice(-1)[0]
+        : '';
+    const arasaacEnTerms = Array.from(
+      new Set([liveTranslatedEn || primaryEn, translatedHeadWord, ...(expanded.headEnTokens ?? [])].filter(Boolean))
+    );
 
+    // Step 3: Race ALL 4 Global Engines in Parallel!
+    // - Re-query local 43,722-icon Vibrant Offline Index with `liveTranslatedEn` (guarantees 100% TR = EN parity!)
+    // - Query Iconify 546,996+ Live Vector API (full phrase + head noun)
+    // - Query ARASAAC 14,000+ Native TR + EN Everyday Object Pictograms
+    // - Query Shared AI Sticker Pool
     const settled = await Promise.race([
       Promise.allSettled([
+        liveTranslatedEn && liveTranslatedEn.toLowerCase() !== clean.toLowerCase()
+          ? OfflineVisualSearchClient.searchShards(
+              liveTranslatedEn,
+              mapContext.discipline,
+              branchColor,
+              36
+            ).then((r) => r.results)
+          : Promise.resolve([] as VisualSearchResult[]),
         searchIconifyLive(clean, enTerms, branchColor, signal, {
           hasExactOfflineLexicon: Boolean(expanded.hasLexiconMatch),
+          allWordsMatched: Boolean(expanded.allWordsMatched),
+          hasExactPhraseMatch: Boolean(expanded.hasExactPhraseMatch),
+          preTranslatedEn: liveTranslatedEn,
+          headEnTerms: expanded.headEnTokens,
           blockedTokens: expanded.blockedTokens,
         }),
+        searchArasaacPictograms([clean], arasaacEnTerms, signal),
         AIStickerDirector.searchSharedPool(clean, 4),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
-        setTimeout(() => r([]), 1850)
+        setTimeout(() => r([]), 2100)
       ),
     ]);
 
@@ -313,23 +364,29 @@ export class VisualSearchOrchestrator {
         .replace(/\b(outline|solid|fill|filled|flat|color|colour|alt|regular|bold|1|2|3|4|5)\b/g, '')
         .replace(/[^a-z0-9]+/g, ' ')
         .trim();
-      if (cKey && (conceptCounts.get(cKey) ?? 0) >= 2 && combined.length >= 6) {
+      // Deduplicate PRO & FREE concepts independently so colorful PRO icons NEVER evict FREE monochrome options!
+      const tierConceptKey = cKey ? `${item.tier === 'free' ? 'f' : 'p'}:${cKey}` : '';
+      const maxPerConcept = item.tier === 'free' ? 4 : 2;
+      if (tierConceptKey && (conceptCounts.get(tierConceptKey) ?? 0) >= maxPerConcept && combined.length >= 6) {
         return;
       }
       seenUrls.add(item.previewUrl);
       seenIds.add(item.id);
       if (item.iconifyId) seenIconifyIds.add(item.iconifyId);
-      if (cKey) conceptCounts.set(cKey, (conceptCounts.get(cKey) ?? 0) + 1);
+      if (tierConceptKey) conceptCounts.set(tierConceptKey, (conceptCounts.get(tierConceptKey) ?? 0) + 1);
       combined.push(item);
     };
 
-    // Only anchor offline hits above live translated 540K+ gamified icons when our offline Turkish dictionary
-    // actually recognized the word (`expanded.hasLexiconMatch`) with strong primary confidence!
-    const offlineHasStrongPrimary =
-      Boolean(expanded.hasLexiconMatch) && offlineWave.results.length >= 6;
+    // Only anchor initial offline hits above live translated 546K+ icons when EVERY word matched locally
+    // (or the exact full multi-word phrase matched locally)!
+    const offlineHasStrongFullMatch =
+      Boolean(expanded.hasLexiconMatch) &&
+      Boolean(expanded.allWordsMatched) &&
+      (!expanded.isMultiWord || Boolean(expanded.hasExactPhraseMatch)) &&
+      offlineWave.results.length >= 6;
 
-    if (!offlineHasStrongPrimary) {
-      // Uncommon/new Turkish word -> put live Google-Translated gamified 540K+ icons FIRST!
+    if (!offlineHasStrongFullMatch) {
+      // Unknown word OR partial multi-word compound -> put live full-phrase translated results FIRST!
       for (const s of settled) {
         if (s.status === 'fulfilled') {
           for (const remoteItem of s.value) {
@@ -340,7 +397,7 @@ export class VisualSearchOrchestrator {
         }
       }
       for (const offItem of offlineWave.results) {
-        pushUnique(offItem);
+        pushUnique({ ...offItem, score: Math.min(offItem.score, 0.86) });
       }
     } else {
       for (const offItem of offlineWave.results) {
@@ -350,7 +407,7 @@ export class VisualSearchOrchestrator {
         if (s.status === 'fulfilled') {
           for (const remoteItem of s.value) {
             if (isRemoteItemRelevant(remoteItem)) {
-              pushUnique({ ...remoteItem, score: Math.min(remoteItem.score, 0.89) });
+              pushUnique({ ...remoteItem, score: Math.min(remoteItem.score, 0.91) });
             }
           }
         }
@@ -358,7 +415,6 @@ export class VisualSearchOrchestrator {
     }
 
     // Strict Relevance Guarantee: NEVER dump unrelated discipline seed icons (e.g. Red Hearts for "Komutan"!)
-    // If a genuinely unknown/abstract phrase has 0 hits, fall back ONLY to universal neutral thinking icons (`fikir hedef yildiz`) at low score!
     if (combined.length === 0 && !signal?.aborted) {
       const neutralFallback = await OfflineVisualSearchClient.searchShards(
         'hedef yildiz fikir pusula bayrak',
@@ -378,6 +434,8 @@ export class VisualSearchOrchestrator {
       metaphorChips: offlineWave.metaphorChips,
       resolvedEnglish: primaryEn,
       elapsedMs: offlineWave.elapsedMs,
+      hasLexiconMatch: Boolean(expanded.hasLexiconMatch),
+      allWordsMatched: Boolean(expanded.allWordsMatched),
     };
 
     if (!signal?.aborted && response.results.length > 0) {

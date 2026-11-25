@@ -476,6 +476,19 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
 
                 <button
                   type="button"
+                  data-testid="hud-smart-map-menu-btn"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onOpenSmartGenerator();
+                  }}
+                  className="mb-1 flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl bg-amber-500/12 px-3 text-xs font-extrabold text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
+                >
+                  <Wand2 className="h-4 w-4 text-amber-500" />
+                  <span>{t('Metinden Harita Oluştur', 'Text to Mind Map')}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => {
                     onAutoLayout();
                     setMoreMenuOpen(false);

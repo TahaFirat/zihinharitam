@@ -14,6 +14,8 @@ export interface ExpandedSemanticQueryV3 {
   stemmedTokens: string[];
   primaryEnTokens?: string[];
   secondaryEnTokens?: string[];
+  headEnTokens?: string[];
+  modifierEnTokens?: string[];
   expandedEnTokens: string[];
   expandedTrTokens: string[];
   blockedTokens: string[];
@@ -21,6 +23,9 @@ export interface ExpandedSemanticQueryV3 {
   detectedDomains: OfflineTaxonomyDomain[];
   isHomonym: boolean;
   hasLexiconMatch?: boolean;
+  hasExactPhraseMatch?: boolean;
+  allWordsMatched?: boolean;
+  isMultiWord?: boolean;
 }
 
 export function normalizeTrToken(raw: string): string;

@@ -51,6 +51,7 @@ import {
   sanitizeNodeSearchQuery,
   VisualSearchOrchestrator,
 } from '../core/visuals/VisualSearchOrchestrator';
+import { splitTitleAndInlineNote } from '../core/smartmap/TextToMindMapParser';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 import {
   dismissNativeKeyboard,
@@ -265,11 +266,41 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     };
   }, []);
 
+  // Smart branch-box description awareness:
+  // If user typed a branch note/description (`activeNode.note`), automatically leverage it for icon search
+  // when title is empty/placeholder or generic so adding a description inside the branch box is immediately understood!
   const searchQuery = useMemo(() => {
     const manual = customIconQuery.trim();
     if (manual.length > 0) return manual;
-    return sanitizeNodeSearchQuery(activeNode?.title ?? '');
-  }, [customIconQuery, activeNode?.title]);
+    const cleanTitle = sanitizeNodeSearchQuery(activeNode?.title ?? '');
+    const cleanNote = (activeNode?.note ?? '').trim();
+    if (cleanTitle.length > 0) {
+      // If user typed `Başlık: Açıklama` inline inside the title box, focus icon search on the clean title part
+      const inlineSplit = splitTitleAndInlineNote(cleanTitle);
+      return inlineSplit.title || cleanTitle;
+    }
+    if (cleanNote.length >= 2) {
+      return cleanNote
+        .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length >= 3)
+        .slice(0, 3)
+        .join(' ');
+    }
+    return '';
+  }, [customIconQuery, activeNode?.title, activeNode?.note]);
+
+  const inlineTitleSplitCandidate = useMemo(() => {
+    const raw = (activeNode?.title ?? '').trim();
+    if (raw.length < 14) return null;
+    const parsed = splitTitleAndInlineNote(raw);
+    if (parsed.note && parsed.note.length >= 6 && parsed.title !== raw) {
+      return parsed;
+    }
+    return null;
+  }, [activeNode?.title]);
+
+  const hasBranchNote = (activeNode?.note ?? '').trim().length > 0;
   const activeBranchColor = activeNode?.branchColor ?? '#0EA5E9';
 
   // Gamified Instant Search: <2ms Offline Shards + ALWAYS-ON Parallel Turkish->English Live Enrichment for new words!
@@ -305,14 +336,18 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
       }
       setAllFederated(offlineWave.results);
 
-      // ALWAYS enrich via Live Google-Translated 540K+ Gamified Iconify whenever:
-      // 1) Offline Turkish lexicon did NOT have an exact concept hit (`!offlineWave.hasLexiconMatch`), OR
-      // 2) Offline returned fewer than 12 icons or weak top confidence (< 0.90)
+      // ALWAYS enrich via Live Google-Translated 540K+ Gamified Iconify + ARASAAC whenever:
+      // 1) Offline Turkish lexicon did NOT fully match ALL words (`!offlineWave.allWordsMatched` / `!offlineWave.hasLexiconMatch`), OR
+      // 2) Query is multi-word (e.g. "tablet kılıfı") so full-phrase EN translation + head-noun icons ALWAYS appear, OR
+      // 3) Offline returned fewer than 12 icons or weak top confidence (< 0.90)
+      const isMultiWordQuery = searchQuery.trim().includes(' ');
       const needsOnlineEnrichment =
         searchQuery.trim().length >= 2 &&
         typeof navigator !== 'undefined' &&
         navigator.onLine &&
         (!offlineWave.hasLexiconMatch ||
+          offlineWave.allWordsMatched === false ||
+          isMultiWordQuery ||
           offlineWave.results.length < 12 ||
           (offlineWave.results[0]?.score ?? 0) < 0.9);
 
@@ -853,6 +888,32 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         </div>
         )}
 
+        {/* Smart 1-Tap Inline Description Split (`Başlık: Açıklama` -> Title + Branch Note Box!) */}
+        {!isIconSearchFocused && !isSheetMinimized && inlineTitleSplitCandidate && (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-violet-500/35 bg-violet-500/10 px-2.5 py-1.5 text-[11px]">
+            <span className="min-w-0 truncate font-bold text-violet-700 dark:text-violet-300">
+              📝 Açıklama algılandı: “{inlineTitleSplitCandidate.note}”
+            </span>
+            <button
+              type="button"
+              data-testid="studio-split-note-btn"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => {
+                void hapticSuccess();
+                const existingNote = (activeNode.note ?? '').trim();
+                const mergedNote = existingNote
+                  ? `${inlineTitleSplitCandidate.note}\n${existingNote}`
+                  : inlineTitleSplitCandidate.note ?? '';
+                onUpdateNodeTitle(activeNode.id, inlineTitleSplitCandidate.title);
+                onUpdateNodeNote(activeNode.id, mergedNote);
+              }}
+              className="shrink-0 rounded-lg bg-violet-600 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-xs active:scale-95"
+            >
+              Not Kutusuna Ayır
+            </button>
+          </div>
+        )}
+
         {!isSheetMinimized && (
         <>
         {/* 3 BIG, CRYSTAL-CLEAR BRANCH DOCK TABS (Hidden only while keyboard is open so dock stays spacious) */}
@@ -887,7 +948,10 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               }`}
             >
               <FileText className="h-4 w-4 text-violet-500" />
-              <span>Not</span>
+              <span>{hasBranchNote ? 'Not ✓' : 'Not'}</span>
+              {hasBranchNote && (
+                <span className="h-2 w-2 rounded-full bg-violet-500" />
+              )}
             </button>
             <button
               type="button"

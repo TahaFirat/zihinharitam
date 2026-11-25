@@ -174,6 +174,13 @@ const CONSONANT_RESTORE = {
   tırnag: 'tirnak',
   tirnag: 'tirnak',
   koltug: 'koltuk',
+  kulaklig: 'kulaklik',
+  kalemlig: 'kalemlik',
+  yastig: 'yastik',
+  terlig: 'terlik',
+  baslig: 'baslik',
+  kasig: 'kasik',
+  bilezig: 'bilezik',
   blogy: 'blok',
   kalb: 'kalp',
   reng: 'renk',
@@ -1224,6 +1231,165 @@ export const DIRECT_TR_EN_PAIRS = {
   yelkenli: ['sailboat'],
   capa: ['anchor'],
   semsiye: ['umbrella', 'closed-umbrella'],
+  // --- Everyday accessories, electronics, homeware, clothing & Turkish head-final compounds ---
+  kilif: ['case', 'cover', 'sleeve', 'pouch', 'briefcase', 'shield'],
+  stand: ['stand', 'easel', 'holder', 'tripod'],
+  tutucu: ['holder', 'clip', 'clamp', 'stand', 'bracket'],
+  sarj: ['charger', 'battery-charging', 'plug', 'lightning', 'usb'],
+  kablo: ['cable', 'wire', 'cord', 'plug', 'usb'],
+  adaptor: ['adapter', 'plug', 'charger', 'power'],
+  fis: ['plug', 'electric-plug', 'receipt'],
+  kumanda: ['remote', 'controller', 'gamepad', 'tv'],
+  supurge: ['broom', 'vacuum', 'cleaning'],
+  utu: ['iron', 'steam', 'laundry'],
+  camasir: ['washing-machine', 'laundry', 'shirt'],
+  bulasik: ['dishwasher', 'plate', 'sponge', 'bubbles'],
+  buzdolabi: ['fridge', 'refrigerator', 'snowflake'],
+  firin: ['oven', 'stove', 'baking', 'bread'],
+  ocak: ['stove', 'fire', 'cooking'],
+  mikrodalga: ['microwave', 'oven'],
+  kettle: ['kettle', 'teapot', 'hot-beverage'],
+  klima: ['air-conditioner', 'wind', 'snowflake', 'fan'],
+  vantilator: ['fan', 'wind', 'propeller'],
+  kalorifer: ['radiator', 'heater', 'flame', 'thermometer'],
+  petek: ['honeycomb', 'radiator', 'heater'],
+  lamba: ['lamp', 'light-bulb', 'table-lamp'],
+  avize: ['chandelier', 'lamp', 'light-bulb', 'sparkles'],
+  perde: ['curtain', 'window', 'blinds'],
+  hali: ['rug', 'carpet', 'mat'],
+  koltuk: ['chair', 'armchair', 'couch', 'sofa'],
+  kanepe: ['couch', 'sofa', 'couch-and-lamp'],
+  yatak: ['bed', 'sleeping', 'pillow'],
+  yastik: ['pillow', 'bed', 'cushion'],
+  yorgan: ['blanket', 'bed', 'quilt'],
+  battaniye: ['blanket', 'bed'],
+  havlu: ['towel', 'bath', 'soap'],
+  sabun: ['soap', 'bubbles', 'sponge'],
+  sampuan: ['shampoo', 'lotion-bottle', 'soap', 'bubbles'],
+  ayna: ['mirror', 'reflection'],
+  tarak: ['comb', 'hair', 'scissors'],
+  firca: ['paintbrush', 'brush', 'toothbrush', 'broom'],
+  parfum: ['perfume', 'lotion-bottle', 'sparkles'],
+  cuzdan: ['wallet', 'purse', 'money', 'credit-card'],
+  canta: ['handbag', 'backpack', 'briefcase', 'shopping-bags', 'bag'],
+  valiz: ['luggage', 'suitcase'],
+  kalemlik: ['pencil-case', 'pencil', 'case', 'pouch'],
+  kalemtiras: ['sharpener', 'pencil'],
+  defter: ['notebook', 'ledger', 'spiral-notepad', 'memo'],
+  zimba: ['stapler', 'paperclip', 'office'],
+  bant: ['tape', 'adhesive-bandage', 'bandage'],
+  gozluk: ['glasses', 'sunglasses', 'goggles'],
+  saat: ['watch', 'alarm-clock', 'clock', 'wristwatch'],
+  bilezik: ['bracelet', 'ring', 'gem-stone'],
+  kolye: ['necklace', 'prayer-beads', 'gem-stone'],
+  kupe: ['earring', 'gem-stone', 'sparkles'],
+  yuzuk: ['ring', 'gem-stone', 'diamond'],
+  kravat: ['necktie', 'tie'],
+  bere: ['beanie', 'hat', 'billed-cap'],
+  kask: ['helmet', 'rescue-workers-helmet', 'hard-hat'],
+  bot: ['hiking-boot', 'boot', 'shoe'],
+  terlik: ['slipper', 'thong-sandal', 'sandal'],
+  elbise: ['dress', 'kimono', 'clothing'],
+  etek: ['skirt', 'dress'],
+  gomlek: ['shirt', 't-shirt', 'necktie'],
+  kazak: ['sweater', 'coat', 'shirt'],
+  mont: ['coat', 'jacket'],
+  pijama: ['pajamas', 'bed', 'moon'],
+  mayo: ['swimsuit', 'one-piece-swimsuit', 'shorts'],
+  termos: ['thermos', 'flask', 'bottle', 'coffee'],
+  matara: ['bottle', 'water-bottle', 'flask', 'canteen'],
+  surahi: ['pitcher', 'jug', 'water', 'bottle'],
+  caydanlik: ['teapot', 'teacup', 'kettle'],
+  cezve: ['coffee', 'teapot', 'hot-beverage'],
+  kase: ['bowl', 'bowl-with-spoon'],
+  rende: ['grater', 'kitchen', 'cheese'],
+  suzgec: ['strainer', 'filter', 'funnel'],
+  kepce: ['ladle', 'spoon', 'excavator'],
+  spatula: ['spatula', 'cooking', 'spoon'],
+  paspas: ['mop', 'broom', 'bucket'],
+  kova: ['bucket', 'pail', 'water'],
+  sunger: ['sponge', 'bubbles', 'cleaning'],
+  deterjan: ['detergent', 'lotion-bottle', 'soap', 'bubbles'],
+  mandal: ['clothespin', 'clip', 'paperclip'],
+  aski: ['hanger', 'coat', 'hook'],
+  dugme: ['button', 'radio-button', 'toggle'],
+  fermuar: ['zipper', 'bag'],
+  pense: ['pliers', 'wrench', 'tools'],
+  matkap: ['drill', 'screwdriver', 'tools'],
+  kurek: ['shovel', 'spade', 'oar'],
+  saksi: ['potted-plant', 'plant', 'flower'],
+  hortum: ['hose', 'water', 'tornado'],
+  konsol: ['video-game', 'gamepad', 'joystick'],
+  powerbank: ['battery-charging', 'battery', 'charger', 'power'],
+  usb: ['usb', 'cable', 'pendrive', 'memory'],
+  modem: ['router', 'wifi', 'network'],
+  router: ['router', 'wifi', 'network'],
+  projeksiyon: ['projector', 'film-projector', 'screen'],
+  bilet: ['ticket', 'admission-tickets'],
+  pasaport: ['passport', 'passport-control', 'identification-card'],
+  kimlik: ['identification-card', 'id-card', 'badge'],
+  kart: ['credit-card', 'identification-card', 'card'],
+  fatura: ['receipt', 'invoice', 'document'],
+  etiket: ['label', 'tag', 'bookmark'],
+  barkod: ['barcode', 'qr-code', 'scan'],
+  durbun: ['binoculars', 'telescope'],
+  buyutec: ['magnifying-glass-tilted-left', 'search', 'zoom'],
+  termometre: ['thermometer', 'temperature'],
+  maske: ['face-with-medical-mask', 'mask', 'shield'],
+  biberon: ['baby-bottle', 'milk', 'baby'],
+  emzik: ['pacifier', 'baby'],
+  besik: ['crib', 'cradle', 'baby', 'bed'],
+  salincak: ['swing', 'playground', 'park'],
+  ucurtma: ['kite', 'wind'],
+  kaykay: ['skateboard', 'roller-skate'],
+  paten: ['roller-skate', 'ice-skate'],
+  scooter: ['kick-scooter', 'motor-scooter'],
+  olta: ['fishing-pole', 'fish', 'hook'],
+  mangal: ['grill', 'barbecue', 'fire', 'meat'],
+  // --- Curated High-Frequency Turkish 2-Word Compounds (Head-Final Accuracy!) ---
+  'tablet kilifi': ['tablet-case', 'case', 'cover', 'sleeve', 'pouch', 'briefcase'],
+  'telefon kilifi': ['phone-case', 'case', 'cover', 'sleeve', 'pouch'],
+  'ekran koruyucu': ['screen-protector', 'shield', 'glass'],
+  'sarj aleti': ['charger', 'battery-charging', 'electric-plug', 'cable'],
+  'sarj kablosu': ['usb-cable', 'cable', 'charger', 'plug'],
+  'dis fircasi': ['toothbrush', 'brush'],
+  'dis macunu': ['toothpaste', 'toothbrush'],
+  'gunes gozlugu': ['sunglasses', 'glasses'],
+  'calisma masasi': ['workspace-desk', 'desk', 'table'],
+  'su sisesi': ['water-bottle', 'bottle', 'flask'],
+  'kahve fincani': ['hot-beverage', 'teacup', 'mug', 'coffee'],
+  'kahve makinesi': ['coffee-maker', 'espresso', 'coffee'],
+  'camasir makinesi': ['washing-machine', 'laundry'],
+  'bulasik makinesi': ['dishwasher', 'plate'],
+  'elektrik supurgesi': ['vacuum', 'broom'],
+  'araba anahtari': ['car-key', 'key'],
+  'sirt cantasi': ['backpack', 'bag', 'luggage'],
+  'el cantasi': ['handbag', 'purse', 'clutch-bag', 'briefcase'],
+  'laptop cantasi': ['briefcase', 'backpack', 'bag'],
+  'kalem kutusu': ['pencil-case', 'case', 'pouch', 'box'],
+  'oyun kolu': ['video-game', 'gamepad', 'joystick', 'controller'],
+  'futbol topu': ['soccer-ball', 'football', 'ball'],
+  'basketbol topu': ['basketball', 'ball'],
+  'voleybol topu': ['volleyball', 'ball'],
+  'tenis topu': ['tennis', 'ball'],
+  'bisiklet kaski': ['helmet', 'bicycle', 'rescue-workers-helmet'],
+  'kulaklik kablosu': ['cable', 'wire', 'headphones', 'plug'],
+  'masa lambasi': ['table-lamp', 'lamp', 'light-bulb'],
+  'cop kutusu': ['wastebasket', 'trash', 'bin'],
+  'kredi karti': ['credit-card', 'card', 'wallet'],
+  'akilli saat': ['smartwatch', 'watch'],
+  'kol saati': ['watch', 'wristwatch', 'clock'],
+  'bebek arabasi': ['stroller', 'baby', 'carriage'],
+  'tekerlekli sandalye': ['manual-wheelchair', 'motorized-wheelchair', 'wheelchair'],
+  'yara bandi': ['adhesive-bandage', 'bandage', 'first-aid'],
+  'tansiyon aleti': ['blood-pressure', 'stethoscope', 'heart-pulse'],
+  'uyku tulumu': ['sleeping-bag', 'camping', 'tent'],
+  'yuzme havuzu': ['swimming', 'pool', 'water-wave'],
+  'boks eldiveni': ['boxing-glove', 'gloves'],
+  'bilgisayar faresi': ['computer-mouse', 'mouse'],
+  'telefon tutucu': ['phone-holder', 'stand', 'holder', 'smartphone'],
+  'tablet standi': ['stand', 'holder', 'easel', 'tablet'],
+  'tirnak makasi': ['nail-clipper', 'scissors', 'nail'],
 };
 
 /**
@@ -1574,28 +1740,69 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  // Only expand stemmed single-word fallback when full phrase did NOT already hit a direct/exact lexicon match!
+  // Only expand per-word lookup when full phrase did NOT already hit a curated phrase cluster!
   const hasDirectPhraseHit = phraseClusters.some((c) => c.isDirect1to1);
-  const hasExactSinglePhraseHit =
-    words.length === 1 && (hasDirectPhraseHit || phraseClusters.some((c) => c.isExactLexicon));
+  const hasCuratedPhraseHit = phraseClusters.some((c) => !c.isCldrFallback);
+  const hasExactPhraseHit =
+    hasDirectPhraseHit || phraseClusters.some((c) => c.isExactLexicon);
+  const isMultiWord = words.length >= 2;
 
-  if (!hasExactSinglePhraseHit) {
+  // Per-word cluster lookup (each word evaluated independently so word #0 matching NEVER suppresses word #1!)
+  const perWordClusters = words.map(() => []);
+  const perWordCuratedMatched = words.map(() => false);
+
+  if (!hasCuratedPhraseHit) {
     for (let i = 0; i < words.length; i++) {
       if (phraseClusters.length > 0 && stemmedWords[i].length <= 3) continue;
-      tryLookup(words[i], wordClusters, false);
-      if (!wordClusters.some((c) => c.isDirect1to1)) {
-        tryLookup(stemmedWords[i], wordClusters, true);
-      }
-      // Single-pass Turkish plural/verb strip backup (`kediler -> kedi`, `kosmak -> kosma/kos`, `yuzmek -> yuzme`)
-      const w = words[i];
-      if (w.length >= 5 && !wordClusters.some((c) => c.isDirect1to1)) {
-        for (const s of ['lar', 'ler', 'mak', 'mek', 'lik', 'luk', 'dan', 'den', 'da', 'de', 'im', 'um', 'in', 'un']) {
-          if (w.length - s.length >= 3 && w.endsWith(s)) {
-            const cut = restoreTurkishSoftening(w.slice(0, -s.length));
-            tryLookup(cut, wordClusters, true);
-            if (cut.endsWith('g')) tryLookup(`${cut.slice(0, -1)}k`, wordClusters, true);
-            if (cut.endsWith('b')) tryLookup(`${cut.slice(0, -1)}p`, wordClusters, true);
+      const bucket = perWordClusters[i];
+      const lookupIntoBucket = (key, includeStemmed = false) => {
+        if (!key || (words.length > 1 && TURKISH_STOPWORDS.has(key))) return;
+        const exactHits = trExactMap.get(key);
+        if (exactHits) {
+          for (const c of exactHits) {
+            if (!bucket.includes(c)) bucket.push(c);
           }
+        }
+        if (includeStemmed && !bucket.some((c) => c.isDirect1to1)) {
+          const stemHits = trStemMap.get(key);
+          if (stemHits) {
+            for (const c of stemHits) {
+              if (!bucket.includes(c)) bucket.push(c);
+            }
+          }
+        }
+      };
+
+      lookupIntoBucket(words[i], false);
+      if (!bucket.some((c) => c.isDirect1to1)) {
+        lookupIntoBucket(stemmedWords[i], true);
+      }
+
+      // Single-pass Turkish possessive/plural/case/verb strip backup (`kilifi -> kilif`, `kediler -> kedi`, `sisesi -> sise`, `gozlugu -> gozluk`)
+      const w = words[i];
+      if (w.length >= 4 && !bucket.some((c) => c.isDirect1to1)) {
+        for (const s of [
+          'lari', 'leri', 'lar', 'ler', 'mak', 'mek', 'lik', 'luk',
+          'dan', 'den', 'tan', 'ten', 'da', 'de', 'ta', 'te',
+          'si', 'su', 'im', 'um', 'in', 'un', 'i', 'u', 'a', 'e',
+        ]) {
+          const minLen = s.length <= 2 ? 4 : 3;
+          if (w.length - s.length >= minLen && w.endsWith(s)) {
+            const cut = restoreTurkishSoftening(w.slice(0, -s.length));
+            lookupIntoBucket(cut, true);
+            if (cut.endsWith('g')) lookupIntoBucket(`${cut.slice(0, -1)}k`, true);
+            if (cut.endsWith('b')) lookupIntoBucket(`${cut.slice(0, -1)}p`, true);
+            if (bucket.some((c) => c.isDirect1to1)) break;
+          }
+        }
+      }
+
+      if (bucket.some((c) => !c.isCldrFallback)) {
+        perWordCuratedMatched[i] = true;
+      }
+      for (const c of bucket) {
+        if (!phraseClusters.includes(c) && !wordClusters.includes(c)) {
+          wordClusters.push(c);
         }
       }
     }
@@ -1612,6 +1819,8 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     wordClusters.some((c) => c.isExactLexicon);
 
   const matchedClusters = [...phraseClusters, ...wordClusters];
+  const headEnSet = new Set();
+  const modifierEnSet = new Set();
 
   // 3. Safe >=5-char prefix match while user is mid-typing a Turkish word (e.g. `mikroorg`, `helikop`, `ekokardi`)
   if (matchedClusters.length === 0 && norm.length >= 5) {
@@ -1654,24 +1863,53 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     for (const p of c.packIds) atlasIds.add(p);
   }
 
-  for (const c of wordClusters) {
-    domains.add(c.domain);
-    for (const b of c.blockedTokens) blocked.add(b);
-    for (const p of c.packIds) atlasIds.add(p);
+  // HEAD-FINAL COMPOUND ORDERING (Both Turkish `tablet kılıfı` AND English `tablet case` have HEAD NOUN LAST!):
+  // Process the LAST word (head noun) BEFORE modifier words so head-noun visual concepts lead `primaryEn`
+  // while BOTH head & modifier tokens are tracked separately for Compound-AND intersection scoring!
+  const wordVisitOrder = isMultiWord
+    ? [words.length - 1, ...Array.from({ length: words.length - 1 }, (_, k) => k)]
+    : words.map((_, k) => k);
 
-    if (hasDirect1to1Hit) {
-      if (c.isDirect1to1) {
+  for (const wi of wordVisitOrder) {
+    const isHeadWord = isMultiWord && wi === words.length - 1;
+    const bucket = perWordClusters[wi] || [];
+    const bucketHasDirect = bucket.some((c) => c.isDirect1to1);
+
+    for (const c of bucket) {
+      domains.add(c.domain);
+      for (const b of c.blockedTokens) blocked.add(b);
+      for (const p of c.packIds) atlasIds.add(p);
+
+      let emittedTokens = [];
+      if (bucketHasDirect) {
+        if (c.isDirect1to1) {
+          emittedTokens = c.enTokens;
+          if (!hasDirectPhraseHit) {
+            c.enTokens.forEach((e) => primaryEn.add(e));
+          } else {
+            c.enTokens.slice(0, 3).forEach((e) => primaryEn.add(e));
+          }
+        } else if (!c.isCldrFallback) {
+          c.enTokens.slice(0, 2).forEach((e) => secondaryEn.add(e));
+        }
+      } else if (c.isExactLexicon) {
+        emittedTokens = c.enTokens;
         c.enTokens.forEach((e) => primaryEn.add(e));
+      } else if (!hasExactLexiconHit && phraseClusters.length === 0) {
+        emittedTokens = c.enTokens.slice(0, 4);
+        emittedTokens.forEach((e) => primaryEn.add(e));
+        c.enTokens.slice(4).forEach((e) => secondaryEn.add(e));
       } else if (!c.isCldrFallback) {
-        c.enTokens.slice(0, 2).forEach((e) => secondaryEn.add(e));
+        emittedTokens = c.enTokens.slice(0, 3);
+        emittedTokens.forEach((e) => secondaryEn.add(e));
       }
-    } else if (c.isExactLexicon) {
-      c.enTokens.forEach((e) => primaryEn.add(e));
-    } else if (!hasExactLexiconHit && phraseClusters.length === 0) {
-      c.enTokens.slice(0, 4).forEach((e) => primaryEn.add(e));
-      c.enTokens.slice(4).forEach((e) => secondaryEn.add(e));
-    } else {
-      c.enTokens.slice(0, 4).forEach((e) => secondaryEn.add(e));
+
+      if (isMultiWord) {
+        for (const tok of emittedTokens) {
+          if (isHeadWord) headEnSet.add(tok);
+          else modifierEnSet.add(tok);
+        }
+      }
     }
   }
 
@@ -1685,29 +1923,35 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     }
   }
 
-  // Always preserve any direct English/tech words typed by the user (e.g. `react`, `docker`, `python`, `commander`, `honeycomb`)
-  // AND expand abstract English intent words via `EN_CONCEPT_INTENT_MAP` so English queries like "commander" ALWAYS find crisp relevant icons!
+  // Always preserve any direct English/tech words typed by the user (e.g. `react`, `docker`, `python`, `tablet case`)
+  // AND expand abstract English intent words via `EN_CONCEPT_INTENT_MAP` in head-final order!
   let matchedEnglishIntent = false;
-  for (let i = 0; i < words.length; i++) {
-    const w = words[i];
-    const sw = stemmedWords[i];
+  for (const wi of wordVisitOrder) {
+    const w = words[wi];
+    const sw = stemmedWords[wi];
+    const isHeadWord = isMultiWord && wi === words.length - 1;
     const intentProxies = EN_CONCEPT_INTENT_MAP[w];
     if (intentProxies) {
       matchedEnglishIntent = true;
-      // A curated English intent entry ALWAYS beats accidental Turkish-cluster collisions
-      // and puts its #1 visual symbol FIRST (`football` -> `soccer-ball`, `stone` -> `rock`)!
+      perWordCuratedMatched[wi] = true;
       if (words.length === 1) {
         primaryEn.clear();
         secondaryEn.clear();
       }
-      intentProxies.forEach((p) => primaryEn.add(p));
+      intentProxies.forEach((p) => {
+        primaryEn.add(p);
+        if (isMultiWord) (isHeadWord ? headEnSet : modifierEnSet).add(p);
+      });
       primaryEn.add(w);
+      if (isMultiWord) (isHeadWord ? headEnSet : modifierEnSet).add(w);
       continue;
     }
     if (w.length >= 2 && !TURKISH_STOPWORDS.has(w)) {
-      const matchedTr = trPhraseMap.has(w) || trPhraseMap.has(sw);
+      const matchedTr =
+        perWordCuratedMatched[wi] || trPhraseMap.has(w) || trPhraseMap.has(sw);
       if (!matchedTr && (w.length >= 3 || words.length === 1)) {
         primaryEn.add(w);
+        if (isMultiWord) (isHeadWord ? headEnSet : modifierEnSet).add(w);
       }
     }
   }
@@ -1743,6 +1987,8 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   for (const b of blocked) {
     primaryEn.delete(b);
     secondaryEn.delete(b);
+    headEnSet.delete(b);
+    modifierEnSet.delete(b);
   }
   for (const p of primaryEn) {
     secondaryEn.delete(p);
@@ -1750,6 +1996,8 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
 
   const primaryArr = Array.from(primaryEn);
   const secondaryArr = Array.from(secondaryEn);
+  const headEnArr = Array.from(headEnSet);
+  const modifierEnArr = Array.from(modifierEnSet);
 
   const hasCuratedNonCldrMatch =
     phraseClusters.some((c) => !c.isCldrFallback) ||
@@ -1760,11 +2008,19 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     matchedEnglishIntent ||
     hasCuratedNonCldrMatch;
 
+  // True ONLY when either the full multi-word phrase hit a curated entry OR EVERY word in the query matched curated lexicon!
+  const allWordsMatched =
+    isHomonym ||
+    hasCuratedPhraseHit ||
+    (words.length > 0 && words.every((_, i) => perWordCuratedMatched[i]));
+
   return {
     normalizedQuery: norm,
     stemmedTokens: stemmedWords,
     primaryEnTokens: primaryArr,
     secondaryEnTokens: secondaryArr,
+    headEnTokens: hasCuratedPhraseHit ? [] : headEnArr,
+    modifierEnTokens: hasCuratedPhraseHit ? [] : modifierEnArr,
     expandedEnTokens: [...primaryArr, ...secondaryArr],
     expandedTrTokens: Array.from(expandedTr),
     blockedTokens: Array.from(blocked),
@@ -1772,5 +2028,8 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
     detectedDomains: Array.from(domains),
     isHomonym,
     hasLexiconMatch,
+    hasExactPhraseMatch: hasCuratedPhraseHit,
+    allWordsMatched,
+    isMultiWord,
   };
 }
