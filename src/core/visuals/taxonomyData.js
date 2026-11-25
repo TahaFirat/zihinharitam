@@ -19,6 +19,7 @@
 
 import { EXTRA_DOMAIN_LEXICON } from './taxonomyBankExtra.js';
 import { CLDR_TR_TO_EN_CONCEPTS } from './cldrTrLexicon.js';
+import { ACADEMIC_LEXICON_TR } from './academicLexiconTR.js';
 
 /**
  * English Concept-Intent Visual Proxy Map:
@@ -902,7 +903,7 @@ export const DIRECT_TR_EN_PAIRS = {
   kulaklik: ['headphones', 'headset', 'audio'],
   gunes: ['sun', 'solar', 'sunny'],
   yagmur: ['rain', 'cloud-rain', 'umbrella'],
-  kar: ['snow', 'snowflake', 'winter'],
+  kar: ['snow', 'snowflake', 'snowman', 'winter'],
   ruzgar: ['wind', 'breeze', 'turbine'],
   ates: ['fire', 'flame'],
   su: ['droplet', 'water-wave', 'potable-water', 'water'],
@@ -1542,6 +1543,22 @@ for (const [trWord, enArr] of Object.entries(DIRECT_TR_EN_PAIRS)) {
   });
 }
 
+// 1b. Register 400+ High-School & University Faculty 1-to-1 Academic Concepts (`ACADEMIC_LEXICON_TR`)
+// Never overrides an existing `DIRECT_TR_EN_PAIRS` entry or context-disambiguated homonym!
+for (const [trWord, enArr] of Object.entries(ACADEMIC_LEXICON_TR)) {
+  const normTr = normalizeTrToken(trWord);
+  if (!normTr || trExactMap.has(normTr) || HOMONYM_DISCIPLINE_RULES[normTr]) continue;
+  registerClusterInLookup({
+    domain: 'general',
+    trTerms: [normTr],
+    enTokens: enArr.map((s) => s.trim().toLowerCase()).filter(Boolean),
+    blockedTokens: [],
+    packIds: [],
+    isDirect1to1: true,
+    isExactLexicon: true,
+  });
+}
+
 for (const [domain, rows] of Object.entries(EXTRA_DOMAIN_LEXICON)) {
   for (const row of rows) {
     const [trPart, enPart] = row.split(':');
@@ -1845,6 +1862,13 @@ export function expandSemanticQueryV3(rawQuery, disciplineHint = 'system_design_
   }
 
   for (const c of phraseClusters) {
+    // STRICT TIER-1 ISOLATION: When a curated 1-to-1 entry (`isDirect1to1`) matched (e.g. `kar -> snow`),
+    // NEVER let unrelated multi-topic clusters (`kâr/ekonomi/enflasyon/faiz`) contaminate `secondaryEn` or `expandedTr`!
+    if (hasDirectPhraseHit && !c.isDirect1to1) {
+      for (const b of c.blockedTokens) blocked.add(b);
+      for (const p of c.packIds) atlasIds.add(p);
+      continue;
+    }
     domains.add(c.domain);
     if (hasDirect1to1Hit) {
       if (c.isDirect1to1) {

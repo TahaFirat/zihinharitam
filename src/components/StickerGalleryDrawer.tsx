@@ -114,6 +114,7 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
     setMetaphorChips(wave1.metaphorChips);
 
     let cancelled = false;
+    let onlineTimer: number | undefined;
     void VisualSearchOrchestrator.searchOfflineWave(
       effectiveQuery,
       mapContext,
@@ -123,37 +124,44 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
       if (cancelled || seq !== seqRef.current || controller.signal.aborted) return;
       setAllResults(offRes.results);
       setMetaphorChips(offRes.metaphorChips);
-    });
 
-    let onlineTimer: number | undefined;
-    if (
-      effectiveQuery.length >= 2 &&
-      typeof navigator !== 'undefined' &&
-      navigator.onLine
-    ) {
-      onlineTimer = window.setTimeout(async () => {
-        if (seq !== seqRef.current || controller.signal.aborted) return;
-        setLoadingOnline(true);
-        try {
-          const fedRes = await VisualSearchOrchestrator.searchFederatedGallery(
-            effectiveQuery,
-            mapContext,
-            branchColor,
-            controller.signal
-          );
-          if (seq === seqRef.current && !controller.signal.aborted) {
-            setAllResults(fedRes.results);
-            setMetaphorChips(fedRes.metaphorChips);
+      // Only trigger remote enrichment when query isn't already richly satisfied by curated offline icons
+      // (prevents curated words like "kar" from jumping/flashing 155ms after crisp offline icons appear!)
+      const needsOnline =
+        effectiveQuery.length >= 2 &&
+        typeof navigator !== 'undefined' &&
+        navigator.onLine &&
+        (!offRes.hasLexiconMatch ||
+          offRes.allWordsMatched === false ||
+          effectiveQuery.includes(' ') ||
+          offRes.results.length < 18 ||
+          (offRes.results[0]?.score ?? 0) < 0.9);
+
+      if (needsOnline) {
+        onlineTimer = window.setTimeout(async () => {
+          if (cancelled || seq !== seqRef.current || controller.signal.aborted) return;
+          setLoadingOnline(true);
+          try {
+            const fedRes = await VisualSearchOrchestrator.searchFederatedGallery(
+              effectiveQuery,
+              mapContext,
+              branchColor,
+              controller.signal
+            );
+            if (!cancelled && seq === seqRef.current && !controller.signal.aborted) {
+              setAllResults(fedRes.results);
+              setMetaphorChips(fedRes.metaphorChips);
+            }
+          } finally {
+            if (!cancelled && seq === seqRef.current && !controller.signal.aborted) {
+              setLoadingOnline(false);
+            }
           }
-        } finally {
-          if (seq === seqRef.current && !controller.signal.aborted) {
-            setLoadingOnline(false);
-          }
-        }
-      }, 155);
-    } else {
-      setLoadingOnline(false);
-    }
+        }, 140);
+      } else {
+        setLoadingOnline(false);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -318,8 +326,8 @@ export const StickerGalleryDrawer: React.FC<StickerGalleryDrawerProps> = ({
                 data-testid="gallery-search-input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="İkon ara (top, taş, kalp, roket...)"
-                autoFocus={!kb.isTouchDevice}
+                placeholder="İkon ara (kar, top, taş, tablet kılıfı...)"
+                autoFocus={false}
                 className="allow-text-input min-h-[42px] w-full rounded-xl border bg-transparent py-2 pr-9 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                 style={{ borderColor: 'var(--hud-border)' }}
               />

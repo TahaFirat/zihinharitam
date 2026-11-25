@@ -54,6 +54,10 @@ import {
 import { splitTitleAndInlineNote } from '../core/smartmap/TextToMindMapParser';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 import {
+  isDictationSupported,
+  SpeechDictationController,
+} from '../core/native/SpeechDictation';
+import {
   dismissNativeKeyboard,
   setStudioBarHeight,
   useKeyboardInset,
@@ -118,36 +122,6 @@ const PRIORITY_LABELS: Record<NodePriorityTag, string> = {
   review: '❓ Tekrar',
 };
 
-interface SpeechRecLike {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-function createSpeechRecognizer(): SpeechRecLike | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecLike;
-    webkitSpeechRecognition?: new () => SpeechRecLike;
-  };
-  const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-  if (!Ctor) return null;
-  try {
-    const rec = new Ctor();
-    rec.lang = 'tr-TR';
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    return rec;
-  } catch {
-    return null;
-  }
-}
-
 export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   activeNode,
   isEditingText,
@@ -193,6 +167,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [showTechBadgeInput, setShowTechBadgeInput] = useState(false);
   const [isListeningVoice, setIsListeningVoice] = useState(false);
+  const [voiceErrorMsg, setVoiceErrorMsg] = useState<string | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [dockOffset, setDockOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -204,7 +179,11 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
-  const voiceRecRef = useRef<SpeechRecLike | null>(null);
+  const dictationRef = useRef<SpeechDictationController | null>(null);
+  const dictationBaseTextRef = useRef<{ target: 'title' | 'note'; prefix: string }>({
+    target: 'title',
+    prefix: '',
+  });
   const requestSeqRef = useRef(0);
   const dockDragRef = useRef<{
     pointerId: number;
@@ -258,11 +237,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
 
   useEffect(() => {
     return () => {
-      try {
-        voiceRecRef.current?.stop();
-      } catch {
-        // Ignore
-      }
+      void dictationRef.current?.stop(false);
     };
   }, []);
 
@@ -450,38 +425,61 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
     isTitleInputFocused &&
     !isIconSearchFocused;
 
-  const toggleVoiceDictation = () => {
+  const toggleVoiceDictation = async () => {
     void hapticLight();
-    if (isListeningVoice) {
-      try {
-        voiceRecRef.current?.stop();
-      } catch {
-        // Ignore
-      }
+    setVoiceErrorMsg(null);
+    if (!dictationRef.current) {
+      dictationRef.current = new SpeechDictationController();
+    }
+    const ctrl = dictationRef.current;
+
+    if (isListeningVoice || ctrl.isListening()) {
+      await ctrl.stop(true);
       setIsListeningVoice(false);
       return;
     }
-    const rec = createSpeechRecognizer();
-    if (!rec) return;
-    voiceRecRef.current = rec;
-    setIsListeningVoice(true);
-    rec.onresult = (ev) => {
-      const spoken = ev.results?.[0]?.[0]?.transcript?.trim();
-      if (spoken) {
-        if (dockTab === 'note') {
-          const prev = activeNode.note?.trim() || '';
-          onUpdateNodeNote(activeNode.id, prev ? `${prev} ${spoken}` : spoken);
-        } else {
-          onUpdateNodeTitle(activeNode.id, spoken);
-        }
-        void hapticSuccess();
+
+    const target: 'title' | 'note' = dockTab === 'note' ? 'note' : 'title';
+    const existingText =
+      target === 'note'
+        ? (activeNode.note ?? '').trim()
+        : (activeNode.title ?? '').trim();
+    const isPlaceholderTitle =
+      target === 'title' &&
+      /^(yeni konu|yeni zihin haritası|merkez konu|ana konu)$/i.test(existingText);
+    dictationBaseTextRef.current = {
+      target,
+      prefix: isPlaceholderTitle ? '' : existingText,
+    };
+
+    const applySpokenText = (spoken: string) => {
+      const cleanSpoken = spoken.trim();
+      if (!cleanSpoken) return;
+      const { target: t, prefix } = dictationBaseTextRef.current;
+      const merged = prefix ? `${prefix} ${cleanSpoken}` : cleanSpoken;
+      if (t === 'note') {
+        onUpdateNodeNote(activeNode.id, merged);
+      } else {
+        onUpdateNodeTitle(activeNode.id, merged);
       }
     };
-    rec.onerror = () => setIsListeningVoice(false);
-    rec.onend = () => setIsListeningVoice(false);
-    try {
-      rec.start();
-    } catch {
+
+    const started = await ctrl.start({
+      locale: 'tr-TR',
+      onStateChange: (listening) => setIsListeningVoice(listening),
+      onPartial: (liveText) => {
+        applySpokenText(liveText);
+      },
+      onFinal: (finalText) => {
+        applySpokenText(finalText);
+        void hapticSuccess();
+      },
+      onError: (msg) => {
+        setVoiceErrorMsg(msg);
+        window.setTimeout(() => setVoiceErrorMsg(null), 3500);
+      },
+    });
+    if (!started) {
       setIsListeningVoice(false);
     }
   };
@@ -690,13 +688,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
           : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), bottom 160ms cubic-bezier(0.22, 1, 0.36, 1)',
       };
 
-  const voiceSupported =
-    typeof window !== 'undefined' &&
-    Boolean(
-      (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown })
-        .SpeechRecognition ||
-        (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
-    );
+  const voiceSupported = isDictationSupported();
 
   return (
     <div
@@ -792,6 +784,22 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                 if (!isEditingText) onRequestEditTitle();
               }}
               onChange={(e) => onUpdateNodeTitle(activeNode.id, e.target.value)}
+              onPaste={(e) => {
+                const pasted = e.clipboardData?.getData('text/plain') || '';
+                const lines = pasted
+                  .split(/\r?\n/)
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+                if (lines.length >= 2) {
+                  e.preventDefault();
+                  const head = lines[0];
+                  const body = lines.slice(1).join('\n');
+                  const existingNote = (activeNode.note ?? '').trim();
+                  onUpdateNodeTitle(activeNode.id, head);
+                  onUpdateNodeNote(activeNode.id, existingNote ? `${body}\n${existingNote}` : body);
+                  void hapticSuccess();
+                }
+              }}
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (e.key === 'Enter' || e.key === 'Escape') {
@@ -810,17 +818,21 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             {voiceSupported && (
               <button
                 type="button"
+                data-testid="studio-voice-dictate-btn"
                 onPointerDown={(e) => e.preventDefault()}
-                onClick={toggleVoiceDictation}
-                title="Sesle Yaz (Türkçe Dikte)"
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition active:scale-95 ${
+                onClick={() => void toggleVoiceDictation()}
+                title={isListeningVoice ? 'Dikteyi Durdur' : 'Sesle Yaz'}
+                className={`flex h-8 shrink-0 items-center justify-center gap-1 rounded-xl px-2 transition active:scale-95 ${
                   isListeningVoice
                     ? 'animate-pulse bg-rose-500 text-white'
-                    : 'opacity-65 hover:bg-slate-500/12 hover:opacity-100'
+                    : 'w-8 px-0 opacity-65 hover:bg-slate-500/12 hover:opacity-100'
                 }`}
               >
                 {isListeningVoice ? (
-                  <MicOff className="h-4 w-4" />
+                  <>
+                    <MicOff className="h-3.5 w-3.5" />
+                    <span className="text-[10.5px] font-black">Dinliyor</span>
+                  </>
                 ) : (
                   <Mic className="h-4 w-4" />
                 )}
@@ -888,6 +900,13 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         </div>
         )}
 
+        {/* Concise Dictation Feedback Pill (Only shown on mic error) */}
+        {voiceErrorMsg && (
+          <div className="mb-1.5 rounded-xl bg-rose-500/12 px-3 py-1.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+            {voiceErrorMsg}
+          </div>
+        )}
+
         {/* Smart 1-Tap Inline Description Split (`Başlık: Açıklama` -> Title + Branch Note Box!) */}
         {!isIconSearchFocused && !isSheetMinimized && inlineTitleSplitCandidate && (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-violet-500/35 bg-violet-500/10 px-2.5 py-1.5 text-[11px]">
@@ -939,7 +958,6 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => {
                 setDockTab('note');
-                setTimeout(() => noteInputRef.current?.focus(), 40);
               }}
               className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-extrabold transition active:scale-95 ${
                 dockTab === 'note'

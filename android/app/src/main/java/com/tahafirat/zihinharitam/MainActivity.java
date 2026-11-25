@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlayBillingPlugin.class);
+        registerPlugin(SpeechDictationPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Unlock native 90Hz / 120Hz / 144Hz high refresh rate on supported Android tablets & phones!

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2, Eye } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2, Eye, Mic, MicOff } from 'lucide-react';
 import {
   BRANCH_PALETTE,
   type AcademicDepartment,
@@ -16,6 +16,10 @@ import {
 } from '../core/visuals/TopicContextIntelligence';
 import { VisualSearchOrchestrator } from '../core/visuals/VisualSearchOrchestrator';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
+import {
+  isDictationSupported,
+  SpeechDictationController,
+} from '../core/native/SpeechDictation';
 import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
 interface SmartMapGeneratorModalProps {
@@ -393,6 +397,51 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [liveWikiBranches, setLiveWikiBranches] = useState<ProactiveBranchSuggestion[]>([]);
   const [loadingLiveBranches, setLoadingLiveBranches] = useState(false);
   const [showLivePreview, setShowLivePreview] = useState(false);
+  const [isDictating, setIsDictating] = useState(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
+  const dictationRef = useRef<SpeechDictationController | null>(null);
+  const dictationPrefixRef = useRef('');
+
+  useEffect(() => {
+    return () => {
+      void dictationRef.current?.stop(false);
+    };
+  }, []);
+
+  const toggleOutlineDictation = async () => {
+    void hapticLight();
+    setDictationError(null);
+    if (!dictationRef.current) {
+      dictationRef.current = new SpeechDictationController();
+    }
+    const ctrl = dictationRef.current;
+    if (isDictating || ctrl.isListening()) {
+      await ctrl.stop(true);
+      setIsDictating(false);
+      return;
+    }
+    dictationPrefixRef.current = outlineText.trim();
+    const applyText = (spoken: string) => {
+      const clean = spoken.trim();
+      if (!clean) return;
+      const base = dictationPrefixRef.current;
+      setOutlineText(base ? `${base}\n${clean}` : clean);
+    };
+    const ok = await ctrl.start({
+      locale: 'tr-TR',
+      onStateChange: (l) => setIsDictating(l),
+      onPartial: applyText,
+      onFinal: (txt) => {
+        applyText(txt);
+        void hapticSuccess();
+      },
+      onError: (msg) => {
+        setDictationError(msg);
+        window.setTimeout(() => setDictationError(null), 3500);
+      },
+    });
+    if (!ok) setIsDictating(false);
+  };
 
   const liveParsedPreview = useMemo(() => {
     const trimmed = outlineText.trim();
@@ -584,9 +633,40 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-extrabold opacity-75">
-                  Konu, Paragraf veya Açıklamalı Madde Listesi Yapıştırın:
-                </label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-xs font-extrabold opacity-75">
+                    Konu, Paragraf veya Açıklamalı Liste:
+                  </label>
+                  {isDictationSupported() && (
+                    <button
+                      type="button"
+                      data-testid="smart-map-dictate-btn"
+                      onClick={() => void toggleOutlineDictation()}
+                      className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold active:scale-95 ${
+                        isDictating
+                          ? 'animate-pulse bg-rose-500 text-white'
+                          : 'bg-sky-500/12 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300'
+                      }`}
+                    >
+                      {isDictating ? (
+                        <>
+                          <MicOff className="h-3.5 w-3.5" />
+                          <span>Durdur</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="h-3.5 w-3.5" />
+                          <span>Sesle Anlat</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {dictationError && (
+                  <div className="mb-1.5 rounded-xl bg-rose-500/12 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                    {dictationError}
+                  </div>
+                )}
                 <textarea
                   rows={kb.isKeyboardOpen ? 4 : 8}
                   value={outlineText}

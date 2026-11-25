@@ -1,4 +1,4 @@
-• Enhanced Text-to-Mind-Map: Automatically converts paragraphs, headings, and inline descriptions into structured branches with attached branch notes.
-• Improved Multi-Word & Multilingual Icon Search: Better accuracy for multi-word queries and broader visual coverage across everyday and academic topics.
-• Drawing & Keyboard Polish: Fixed-size draggable drawing toolbar and compact keyboard-open icon search layout on iPhone and iPad.
-• General stability and performance improvements.
+• Expanded Academic & Multilingual Icon Search: Comprehensive coverage across school and university subjects with instant stable results and multi-word query matching.
+• Native Voice Dictation: Seamless on-device speech dictation for branch titles, notes, and Text-to-Mind-Map creation.
+• Smarter Text-to-Mind-Map: Automatically separates headings, bold leads, and explanatory sentences into clean branches with attached descriptions.
+• Mobile & Tablet Polish: Finger drawing defaults to off in Draw mode (toggleable anytime), keyboard opens only when tapping text fields, and optimized GPU rendering for cooler, smoother performance.

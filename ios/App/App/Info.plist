@@ -31,6 +31,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Ders kitabınızdaki, defterinizdeki veya slaytlardaki diyagramların fotoğrafını çekip zihin haritanıza çıkartma olarak eklemek için kameranıza erişim gerekir.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Zihin haritası dallarına ve ders notlarına sesli dikte ile hızlıca metin eklemek için mikrofon erişimi gerekir.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Konuşmanızı doğrudan Türkçe ve İngilizce zihin haritası başlıklarına ve ders notlarına dönüştürmek için ses tanıma izni gerekir.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Oluşturduğunuz görsel zihin haritası posterlerini cihazınızın galerisine kaydetmek için izin gerekir.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -98,7 +98,12 @@ import {
   SettingsModal,
   type ThemePreference,
 } from './components/SettingsModal';
-import { hapticLight, hapticMedium, hapticSuccess } from './core/native/NativeBridge';
+import {
+  hapticLight,
+  hapticMedium,
+  hapticSuccess,
+  syncNativeStatusBarTheme,
+} from './core/native/NativeBridge';
 
 const THEME_PREF_KEY = 'zh_v4_theme_pref';
 const V4_SEED_MIGRATION_KEY = 'zh_v4_seed_migrated';
@@ -176,7 +181,9 @@ export const App: React.FC = () => {
   const [autoShapeEnabled, setAutoShapeEnabled] = useState(true);
   const [inkColor, setInkColor] = useState('#0F172A');
   const [inkWidth, setInkWidth] = useState(4.5);
-  const [stylusOnly, setStylusOnly] = useState(false);
+  // Finger drawing is OFF by default in Draw mode (Apple Pencil / Samsung S-Pen / Desktop Mouse draw immediately;
+  // fingers pan/zoom smoothly unless user explicitly enables finger drawing on the toolbar!)
+  const [stylusOnly, setStylusOnly] = useState(true);
   const [hardwareEraserActive, setHardwareEraserActive] = useState(false);
   const [selectedLassoIds, setSelectedLassoIds] = useState<string[]>([]);
   const prevDrawToolRef = useRef<InkToolType>('pen');
@@ -299,6 +306,7 @@ export const App: React.FC = () => {
       const resolvedDark =
         themePref === 'dark' || (themePref === 'system' && media.matches);
       document.documentElement.classList.toggle('dark-study', resolvedDark);
+      void syncNativeStatusBarTheme(resolvedDark);
       setDoc((prev) =>
         Boolean(prev.darkMode) === resolvedDark
           ? prev
@@ -662,7 +670,7 @@ export const App: React.FC = () => {
       setRevealedExamIds(new Set());
       setDoc(nextMap);
       setSelectedNodeId(autoEditRoot ? nextMap.rootNodeId : null);
-      setEditingNodeId(autoEditRoot ? nextMap.rootNodeId : null);
+      setEditingNodeId(autoEditRoot && !kbInset.isTouchDevice ? nextMap.rootNodeId : null);
       setActiveScreen('canvas');
       setTimeout(() => setFitTrigger((t) => t + 1), 45);
     },
@@ -1091,9 +1099,10 @@ export const App: React.FC = () => {
       });
 
       setSelectedNodeId(newId);
-      setEditingNodeId(newId);
+      // Never auto-pop virtual keyboard on touch devices; user taps title/search input explicitly when ready to type!
+      setEditingNodeId(kbInset.isTouchDevice ? null : newId);
     },
-    [doc, openPaywall, pushHistory]
+    [doc, kbInset.isTouchDevice, openPaywall, pushHistory]
   );
 
   const handleCreateBranchWithSticker = useCallback(

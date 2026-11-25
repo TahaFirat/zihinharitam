@@ -342,49 +342,39 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
 
   return (
     <>
-      {/* Top Status Banner for Hardware S-Pen/Apple Pencil Eraser or Lasso Selection */}
-      {(hardwareEraserActive || selectedLassoCount > 0) && (
+      {/* Compact Floating Lasso Selection Bar ONLY when strokes are actively selected (zero noisy hardware-eraser text banners!) */}
+      {selectedLassoCount > 0 && (
         <div
           className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3"
           style={{ top: 'max(72px, calc(var(--safe-top) + 64px))' }}
         >
-          {hardwareEraserActive ? (
-            <div
-              data-testid="hardware-eraser-pill"
-              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3.5 py-1.5 text-xs font-black text-white shadow-lg ring-2 ring-white/25"
-            >
-              <Eraser className="h-3.5 w-3.5" />
-              <span>Kalem Silgi Tuşu Aktif — Çizgilerin Üzerinden Geçin</span>
+          <div
+            data-testid="lasso-selection-bar"
+            onPointerDown={(e) => e.stopPropagation()}
+            className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-indigo-500/40 bg-slate-900/95 px-3 py-1.5 text-xs font-extrabold text-white shadow-xl"
+          >
+            <span>{selectedLassoCount} seçili</span>
+            <div className="flex items-center gap-1">
+              {INK_COLORS.slice(1, 6).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onRecolorLassoSelected(c)}
+                  className="h-5 w-5 rounded-full border border-white/80 active:scale-90"
+                  style={{ backgroundColor: c }}
+                  aria-label="Boya"
+                />
+              ))}
             </div>
-          ) : (
-            <div
-              data-testid="lasso-selection-bar"
-              onPointerDown={(e) => e.stopPropagation()}
-              className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-indigo-500/40 bg-slate-900/95 px-3 py-1.5 text-xs font-extrabold text-white shadow-xl backdrop-blur-md"
+            <button
+              type="button"
+              onClick={onDeleteLassoSelected}
+              className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-2.5 py-1 text-xs font-black text-white active:scale-95"
             >
-              <span>{selectedLassoCount} çizim seçili (Sürükleyip taşıyın)</span>
-              <div className="flex items-center gap-1">
-                {INK_COLORS.slice(1, 6).map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => onRecolorLassoSelected(c)}
-                    className="h-5 w-5 rounded-full border border-white/80 active:scale-90"
-                    style={{ backgroundColor: c }}
-                    title="Seçilileri Boya"
-                  />
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={onDeleteLassoSelected}
-                className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-2.5 py-1 text-xs font-black text-white active:scale-95"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Sil</span>
-              </button>
-            </div>
-          )}
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Sil</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -611,13 +601,14 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
               <button
                 type="button"
                 data-testid="ink-palm-reject-btn"
+                aria-pressed={!stylusOnly}
                 onClick={() => {
                   void hapticLight();
                   onToggleStylusOnly();
                 }}
-                title={stylusOnly ? 'Sadece Kalem Aktif' : 'Kalem + Parmak'}
+                title={!stylusOnly ? 'Parmakla Çizim Açık' : 'Parmakla Çizim Kapalı (Açmak için dokun)'}
                 className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-95 ${
-                  stylusOnly ? 'bg-indigo-500 text-white' : 'bg-slate-500/10 opacity-80'
+                  !stylusOnly ? 'bg-emerald-500 text-white shadow-xs' : 'bg-slate-500/10 opacity-75'
                 }`}
               >
                 <Hand className="h-4 w-4" />
@@ -892,20 +883,21 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                   <button
                     type="button"
                     data-testid="ink-palm-reject-btn"
+                    aria-pressed={!stylusOnly}
                     onClick={() => {
                       void hapticLight();
                       onToggleStylusOnly();
                     }}
-                    title="Avuç İçi Reddi: Açıkken sadece S-Pen / Apple Pencil çizer"
+                    title={!stylusOnly ? 'Parmakla Çizim Açık' : 'Parmakla Çizim Kapalı (Açmak için dokun)'}
                     className={`inline-flex min-h-[36px] items-center gap-1 rounded-xl border px-2.5 text-xs font-extrabold whitespace-nowrap active:scale-95 ${
-                      stylusOnly
-                        ? 'border-indigo-500 bg-indigo-500 text-white shadow-xs'
-                        : 'border-slate-500/20 bg-slate-500/8 opacity-85 hover:opacity-100'
+                      !stylusOnly
+                        ? 'border-emerald-500 bg-emerald-500 text-white shadow-xs'
+                        : 'border-slate-500/20 bg-slate-500/8 opacity-80 hover:opacity-100'
                     }`}
                   >
                     <Hand className="h-3.5 w-3.5" />
-                    <span className="hidden lg:inline">
-                      {stylusOnly ? 'Sadece Kalem' : 'Kalem+Parmak'}
+                    <span className="hidden sm:inline">
+                      {!stylusOnly ? 'Parmak Açık' : 'Parmak'}
                     </span>
                   </button>
 

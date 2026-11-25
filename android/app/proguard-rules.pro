@@ -19,9 +19,10 @@
     public static int i(...);
 }
 
-# Keep App Entrypoint & Native Google Play Billing 8.0.0 Capacitor Plugin
+# Keep App Entrypoint & Native Capacitor Plugins (Play Billing + Speech Dictation)
 -keep class com.tahafirat.zihinharitam.MainActivity { *; }
 -keep class com.tahafirat.zihinharitam.PlayBillingPlugin { *; }
+-keep class com.tahafirat.zihinharitam.SpeechDictationPlugin { *; }
 
 # Keep Capacitor Plugins discovered via capacitor.plugins.json / @CapacitorPlugin annotations
 -keep @com.getcapacitor.annotation.CapacitorPlugin class * {

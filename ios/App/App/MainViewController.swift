@@ -38,6 +38,7 @@ class MainViewController: CAPBridgeViewController {
         super.capacitorDidLoad()
         if #available(iOS 15.0, *) {
             bridge?.registerPluginInstance(StoreKitPlugin())
+            bridge?.registerPluginInstance(SpeechDictationPlugin())
         }
     }
 

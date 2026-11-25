@@ -260,10 +260,20 @@ export class VisualSearchOrchestrator {
       expanded.blockedTokens.map((b) => normalizeTrToken(b))
     );
 
+    const offlineHasStrongFullMatch =
+      Boolean(expanded.hasLexiconMatch) &&
+      Boolean(expanded.allWordsMatched) &&
+      (!expanded.isMultiWord || Boolean(expanded.hasExactPhraseMatch)) &&
+      offlineWave.results.length >= 6;
+
+    // ZERO-REGRESSION GUARD: When our curated offline dictionary ALREADY matched the exact word/phrase
+    // with high confidence (e.g. `kar -> snow`, `top -> soccer ball`, `taş -> rock`), NEVER overwrite or
+    // run live Google Translate (which would translate `kar` -> `profit`!) or ARASAAC TR substring search!
     const needsFullPhraseTranslation =
-      !expanded.allWordsMatched ||
-      !expanded.hasLexiconMatch ||
-      (Boolean(expanded.isMultiWord) && !expanded.hasExactPhraseMatch);
+      !offlineHasStrongFullMatch &&
+      (!expanded.allWordsMatched ||
+        !expanded.hasLexiconMatch ||
+        (Boolean(expanded.isMultiWord) && !expanded.hasExactPhraseMatch));
 
     // Step 2: Parallel Live Turkish->English Full-Phrase Translation + optional Wiki bridge
     const [liveTranslatedEn, wikiBridge] = await Promise.all([
@@ -302,11 +312,7 @@ export class VisualSearchOrchestrator {
       new Set([liveTranslatedEn || primaryEn, translatedHeadWord, ...(expanded.headEnTokens ?? [])].filter(Boolean))
     );
 
-    // Step 3: Race ALL 4 Global Engines in Parallel!
-    // - Re-query local 43,722-icon Vibrant Offline Index with `liveTranslatedEn` (guarantees 100% TR = EN parity!)
-    // - Query Iconify 546,996+ Live Vector API (full phrase + head noun)
-    // - Query ARASAAC 14,000+ Native TR + EN Everyday Object Pictograms
-    // - Query Shared AI Sticker Pool
+    // Step 3: Race Global Engines in Parallel (skipping ARASAAC TR substring noise when curated offline already nailed it!)
     const settled = await Promise.race([
       Promise.allSettled([
         liveTranslatedEn && liveTranslatedEn.toLowerCase() !== clean.toLowerCase()
@@ -321,11 +327,13 @@ export class VisualSearchOrchestrator {
           hasExactOfflineLexicon: Boolean(expanded.hasLexiconMatch),
           allWordsMatched: Boolean(expanded.allWordsMatched),
           hasExactPhraseMatch: Boolean(expanded.hasExactPhraseMatch),
-          preTranslatedEn: liveTranslatedEn,
+          preTranslatedEn: offlineHasStrongFullMatch ? primaryEn : liveTranslatedEn,
           headEnTerms: expanded.headEnTokens,
           blockedTokens: expanded.blockedTokens,
         }),
-        searchArasaacPictograms([clean], arasaacEnTerms, signal),
+        offlineHasStrongFullMatch
+          ? Promise.resolve([] as VisualSearchResult[])
+          : searchArasaacPictograms([clean], arasaacEnTerms, signal),
         AIStickerDirector.searchSharedPool(clean, 4),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>
@@ -377,14 +385,6 @@ export class VisualSearchOrchestrator {
       combined.push(item);
     };
 
-    // Only anchor initial offline hits above live translated 546K+ icons when EVERY word matched locally
-    // (or the exact full multi-word phrase matched locally)!
-    const offlineHasStrongFullMatch =
-      Boolean(expanded.hasLexiconMatch) &&
-      Boolean(expanded.allWordsMatched) &&
-      (!expanded.isMultiWord || Boolean(expanded.hasExactPhraseMatch)) &&
-      offlineWave.results.length >= 6;
-
     if (!offlineHasStrongFullMatch) {
       // Unknown word OR partial multi-word compound -> put live full-phrase translated results FIRST!
       for (const s of settled) {
@@ -400,14 +400,20 @@ export class VisualSearchOrchestrator {
         pushUnique({ ...offItem, score: Math.min(offItem.score, 0.86) });
       }
     } else {
+      // Anchored curated offline results ALWAYS stay stably at the top (zero jump / zero vanish after 155ms!);
+      // extra 546K remote icons append cleanly underneath!
       for (const offItem of offlineWave.results) {
         pushUnique(offItem);
       }
+      const remoteCap = Math.min(
+        0.84,
+        (offlineWave.results[Math.min(5, offlineWave.results.length - 1)]?.score ?? 0.86) - 0.02
+      );
       for (const s of settled) {
         if (s.status === 'fulfilled') {
           for (const remoteItem of s.value) {
             if (isRemoteItemRelevant(remoteItem)) {
-              pushUnique({ ...remoteItem, score: Math.min(remoteItem.score, 0.91) });
+              pushUnique({ ...remoteItem, score: Math.min(remoteItem.score, remoteCap) });
             }
           }
         }

@@ -3,8 +3,29 @@ import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { StatusBar, Style as StatusBarStyle } from '@capacitor/status-bar';
 
 export const isNativePlatform = (): boolean => Capacitor.isNativePlatform();
+
+/**
+ * Keeps iOS & Android system Status Bar icons & tint 100% synced with the active Light/Dark studio theme
+ * so the app feels genuinely indistinguishable from a native SwiftUI / Jetpack Compose app!
+ */
+export async function syncNativeStatusBarTheme(isDark: boolean): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await StatusBar.setStyle({
+      style: isDark ? StatusBarStyle.Dark : StatusBarStyle.Light,
+    });
+    if (Capacitor.getPlatform() === 'android') {
+      await StatusBar.setBackgroundColor({
+        color: isDark ? '#0F141D' : '#FAF9F5',
+      });
+    }
+  } catch {
+    // Ignore unsupported status-bar platforms
+  }
+}
 
 const HAPTICS_PREF_KEY = 'zh_v4_haptics_enabled';
 

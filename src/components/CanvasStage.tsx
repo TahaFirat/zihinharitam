@@ -2085,7 +2085,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       }
 
       lastTapRef.current = { nodeId: nd.nodeId, time: now };
-      if (selectedNodeId === nd.nodeId && editingNodeId !== nd.nodeId) {
+      if (!kbSnap.isTouchDevice && selectedNodeId === nd.nodeId && editingNodeId !== nd.nodeId) {
         onStartEditing(nd.nodeId);
       } else {
         void hapticLight();
@@ -2708,7 +2708,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                           setEditingLinkId(null);
                         }
                       }}
-                      autoFocus
+                      autoFocus={!kbSnap.isTouchDevice}
                       placeholder="İlişki etiketi..."
                       className="allow-text-input w-32 bg-transparent text-[11px] font-extrabold outline-none"
                     />
@@ -2972,7 +2972,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                           onCreateChildBranch(node.id, autoPos.x, autoPos.y, color);
                         }
                       }}
-                      autoFocus
+                      autoFocus={!kbSnap.isTouchDevice}
                       onFocus={(e) => {
                         if (window.scrollY !== 0) window.scrollTo(0, 0);
                         e.currentTarget.select();

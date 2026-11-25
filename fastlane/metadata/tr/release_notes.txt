@@ -1,4 +1,4 @@
-• Gelişmiş Metinden Zihin Haritası: Paragraf, başlık ve açıklamalı maddeleri otomatik olarak dal başlığı ve dal açıklamasına (not kutusuna) dönüştürür.
-• Akıllı Çok Kelimeli İkon Arama: Türkçe ve İngilizce çok kelimeli aramalarda hedef kavramı doğrudan önceliklendirir ve tüm kategorilerde zengin görsel önerileri sunar.
-• Çizim & Klavye İyileştirmeleri: Sabit boyutlu taşınabilir çizim araç çubuğu ve iPhone/iPad klavye açıkken tam görünür ikon arama deneyimi.
-• Genel kararlılık ve hız iyileştirmeleri.
+• Gelişmiş Akademik & Türkçe İkon Arama: Lise ve tüm üniversite bölümlerini kapsayan genişletilmiş ikon araması, kararlı anlık öneriler ve çok kelimeli Türkçe-İngilizce eşleştirme.
+• Native Sesle Dikte: Dal eklerken veya metinden zihin haritası oluştururken iOS ve Android yerel ses tanıma ile kesintisiz konuşarak not alma.
+• Akıllı Metinden Zihin Haritası: Başlık altı açıklama cümlelerini, madde işaretlerini ve kalın başlıkları otomatik olarak dal başlığı ve açıklama kutusuna dönüştürür.
+• Mobil & Tablet Deneyimi: Çizim modunda parmakla çizim varsayılan kapalı (isteğe bağlı tek dokunuşla açılabilir), ikon seçerken gereksiz klavye açılmaması ve düşük GPU tüketimiyle daha akıcı performans.

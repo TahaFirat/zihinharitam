@@ -204,13 +204,21 @@ svg {
   }
 }
 
-/* Disable expensive GPU backdrop-filter Gaussian blur passes on touch devices (phones/tablets) to keep 60/120 FPS silk-smooth & zero overheating */
+/* Native mobile polish: remove browser tap focus rings while keeping keyboard accessibility */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Disable ALL expensive GPU backdrop-filter Gaussian blur passes (including 2xl/3xl!) on touch devices (phones/tablets) to keep 60/120 FPS silk-smooth & ZERO device heating */
 @media (pointer: coarse) {
   .backdrop-blur-xs,
   .backdrop-blur-sm,
   .backdrop-blur-md,
   .backdrop-blur-lg,
-  .backdrop-blur-xl {
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

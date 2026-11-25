@@ -102,6 +102,19 @@ export function splitTitleAndInlineNote(rawText: string): {
       .replace(/^_{1,2}([^_]+)_{1,2}/, '$1')
       .trim();
 
+  // 4b. Split Markdown Bold Lead (`**Başlık** açıklama metni...`)
+  const boldLeadMatch = text.match(/^\*\*([^*]{2,56})\*\*\s*[:\-–—]?\s+(.{6,})$/);
+  if (boldLeadMatch) {
+    return {
+      title: boldLeadMatch[1].trim(),
+      note: stripMd(boldLeadMatch[2].trim()),
+      techBadge,
+      checked,
+      priorityTag,
+      linkUrl,
+    };
+  }
+
   // 5. Split `"Başlık: Açıklama"` (ignore times like 10:30 or ratios like 1:2)
   const colonIdx = text.search(/(?<!\d):(?!\d|\/\/)/);
   if (colonIdx > 1 && colonIdx <= 68) {
@@ -119,12 +132,12 @@ export function splitTitleAndInlineNote(rawText: string): {
     }
   }
 
-  // 6. Split `"Başlık — Açıklama"` / `"Başlık – Açıklama"` / `"Başlık - Uzun açıklama"`
-  const dashMatch = text.match(/^(.{2,64}?)\s+(?:—|–|->|=>|-(?=\s))\s+(.{8,})$/);
+  // 6. Split `"Başlık — Açıklama"` / `"Başlık – Açıklama"` / `"Başlık - Açıklama"` / `"Başlık = Açıklama"` / `"Başlık | Açıklama"`
+  const dashMatch = text.match(/^(.{2,64}?)\s+(?:—|–|->|=>|=|\||-(?=\s))\s+(.{6,})$/);
   if (dashMatch) {
     const left = stripMd(dashMatch[1].trim());
     const right = stripMd(dashMatch[2].trim());
-    if (left.length >= 2 && right.length >= 8) {
+    if (left.length >= 2 && right.length >= 6) {
       return {
         title: left,
         note: right,
@@ -598,13 +611,22 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
       continue;
     }
 
-    // 2. Plain indented explanatory paragraph line immediately under a bullet/heading -> attach as `note` instead of breaking the tree!
-    if (
+    // 2. Plain explanatory sentence line immediately under a heading / numbered / bullet node -> attach cleanly to `lastCreatedNode.note`!
+    // Recognizes Turkish/English declarative sentences (ending in `.`/`!`, Turkish predicates like `-dir/-dır/-tir/-sağlar/-oluşur/-denir/-üretir`, or indented prose)
+    const looksLikeDeclarativeExplanation =
       line.kind === 'plain' &&
-      lastCreatedNode.id !== rootId &&
-      (line.indent >= 2 || line.content.length > 62) &&
-      !line.content.includes(':')
-    ) {
+      !line.content.includes(':') &&
+      (line.indent >= 2 ||
+        line.content.length > 54 ||
+        /[.!?]$/.test(line.content) ||
+        /\b(?:dir|dır|tir|tır|dur|dür|tur|tür|sağlar|saglar|oluşur|olusur|denir|verilir|bulunur|yapılır|yapilir|kullanılır|kullanilir|gösterir|gosterir|edilir|üretir|uretir|taşır|tasir|korur|düzenler|duzenler|içerir|icerir|ayrılır|ayrilir|is|are|was|were|provides|contains)\b/i.test(
+          line.content
+        ) ||
+        /(?:dir|dır|tir|tır|dur|dür|tur|tür|mektedir|maktadır|lidir|lıdır|sidir|sıdır)[.!]?$/i.test(
+          line.content
+        ));
+
+    if (looksLikeDeclarativeExplanation && lastCreatedNode.id !== rootId) {
       lastCreatedNode.note = appendNote(lastCreatedNode.note, line.content);
       continue;
     }
