@@ -7,7 +7,9 @@ import { EN_CONCEPT_INTENT_MAP } from '../taxonomyData.js';
 
 const ICONIFY_API = 'https://api.iconify.design';
 
+// Strictly verified commercial-safe & attributed icon collections ONLY (MIT, Apache-2.0, ISC, CC-BY 4.0/3.0 — zero NC / SA / unverified packs!)
 const LIVE_COLORFUL_SETS = new Set([
+  'fluent-emoji',
   'fluent-emoji-flat',
   'fluent-color',
   'noto',
@@ -15,70 +17,70 @@ const LIVE_COLORFUL_SETS = new Set([
   'streamline-color',
   'streamline-emojis',
   'streamline-plump-color',
-  'streamline-freehand-color',
-  'streamline-flex-color',
-  'streamline-ultimate-color',
-  'streamline-kameleon-color',
-  'streamline-stickies-color',
-  'withicons-soft3d',
-  'withicons-sticker',
-  'withicons-pastel',
-  'withicons-clay',
-  'withicons-kawaii',
-  'withicons-glass',
-  'withicons-suite',
-  'openmoji',
   'emojione',
   'fxemoji',
   'icon-park',
   'flat-color-icons',
   'meteocons',
   'circle-flags',
-  'flag',
-  'flagpack',
   'vscode-icons',
   'logos',
   'devicon',
   'skill-icons',
   'marketeq',
-  'iconito',
-  'thesvg-color',
-  'token-branded',
+]);
+
+const LIVE_MONO_SAFE_SETS = new Set([
+  'healthicons',
+  'medical-icon',
+  'game-icons',
+  'mdi',
+  'lucide',
+  'ph',
+  'tabler',
+  'carbon',
+  'fa6-solid',
+]);
+
+const ALLOWED_LIVE_SETS = new Set([...LIVE_COLORFUL_SETS, ...LIVE_MONO_SAFE_SETS]);
+
+// Brand / product logo packs are NEVER locked behind a paid PRO paywall (strictly FREE educational reference tier)
+const TRADEMARK_REFERENCE_SETS = new Set([
+  'logos',
+  'devicon',
+  'skill-icons',
+  'vscode-icons',
 ]);
 
 const SET_PRIORITY_BOOST: Record<string, number> = {
-  'withicons-soft3d': 1.38,
-  'withicons-sticker': 1.35,
-  'fluent-emoji-flat': 1.34,
+  'fluent-emoji': 1.36,
+  'fluent-emoji-flat': 1.35,
+  'streamline-plump-color': 1.34,
   'fluent-color': 1.32,
   'streamline-color': 1.30,
   'streamline-emojis': 1.29,
   noto: 1.27,
   twemoji: 1.25,
+  fxemoji: 1.24,
   'icon-park': 1.23,
-  openmoji: 1.22,
-  emojione: 1.20,
+  emojione: 1.21,
   'flat-color-icons': 1.20,
+  marketeq: 1.22,
   meteocons: 1.22,
   'circle-flags': 1.20,
-  'vscode-icons': 1.18,
-  logos: 1.16,
-  devicon: 1.16,
-  'skill-icons': 1.16,
-  'thesvg-color': 1.15,
+  'vscode-icons': 1.16,
+  logos: 1.15,
+  devicon: 1.15,
+  'skill-icons': 1.15,
   healthicons: 1.18,
+  'medical-icon': 1.17,
   'game-icons': 1.14,
-  mdi: 1.10,
-  'material-symbols': 1.10,
-  solar: 1.12,
+  ph: 1.12,
   lucide: 1.12,
-  hugeicons: 1.10,
-  mingcute: 1.09,
-  ph: 1.09,
+  mdi: 1.10,
+  carbon: 1.10,
   tabler: 1.08,
   'fa6-solid': 1.07,
-  'fa7-solid': 1.08,
-  'simple-icons': 1.08,
 };
 
 const translationCache = new Map<string, string>();
@@ -94,8 +96,8 @@ const NOISY_LIVE_WORDS = new Set([
 ]);
 
 /**
- * Ultra-fast, zero-key Turkish -> English translation racing Google Translate public gtx endpoint
- * against MyMemory (`<180ms` typical!) so ANY rare Turkish concept immediately resolves cleanly!
+ * Zero-key Turkish -> English translation via official public MyMemory REST endpoint
+ * (used only when a rare Turkish phrase is absent from the offline dictionary & Wikipedia bridge).
  */
 export async function translateTurkishToEnglishLive(
   rawQuery: string,
@@ -117,63 +119,20 @@ export async function translateTurkishToEnglishLive(
     return translated;
   };
 
-  const tryGoogleGtx = async (): Promise<string | null> => {
-    try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q=${encodeURIComponent(
-        clean
-      )}`;
-      const res = await fetch(url, { signal });
-      if (!res.ok) return null;
-      const json = (await res.json()) as unknown[];
-      const segments = Array.isArray(json?.[0]) ? (json[0] as unknown[][]) : [];
-      const joined = segments.map((s) => String(s?.[0] || '')).join(' ');
-      return sanitizeTrResult(joined);
-    } catch {
-      return null;
-    }
-  };
-
-  const tryMyMemory = async (): Promise<string | null> => {
-    try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-        clean
-      )}&langpair=tr|en`;
-      const res = await fetch(url, { signal });
-      if (!res.ok) return null;
-      const json = (await res.json()) as {
-        responseData?: { translatedText?: string };
-      };
-      return sanitizeTrResult(json?.responseData?.translatedText || '');
-    } catch {
-      return null;
-    }
-  };
-
   try {
-    const firstValid = await new Promise<string | null>((resolve) => {
-      let pending = 2;
-      let resolved = false;
-      const settle = (val: string | null) => {
-        if (resolved) return;
-        if (val) {
-          resolved = true;
-          resolve(val);
-          return;
-        }
-        pending--;
-        if (pending <= 0) {
-          resolved = true;
-          resolve(null);
-        }
-      };
-      void tryGoogleGtx().then(settle);
-      void tryMyMemory().then(settle);
-    });
-
-    if (firstValid) {
-      translationCache.set(clean, firstValid);
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+      clean
+    )}&langpair=tr|en`;
+    const res = await fetch(url, { signal });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      responseData?: { translatedText?: string };
+    };
+    const translated = sanitizeTrResult(json?.responseData?.translatedText || '');
+    if (translated) {
+      translationCache.set(clean, translated);
     }
-    return firstValid;
+    return translated;
   } catch {
     return null;
   }
@@ -184,24 +143,25 @@ function classifyLivePrefix(prefix: string): {
   mode: VisualStyleMode;
   isColor: boolean;
 } {
-  const isColor = LIVE_COLORFUL_SETS.has(prefix) || prefix.includes('-color') || prefix.startsWith('withicons-');
+  const isColor = LIVE_COLORFUL_SETS.has(prefix);
   if (
-    prefix === 'withicons-soft3d' ||
+    prefix === 'fluent-emoji' ||
     prefix === 'fluent-color' ||
     prefix === 'fluent-emoji-flat' ||
+    prefix === 'streamline-plump-color' ||
     prefix === 'streamline-color' ||
     prefix === 'meteocons' ||
-    prefix.includes('-color')
+    prefix === 'marketeq'
   ) {
     return { category: '3d_color', mode: '3d', isColor: true };
   }
   if (
     prefix === 'noto' ||
     prefix === 'twemoji' ||
-    prefix === 'openmoji' ||
+    prefix === 'fxemoji' ||
     prefix === 'emojione' ||
     prefix === 'streamline-emojis' ||
-    prefix === 'withicons-sticker' ||
+    prefix === 'flat-color-icons' ||
     prefix === 'circle-flags'
   ) {
     return { category: 'hand_drawn', mode: 'illustration', isColor: true };
@@ -209,14 +169,7 @@ function classifyLivePrefix(prefix: string): {
   if (prefix === 'healthicons' || prefix === 'medical-icon') {
     return { category: 'medical_academic', mode: 'illustration', isColor };
   }
-  if (
-    prefix === 'logos' ||
-    prefix === 'devicon' ||
-    prefix === 'skill-icons' ||
-    prefix === 'vscode-icons' ||
-    prefix === 'simple-icons' ||
-    prefix === 'thesvg-color'
-  ) {
+  if (TRADEMARK_REFERENCE_SETS.has(prefix)) {
     return { category: 'system_arch', mode: 'illustration', isColor };
   }
   return {
@@ -352,17 +305,16 @@ export async function searchIconifyLive(
   const isCompoundLive = headWordSet.size > 0 && modWordSet.size > 0;
   const allowNoisy = primaryWords.some((w) => NOISY_LIVE_WORDS.has(w));
 
-  const COLORFUL_PREFIX_FILTER =
-    'fluent-emoji,fluent-emoji-flat,streamline-plump-color,fluent-color,streamline-color,emojione,noto,fxemoji,streamline-emojis,marketeq,withicons-soft3d,withicons-sticker,flat-color-icons,icon-park,twemoji,meteocons,logos,devicon,skill-icons,healthicons';
+  const COLORFUL_PREFIX_FILTER = Array.from(LIVE_COLORFUL_SETS).join(',');
+  const MONO_SAFE_PREFIX_FILTER = Array.from(LIVE_MONO_SAFE_SETS).join(',');
 
   const fetchBatch = async (
     q: string,
     limit: number,
-    prefixes?: string
+    prefixes: string
   ): Promise<string[]> => {
     try {
-      const prefixParam = prefixes ? `&prefixes=${encodeURIComponent(prefixes)}` : '';
-      const url = `${ICONIFY_API}/search?query=${encodeURIComponent(q)}&limit=${limit}${prefixParam}`;
+      const url = `${ICONIFY_API}/search?query=${encodeURIComponent(q)}&limit=${limit}&prefixes=${encodeURIComponent(prefixes)}`;
       const res = await fetch(url, { signal });
       if (!res.ok) return [];
       const data = (await res.json()) as { icons?: string[] };
@@ -372,12 +324,12 @@ export async function searchIconifyLive(
     }
   };
 
-  // Query FULL PHRASE (colorful + full 546K catalog) AND HEAD NOUN in parallel!
+  // Query verified commercial-safe colorful + monochrome catalogs in parallel!
   const batches = await Promise.all([
     fetchBatch(primaryQuery, 32, COLORFUL_PREFIX_FILTER),
-    fetchBatch(primaryQuery, 32),
+    fetchBatch(primaryQuery, 28, MONO_SAFE_PREFIX_FILTER),
     headQuery ? fetchBatch(headQuery, 24, COLORFUL_PREFIX_FILTER) : Promise.resolve([]),
-    headQuery ? fetchBatch(headQuery, 20) : Promise.resolve([]),
+    headQuery ? fetchBatch(headQuery, 18, MONO_SAFE_PREFIX_FILTER) : Promise.resolve([]),
     secondaryQuery ? fetchBatch(secondaryQuery, 20, COLORFUL_PREFIX_FILTER) : Promise.resolve([]),
   ]);
 
@@ -400,6 +352,8 @@ export async function searchIconifyLive(
     const prefix = fullId.slice(0, colonIdx);
     const name = fullId.slice(colonIdx + 1);
     if (!name || name.length < 2) continue;
+    // Hard license gate: reject any non-whitelisted collection
+    if (!ALLOWED_LIVE_SETS.has(prefix)) continue;
 
     const cleanName = name
       .toLowerCase()
@@ -482,12 +436,18 @@ export async function searchIconifyLive(
       aspectRatio: 1,
       score: rankScore,
       providerName: isColor
-        ? `Iconify 540K+ (${prefix})`
+        ? `Iconify (${prefix})`
         : `Iconify Vektör (${prefix})`,
       isVectorSvg: true,
       iconifyId: fullId,
-      // V8 Quality Tiering: Simple 1-color monochrome outline icons are FREE; ALL colorful/3D/illustrated sets are PRO!
-      tier: isColor ? 'pro' : 'free',
+      // Monochrome outline sets, starter flat packs & third-party trademark logos are ALWAYS FREE (never paywalled behind PRO!)
+      tier:
+        !isColor ||
+        TRADEMARK_REFERENCE_SETS.has(prefix) ||
+        prefix === 'fxemoji' ||
+        prefix === 'flat-color-icons'
+          ? 'free'
+          : 'pro',
     });
   }
 

@@ -1,5 +1,19 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Wand2, Plus, Sparkles, Check, FileText, Loader2, Eye, Mic, MicOff } from 'lucide-react';
+import {
+  X,
+  Wand2,
+  Plus,
+  Sparkles,
+  Check,
+  FileText,
+  Loader2,
+  Eye,
+  Mic,
+  MicOff,
+  Trash2,
+  ArrowRight,
+  BookOpen,
+} from 'lucide-react';
 import {
   BRANCH_PALETTE,
   type AcademicDepartment,
@@ -9,7 +23,11 @@ import {
   type ProactiveBranchSuggestion,
 } from '../types/mindmap';
 import { computeRadialAutoLayout } from '../core/canvas/RadialAutoLayout';
-import { parseTextToMindMapOutline } from '../core/smartmap/TextToMindMapParser';
+import {
+  convertLectureNoteToMindMapFormat,
+  parseTextToMindMapOutline,
+  type LectureNoteConversionResult,
+} from '../core/smartmap/TextToMindMapParser';
 import {
   TopicContextIntelligence,
   type MapContextAnalysis,
@@ -378,6 +396,14 @@ async function fetchLiveWikipediaSubBranches(
   }
 }
 
+const SAMPLE_RAW_LECTURE_NOTE = `Hücre Bölünmesi ve Mitoz Süreci
+
+Mitoz bölünme tek bir ana hücreden genetik olarak birbirinin aynısı 2 yeni yavru hücre oluşmasını sağlar. Çok hücreli canlılarda büyüme, gelişme ve doku onarımı mitoz ile gerçekleşir.
+
+Mitoz Evreleri: Mitoz çekirdek bölünmesi 4 temel evreden oluşur: Profaz, Metafaz, Anafaz ve Telofaz. Profaz evresinde kromatin iplikler kısalıp kalınlaşarak kromozomlara dönüşür ve çekirdek zarı erir. Metafaz evresinde kromozomlar hücrenin ekvator düzleminde tek sıra dizilir ve karyotip analizi bu evrede yapılır (sınavda çıkar). Anafaz evresinde kardeş kromatitler ayrılarak zıt kutuplara çekilir.
+
+Sitokinez (Sitoplazma Bölünmesi): Hayvan hücrelerinde hücre zarı dıştan içe boğumlanarak bölünür. Bitki hücrelerinde ise hücre duvarı nedeniyle merkezde ara lamel (orta plak) oluşumu gerçekleşir.`;
+
 export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   isOpen,
   initialTab = 'text_to_map',
@@ -390,7 +416,12 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 }) => {
   const kb = useKeyboardInset();
   const [tab, setTab] = useState<'text_to_map' | 'proactive_branches'>(initialTab);
+  const [inputMode, setInputMode] = useState<'outline' | 'converter'>('outline');
   const [outlineText, setOutlineText] = useState('');
+  const [rawLectureNote, setRawLectureNote] = useState('');
+  const [convertFeedback, setConvertFeedback] = useState<
+    LectureNoteConversionResult['stats'] | null
+  >(null);
   const [deptHint, setDeptHint] = useState<AcademicDepartment>('genel');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
@@ -401,6 +432,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [dictationError, setDictationError] = useState<string | null>(null);
   const dictationRef = useRef<SpeechDictationController | null>(null);
   const dictationPrefixRef = useRef('');
+  const outlineTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -454,6 +486,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       setTab(initialTab);
       setAddedIds(new Set());
       setShowLivePreview(false);
+      setConvertFeedback(null);
+      setDictationError(null);
     }
   }, [isOpen, initialTab]);
 
@@ -517,20 +551,54 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     onClose();
   };
 
-  const handleCreateSmartMap = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetAllInputs = () => {
+    setOutlineText('');
+    setRawLectureNote('');
+    setConvertFeedback(null);
+    setShowLivePreview(false);
+    setDeptHint('genel');
+    setInputMode('outline');
+    setDictationError(null);
+  };
+
+  const handleConvertLectureNote = (andCreateMap = false) => {
+    const raw = rawLectureNote.trim();
+    if (!raw) return;
+    void hapticSuccess();
+    const res = convertLectureNoteToMindMapFormat(raw);
+    setOutlineText(res.formattedOutline);
+    setConvertFeedback(res.stats);
+    setInputMode('outline');
+    setShowLivePreview(true);
+    if (andCreateMap && res.formattedOutline.trim()) {
+      void executeGenerateFromText(res.formattedOutline);
+    } else {
+      window.setTimeout(() => {
+        outlineTextareaRef.current?.focus();
+      }, 60);
+    }
+  };
+
+  const executeGenerateFromText = async (sourceText: string) => {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
-      const input = outlineText.trim() || QUICK_SAMPLE_NOTES[0].text;
+      const input = sourceText.trim() || QUICK_SAMPLE_NOTES[0].text;
       const generatedDoc = await buildSmartMapFromOutlineText(input, deptHint);
       void hapticSuccess();
       void dismissNativeKeyboard();
+      // Always clear BOTH input boxes right after map creation so reopening starts completely clean!
+      resetAllInputs();
       onGenerateCompleteMap(generatedDoc);
       onClose();
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleCreateSmartMap = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeGenerateFromText(outlineText);
   };
 
   return (
@@ -609,174 +677,344 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {tab === 'text_to_map' ? (
-            <form onSubmit={handleCreateSmartMap} className="space-y-3.5">
-              <div>
-                <div className="mb-1.5 text-xs font-extrabold opacity-75">
-                  Hızlı Tek Tıkla Örnek Ders Notları:
-                </div>
-                <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap">
-                  {QUICK_SAMPLE_NOTES.map((sample) => (
-                    <button
-                      key={sample.label}
-                      type="button"
-                      onClick={() => {
-                        setOutlineText(sample.text);
-                        setDeptHint(sample.dept);
-                      }}
-                      className="shrink-0 rounded-xl border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors hover:bg-sky-500/10 hover:text-sky-600 dark:hover:text-sky-300"
-                      style={{ borderColor: 'var(--hud-border)' }}
-                    >
-                      {sample.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <label className="block text-xs font-extrabold opacity-75">
-                    Konu, Paragraf veya Açıklamalı Liste:
-                  </label>
-                  {isDictationSupported() && (
-                    <button
-                      type="button"
-                      data-testid="smart-map-dictate-btn"
-                      onClick={() => void toggleOutlineDictation()}
-                      className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold active:scale-95 ${
-                        isDictating
-                          ? 'animate-pulse bg-rose-500 text-white'
-                          : 'bg-sky-500/12 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300'
-                      }`}
-                    >
-                      {isDictating ? (
-                        <>
-                          <MicOff className="h-3.5 w-3.5" />
-                          <span>Durdur</span>
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="h-3.5 w-3.5" />
-                          <span>Sesle Anlat</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-                {dictationError && (
-                  <div className="mb-1.5 rounded-xl bg-rose-500/12 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
-                    {dictationError}
-                  </div>
-                )}
-                <textarea
-                  rows={kb.isKeyboardOpen ? 4 : 8}
-                  value={outlineText}
-                  onChange={(e) => setOutlineText(e.target.value)}
-                  data-testid="smart-map-outline-textarea"
-                  placeholder={`Paragraf, başlık (# / 1.1) veya açıklamalı liste yapıştırabilirsiniz:\n\nMerkezi Konu\n- Ana Dal: Bu kısım dalın açıklama kutucuğuna otomatik eklenir [Rozet]\n  - Alt Kavram: Kısa tanım veya örnek\n    Not: Ekstra notlar da üst dalın açıklamasına eklenir`}
-                  className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500"
-                  style={{ borderColor: 'var(--hud-border)' }}
-                />
-              </div>
-
-              {/* Live Smart Structure & Note Detection Bar */}
-              {liveParsedPreview && (
-                <div
-                  data-testid="smart-map-live-preview"
-                  className="rounded-2xl border p-2.5"
-                  style={{
-                    backgroundColor: 'var(--hud-bg)',
-                    borderColor: 'var(--hud-border)',
-                  }}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
-                      <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
-                        🧠 {liveParsedPreview.stats.totalNodes} Dal
-                      </span>
-                      {liveParsedPreview.stats.mainBranches > 0 && (
-                        <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
-                          🌿 {liveParsedPreview.stats.mainBranches} Ana Dal
-                        </span>
-                      )}
-                      {liveParsedPreview.stats.subBranches > 0 && (
-                        <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">
-                          📌 {liveParsedPreview.stats.subBranches} Alt Dal
-                        </span>
-                      )}
-                      {liveParsedPreview.stats.notedBranches > 0 && (
-                        <span
-                          data-testid="smart-map-noted-count"
-                          className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300"
-                        >
-                          📝 {liveParsedPreview.stats.notedBranches} Açıklamalı Kart
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowLivePreview((v) => !v)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-slate-500/10 px-2 py-1 text-[11px] font-extrabold opacity-80 hover:opacity-100"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      <span>{showLivePreview ? 'Gizle' : 'Önizle'}</span>
-                    </button>
-                  </div>
-
-                  {showLivePreview && (
-                    <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border-t pt-2 text-xs" style={{ borderColor: 'var(--hud-border)' }}>
-                      {liveParsedPreview.nodes.slice(0, 18).map((n) => (
-                        <div
-                          key={n.id}
-                          style={{ paddingLeft: `${Math.min(n.level, 3) * 14}px` }}
-                          className="flex flex-col gap-0.5"
-                        >
-                          <div className="flex items-center gap-1.5 font-extrabold">
-                            <span
-                              className="h-2 w-2 shrink-0 rounded-full"
-                              style={{ backgroundColor: n.branchColor }}
-                            />
-                            <span className="truncate">{n.title}</span>
-                            {n.techBadge && (
-                              <span className="rounded bg-sky-500/15 px-1 text-[10px] text-sky-600 dark:text-sky-300">
-                                {n.techBadge}
-                              </span>
-                            )}
-                          </div>
-                          {n.note && (
-                            <p className="line-clamp-2 pl-3.5 text-[11px] font-medium opacity-75">
-                              📝 {n.note}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="space-y-3.5">
+              {/* Sub-mode Switcher: Structured Outline vs Dedicated Lecture-Note-to-Format Converter */}
+              <div
+                className="grid grid-cols-2 gap-1.5 rounded-2xl border p-1"
+                style={{
+                  backgroundColor: 'var(--hud-bg)',
+                  borderColor: 'var(--hud-border)',
+                }}
+              >
                 <button
                   type="button"
-                  onClick={handleCloseClean}
-                  className="rounded-xl px-4 py-2.5 text-xs font-bold hover:bg-slate-500/10"
+                  data-testid="smart-map-mode-outline-btn"
+                  onClick={() => {
+                    void hapticLight();
+                    setInputMode('outline');
+                  }}
+                  className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
+                    inputMode === 'outline'
+                      ? 'bg-sky-500 text-white shadow-xs'
+                      : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
+                  }`}
                 >
-                  Vazgeç
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span>Harita Formatı</span>
                 </button>
                 <button
-                  type="submit"
-                  data-testid="smart-map-submit-btn"
-                  disabled={isGenerating}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-60"
+                  type="button"
+                  data-testid="smart-map-mode-converter-btn"
+                  onClick={() => {
+                    void hapticLight();
+                    setInputMode('converter');
+                  }}
+                  className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
+                    inputMode === 'converter'
+                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xs'
+                      : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
+                  }`}
                 >
-                  {isGenerating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Wand2 className="h-4 w-4" />
-                  )}
-                  <span>{isGenerating ? 'İkonlar Eşleştiriliyor...' : 'Görsel Haritayı Oluştur'}</span>
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span>Ders Notunu Formata Çevir</span>
                 </button>
               </div>
-            </form>
+
+              {inputMode === 'converter' ? (
+                <div className="space-y-3" data-testid="lecture-note-converter-panel">
+                  <div className="rounded-2xl border border-violet-500/25 bg-violet-500/8 p-3 text-xs leading-relaxed font-semibold">
+                    PDF, slayt, kitap paragrafı veya dağınık ders notunuzu aşağıya yapıştırın. Uygulama başlıkları, alt kavramları, açıklamaları ve sayısal değerleri otomatik ayıklayıp <strong>ZihinHaritam formatına</strong> çevirir.
+                  </div>
+
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <label className="block text-xs font-extrabold opacity-80">
+                        Ham Ders Notunu Buraya Yapıştır:
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          data-testid="lecture-note-sample-btn"
+                          onClick={() => {
+                            void hapticLight();
+                            setRawLectureNote(SAMPLE_RAW_LECTURE_NOTE);
+                            setDeptHint('tip');
+                          }}
+                          className="rounded-xl bg-violet-500/12 px-2.5 py-1 text-[11px] font-extrabold text-violet-700 hover:bg-violet-500/20 dark:text-violet-300"
+                        >
+                          Örnek Not Dene
+                        </button>
+                        {rawLectureNote.trim().length > 0 && (
+                          <button
+                            type="button"
+                            data-testid="lecture-note-clear-btn"
+                            onClick={() => {
+                              void hapticLight();
+                              setRawLectureNote('');
+                            }}
+                            className="inline-flex items-center gap-1 rounded-xl bg-rose-500/12 px-2.5 py-1 text-[11px] font-extrabold text-rose-600 hover:bg-rose-500/20 dark:text-rose-300"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>Temizle</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <textarea
+                      rows={kb.isKeyboardOpen ? 5 : 9}
+                      value={rawLectureNote}
+                      onChange={(e) => setRawLectureNote(e.target.value)}
+                      data-testid="lecture-note-raw-input"
+                      placeholder={`Örnek:\nHücre Bölünmesi\nMitoz bölünme tek bir ana hücreden 2 yeni hücre oluşturur. Evreleri: Profaz, Metafaz, Anafaz ve Telofaz.\n\nMetafaz evresinde kromozomlar ekvator düzleminde dizilir (sınavda çıkar)...`}
+                      className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-sm leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-violet-500 sm:text-base"
+                      style={{ borderColor: 'var(--hud-border)' }}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      data-testid="convert-lecture-note-btn"
+                      disabled={!rawLectureNote.trim() || isGenerating}
+                      onClick={() => handleConvertLectureNote(false)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/12 px-4 py-2.5 text-xs font-extrabold text-violet-700 transition-transform hover:bg-violet-500/20 active:scale-95 disabled:opacity-45 dark:text-violet-200"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      <span>Formata Çevir &amp; Düzenle</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="convert-and-create-map-btn"
+                      disabled={!rawLectureNote.trim() || isGenerating}
+                      onClick={() => handleConvertLectureNote(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-45"
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="h-4 w-4" />
+                      )}
+                      <span>{isGenerating ? 'Harita Oluşturuluyor...' : 'Çevir & Haritayı Oluştur'}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleCreateSmartMap} className="space-y-3.5">
+                  {convertFeedback && (
+                    <div
+                      data-testid="lecture-note-converted-banner"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/12 px-3 py-2 text-xs font-extrabold text-emerald-800 dark:text-emerald-200"
+                    >
+                      <span>
+                        ✓ Ders notu harita formatına çevrildi: {convertFeedback.mainBranches} ana dal,{' '}
+                        {convertFeedback.subBranches} alt kavram
+                        {convertFeedback.badgesCount > 0 ? `, ${convertFeedback.badgesCount} rozet` : ''}.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setInputMode('converter')}
+                        className="underline opacity-85 hover:opacity-100"
+                      >
+                        Ham nota dön
+                      </button>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="mb-1.5 text-xs font-extrabold opacity-75">
+                      Hızlı Tek Tıkla Örnek Ders Notları:
+                    </div>
+                    <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap">
+                      {QUICK_SAMPLE_NOTES.map((sample) => (
+                        <button
+                          key={sample.label}
+                          type="button"
+                          onClick={() => {
+                            setOutlineText(sample.text);
+                            setDeptHint(sample.dept);
+                            setConvertFeedback(null);
+                          }}
+                          className="shrink-0 rounded-xl border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors hover:bg-sky-500/10 hover:text-sky-600 dark:hover:text-sky-300"
+                          style={{ borderColor: 'var(--hud-border)' }}
+                        >
+                          {sample.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <label className="block text-xs font-extrabold opacity-75">
+                        Harita Formatı (Konu, Dal ve Açıklamalar):
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        {outlineText.trim().length > 0 && (
+                          <button
+                            type="button"
+                            data-testid="smart-map-clear-btn"
+                            onClick={() => {
+                              void hapticLight();
+                              setOutlineText('');
+                              setConvertFeedback(null);
+                              setShowLivePreview(false);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-xl bg-rose-500/12 px-2.5 py-1 text-[11px] font-extrabold text-rose-600 hover:bg-rose-500/20 dark:text-rose-300"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>Temizle</span>
+                          </button>
+                        )}
+                        {isDictationSupported() && (
+                          <button
+                            type="button"
+                            data-testid="smart-map-dictate-btn"
+                            onClick={() => void toggleOutlineDictation()}
+                            className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold active:scale-95 ${
+                              isDictating
+                                ? 'animate-pulse bg-rose-500 text-white'
+                                : 'bg-sky-500/12 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300'
+                            }`}
+                          >
+                            {isDictating ? (
+                              <>
+                                <MicOff className="h-3.5 w-3.5" />
+                                <span>Durdur</span>
+                              </>
+                            ) : (
+                              <>
+                                <Mic className="h-3.5 w-3.5" />
+                                <span>Sesle Anlat</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {dictationError && (
+                      <div className="mb-1.5 rounded-xl bg-rose-500/12 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                        {dictationError}
+                      </div>
+                    )}
+                    <textarea
+                      ref={outlineTextareaRef}
+                      rows={kb.isKeyboardOpen ? 4 : 8}
+                      value={outlineText}
+                      onChange={(e) => setOutlineText(e.target.value)}
+                      data-testid="smart-map-outline-textarea"
+                      placeholder={`Paragraf, başlık (# / 1.1) veya açıklamalı liste yazabilirsiniz. Düz ders notunuz varsa yukarıdaki "Ders Notunu Formata Çevir" sekmesini kullanın:\n\nMerkezi Konu\n- Ana Dal: Bu kısım dalın açıklama kutucuğuna otomatik eklenir [Rozet]\n  - Alt Kavram: Kısa tanım veya örnek\n    Not: Ekstra notlar da üst dalın açıklamasına eklenir`}
+                      className="allow-text-input w-full rounded-2xl border bg-transparent p-3.5 text-base leading-relaxed font-semibold outline-none focus:ring-2 focus:ring-sky-500"
+                      style={{ borderColor: 'var(--hud-border)' }}
+                    />
+                  </div>
+
+                  {/* Live Smart Structure & Note Detection Bar */}
+                  {liveParsedPreview && (
+                    <div
+                      data-testid="smart-map-live-preview"
+                      className="rounded-2xl border p-2.5"
+                      style={{
+                        backgroundColor: 'var(--hud-bg)',
+                        borderColor: 'var(--hud-border)',
+                      }}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
+                          <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
+                            🧠 {liveParsedPreview.stats.totalNodes} Dal
+                          </span>
+                          {liveParsedPreview.stats.mainBranches > 0 && (
+                            <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
+                              🌿 {liveParsedPreview.stats.mainBranches} Ana Dal
+                            </span>
+                          )}
+                          {liveParsedPreview.stats.subBranches > 0 && (
+                            <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">
+                              📌 {liveParsedPreview.stats.subBranches} Alt Dal
+                            </span>
+                          )}
+                          {liveParsedPreview.stats.notedBranches > 0 && (
+                            <span
+                              data-testid="smart-map-noted-count"
+                              className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300"
+                            >
+                              📝 {liveParsedPreview.stats.notedBranches} Açıklamalı Kart
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowLivePreview((v) => !v)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-slate-500/10 px-2 py-1 text-[11px] font-extrabold opacity-80 hover:opacity-100"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>{showLivePreview ? 'Gizle' : 'Önizle'}</span>
+                        </button>
+                      </div>
+
+                      {showLivePreview && (
+                        <div
+                          className="mt-2 max-h-40 space-y-1 overflow-y-auto border-t pt-2 text-xs"
+                          style={{ borderColor: 'var(--hud-border)' }}
+                        >
+                          {liveParsedPreview.nodes.slice(0, 18).map((n) => (
+                            <div
+                              key={n.id}
+                              style={{ paddingLeft: `${Math.min(n.level, 3) * 14}px` }}
+                              className="flex flex-col gap-0.5"
+                            >
+                              <div className="flex items-center gap-1.5 font-extrabold">
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full"
+                                  style={{ backgroundColor: n.branchColor }}
+                                />
+                                <span className="truncate">{n.title}</span>
+                                {n.techBadge && (
+                                  <span className="rounded bg-sky-500/15 px-1 text-[10px] text-sky-600 dark:text-sky-300">
+                                    {n.techBadge}
+                                  </span>
+                                )}
+                              </div>
+                              {n.note && (
+                                <p className="line-clamp-2 pl-3.5 text-[11px] font-medium opacity-75">
+                                  📝 {n.note}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleCloseClean}
+                      className="rounded-xl px-4 py-2.5 text-xs font-bold hover:bg-slate-500/10"
+                    >
+                      Vazgeç
+                    </button>
+                    <button
+                      type="submit"
+                      data-testid="smart-map-submit-btn"
+                      disabled={isGenerating}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-60"
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="h-4 w-4" />
+                      )}
+                      <span>
+                        {isGenerating ? 'İkonlar Eşleştiriliyor...' : 'Görsel Haritayı Oluştur'}
+                      </span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">

@@ -610,22 +610,37 @@ export const App: React.FC = () => {
     };
   }, [doc.id]);
 
-  // Autonomous Topic & Discipline Context Intelligence
+  // Autonomous Topic & Discipline Context Intelligence (keyed on lightweight title/tree signature so dragging/styling/notes NEVER recompute!)
   const focusContextNodeId = editingNodeId ?? selectedNodeId ?? doc.rootNodeId;
+  const activeFocusNodeIdRef = useRef<string | null>(null);
+  activeFocusNodeIdRef.current = editingNodeId ?? selectedNodeId;
+
+  const nodesContextSig = useMemo(() => {
+    const vals = Object.values(doc.nodes);
+    let sig = `${vals.length}|`;
+    for (let i = 0; i < vals.length; i++) {
+      const n = vals[i];
+      sig += `${n.id}:${n.parentId ?? ''}:${n.title};`;
+    }
+    return sig;
+  }, [doc.nodes]);
+
   const mapContext = useMemo(
     () =>
       TopicContextIntelligence.analyzeMapContext(
-        doc.nodes,
+        docRef.current.nodes,
         doc.rootNodeId,
         focusContextNodeId,
         doc.department
       ),
-    [doc.nodes, doc.rootNodeId, focusContextNodeId, doc.department]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodesContextSig, doc.rootNodeId, focusContextNodeId, doc.department]
   );
 
   // Zero-Keystroke Proactive Sub-Branch Suggestions
   const { proactiveSuggestions, existingSiblingTitles } = useMemo(() => {
-    const targetNode = doc.nodes[focusContextNodeId];
+    const curNodes = docRef.current.nodes;
+    const targetNode = curNodes[focusContextNodeId];
     if (!targetNode) {
       return { proactiveSuggestions: [], existingSiblingTitles: [] };
     }
@@ -633,9 +648,9 @@ export const App: React.FC = () => {
       targetNode.title.trim().length === 0 && targetNode.parentId;
     const referenceParentId = isFreshEmpty ? targetNode.parentId! : targetNode.id;
     const referenceParent =
-      doc.nodes[referenceParentId] ?? doc.nodes[doc.rootNodeId];
+      curNodes[referenceParentId] ?? curNodes[doc.rootNodeId];
 
-    const siblings = Object.values(doc.nodes)
+    const siblings = Object.values(curNodes)
       .filter((n) => n.parentId === referenceParentId && n.id !== targetNode.id)
       .map((n) => n.title)
       .filter(Boolean);
@@ -650,7 +665,8 @@ export const App: React.FC = () => {
       proactiveSuggestions: suggestions,
       existingSiblingTitles: siblings,
     };
-  }, [doc.nodes, doc.rootNodeId, doc.title, focusContextNodeId, mapContext]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodesContextSig, doc.rootNodeId, doc.title, focusContextNodeId, mapContext]);
 
   const openMapOnCanvas = useCallback(
     (targetMap: MindMapDocument, autoEditRoot = false) => {
@@ -2077,6 +2093,50 @@ export const App: React.FC = () => {
     setInkTool(nextTool);
   }, []);
 
+  const handlePushInkHistory = useCallback(() => {
+    pushHistory(docRef.current);
+  }, [pushHistory]);
+
+  const handleStartEditing = useCallback((id: string) => {
+    setSelectedNodeId(id);
+    setEditingNodeId(id);
+  }, []);
+
+  const handleStartCrossLink = useCallback((fromId: string) => {
+    setSelectedNodeId(null);
+    setEditingNodeId(null);
+    setLinkingFromNodeId(fromId);
+  }, []);
+
+  const handleOpenStickerGallery = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setStickerDrawerOpen(true);
+  }, []);
+
+  const handleCancelCrossLink = useCallback(() => {
+    setLinkingFromNodeId(null);
+  }, []);
+
+  const handleRevealExamNode = useCallback((nodeId: string) => {
+    setRevealedExamIds((prev) => {
+      if (prev.has(nodeId)) return prev;
+      const next = new Set(prev);
+      next.add(nodeId);
+      return next;
+    });
+  }, []);
+
+  const handlePointerWorldMove = useCallback((wx: number, wy: number) => {
+    collabRef.current?.broadcastCursor(wx, wy, activeFocusNodeIdRef.current);
+  }, []);
+
+  const handleViewportSnapshot = useCallback(
+    (vp: ViewportTransform, w: number, h: number, hiddenIds: Set<string>) => {
+      setRadarSnap({ vp, w, h, hiddenIds });
+    },
+    []
+  );
+
   const handleAddInkStroke = useCallback(
     (stroke: CanvasInkStroke) => {
       pushHistory(docRef.current);
@@ -2447,7 +2507,7 @@ export const App: React.FC = () => {
             onAddInkStroke={handleAddInkStroke}
             onDeleteInkStroke={handleDeleteInkStroke}
             onReplaceInkStrokes={handleReplaceInkStrokes}
-            onPushInkHistory={() => pushHistory(docRef.current)}
+            onPushInkHistory={handlePushInkHistory}
             onSelectLassoIds={setSelectedLassoIds}
             onUpdateStickyNote={handleUpdateStickyNote}
             onDeleteStickyNote={handleDeleteStickyNote}
@@ -2468,50 +2528,26 @@ export const App: React.FC = () => {
             zoomRequest={zoomRequest}
             radarJumpRequest={radarJump}
             onSelectNode={setSelectedNodeId}
-            onStartEditing={(id) => {
-              setSelectedNodeId(id);
-              setEditingNodeId(id);
-            }}
+            onStartEditing={handleStartEditing}
             onFinishEditing={handleFinishEditing}
             onUpdateNodeTitle={handleUpdateNodeTitle}
             onDeleteNode={handleDeleteNode}
             onToggleNodeCheck={handleToggleNodeCheck}
             onCyclePriorityTag={handleCycleNodePriorityTag}
             onToggleNoteCollapse={handleToggleNodeNoteCollapse}
-            onStartCrossLink={(fromId) => {
-              setSelectedNodeId(null);
-              setEditingNodeId(null);
-              setLinkingFromNodeId(fromId);
-            }}
-            onOpenStickerGallery={(nodeId) => {
-              setSelectedNodeId(nodeId);
-              setStickerDrawerOpen(true);
-            }}
+            onStartCrossLink={handleStartCrossLink}
+            onOpenStickerGallery={handleOpenStickerGallery}
             onCommitBatchNodePositions={handleCommitBatchNodePositions}
             onCreateChildBranch={handleCreateChildBranch}
             onCompleteCrossLink={handleCompleteCrossLink}
-            onCancelCrossLink={() => setLinkingFromNodeId(null)}
+            onCancelCrossLink={handleCancelCrossLink}
             onUpdateCrossLinkLabel={handleUpdateCrossLinkLabel}
             onDeleteCrossLink={handleDeleteCrossLink}
             onToggleCollapse={handleToggleCollapse}
-            onRevealExamNode={(nodeId) => {
-              setRevealedExamIds((prev) => {
-                const next = new Set(prev);
-                next.add(nodeId);
-                return next;
-              });
-            }}
-            onPointerWorldMove={(wx, wy) => {
-              collabRef.current?.broadcastCursor(
-                wx,
-                wy,
-                editingNodeId ?? selectedNodeId
-              );
-            }}
+            onRevealExamNode={handleRevealExamNode}
+            onPointerWorldMove={handlePointerWorldMove}
             onZoomChange={setZoomPercent}
-            onViewportSnapshot={(vp, w, h, hiddenIds) => {
-              setRadarSnap({ vp, w, h, hiddenIds });
-            }}
+            onViewportSnapshot={handleViewportSnapshot}
             onActiveNodeScreenPosition={setActiveNodeScreenPos}
           />
 

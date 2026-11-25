@@ -26,10 +26,14 @@ export interface OfflineEngineStatus {
 const PACK_DISPLAY_NAMES: Record<string, string> = {
   'fluent-emoji-flat': 'Fluent Emoji (Offline)',
   'fluent-color': 'Fluent 3D Color (Offline)',
+  'streamline-plump-color': 'Streamline Plump (Offline)',
   'streamline-color': 'Streamline Renkli (Offline)',
   'streamline-emojis': 'Streamline Sticker (Offline)',
+  emojione: 'EmojiOne Renkli (Offline)',
+  noto: 'Google Noto (Offline)',
+  fxemoji: 'Mozilla FxEmoji (Offline)',
+  marketeq: 'Marketeq Renkli (Offline)',
   twemoji: 'Twemoji Renkli (Offline)',
-  openmoji: 'OpenMoji El Çizimi (Offline)',
   'icon-park': 'IconPark Renkli (Offline)',
   'flat-color-icons': 'Flat Color (Offline)',
   meteocons: 'Meteocons Doğa (Offline)',
@@ -38,7 +42,6 @@ const PACK_DISPLAY_NAMES: Record<string, string> = {
   logos: 'Teknoloji Logosu (Offline)',
   devicon: 'Devicon (Offline)',
   'skill-icons': 'Skill Icons (Offline)',
-  'simple-icons': 'Marka & Uygulama (Offline)',
   healthicons: 'HealthIcons Tıp (Offline)',
   'medical-icon': 'Medical Atlas (Offline)',
   'game-icons': 'Ansiklopedik Vektör (Offline)',
@@ -57,15 +60,20 @@ function mapHitToCategoryAndMode(hit: HydratedOfflineHit): {
   if (
     hit.pack === 'fluent-color' ||
     hit.pack === 'fluent-emoji-flat' ||
+    hit.pack === 'streamline-plump-color' ||
     hit.pack === 'streamline-color' ||
+    hit.pack === 'marketeq' ||
     hit.pack === 'meteocons'
   ) {
     return { category: '3d_color', mode: '3d' };
   }
   if (
-    hit.pack === 'openmoji' ||
+    hit.pack === 'fxemoji' ||
+    hit.pack === 'noto' ||
+    hit.pack === 'emojione' ||
     hit.pack === 'twemoji' ||
     hit.pack === 'streamline-emojis' ||
+    hit.pack === 'flat-color-icons' ||
     hit.pack === 'circle-flags'
   ) {
     return { category: 'hand_drawn', mode: 'illustration' };

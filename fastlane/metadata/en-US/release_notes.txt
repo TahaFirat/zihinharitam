@@ -1,4 +1,4 @@
-• Expanded Academic & Multilingual Icon Search: Comprehensive coverage across school and university subjects with instant stable results and multi-word query matching.
-• Native Voice Dictation: Seamless on-device speech dictation for branch titles, notes, and Text-to-Mind-Map creation.
-• Smarter Text-to-Mind-Map: Automatically separates headings, bold leads, and explanatory sentences into clean branches with attached descriptions.
-• Mobile & Tablet Polish: Finger drawing defaults to off in Draw mode (toggleable anytime), keyboard opens only when tapping text fields, and optimized GPU rendering for cooler, smoother performance.
+• NEW Lecture Note to Mind Map Converter: Turns raw PDFs, slides, and textbook paragraphs into clean structured ZihinHaritam outlines in one tap, and automatically clears input boxes after map creation.
+• Smoother Canvas Performance: Stabilized canvas memoization, cached ink SVG paths, and zero-render sticky/lasso dragging for fluid panning, zooming, and editing.
+• 45,500+ Commercially-Licensed Offline Icons: Expanded with Phosphor & IBM Carbon icon packs, full in-app Open-Source License attributions in Settings, and multilingual icon search.
+• Native Voice Dictation & Tablet Polish: On-device iOS/Android dictation, smarter text-to-mind-map parsing, and responsive low-GPU rendering.

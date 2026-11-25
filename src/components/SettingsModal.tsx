@@ -90,7 +90,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [promoDraft, setPromoDraft] = useState('');
   const isNativeIos = BillingService.isNativeIos();
   const [activeLegalView, setActiveLegalView] = useState<
-    'privacy' | 'terms' | 'support' | null
+    'privacy' | 'terms' | 'support' | 'licenses' | null
   >(initialLegalDoc);
   const backupInputRef = useRef<HTMLInputElement>(null);
 
@@ -207,6 +207,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ? 'Kullanım Koşulları (EULA)'
                 : activeLegalView === 'support'
                 ? 'İletişim & Destek Merkezi'
+                : activeLegalView === 'licenses'
+                ? 'Açık Kaynak & İkon Lisansları'
                 : 'Ayarlar'}
             </h2>
             <p className="text-xs opacity-65">
@@ -235,8 +237,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* Embedded In-App Legal Page Reader */}
-        {legalIframeSrc ? (
+        {/* Embedded In-App Legal Page Reader & Offline Open-Source Attributions */}
+        {activeLegalView === 'licenses' ? (
+          <div className="max-h-[70dvh] space-y-3 overflow-y-auto p-5 text-xs leading-relaxed">
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/8 p-3 font-semibold">
+              ZihinHaritam içerisindeki tüm çevrimdışı ve çevrimiçi ikonlar yalnızca ticari kullanıma açık (MIT, Apache-2.0, ISC, CC BY 4.0 / 3.0) açık kaynak setlerden derlenmiştir. Ticari olmayan (NC) veya ShareAlike (SA) kısıtlı hiçbir görsel paketi kullanılmaz.
+            </div>
+
+            <div className="space-y-1.5 rounded-2xl border p-3.5" style={{ borderColor: 'var(--hud-border)' }}>
+              <div className="text-[11px] font-black tracking-wide uppercase opacity-65">
+                Creative Commons Atıfları (CC BY 4.0 / CC BY 3.0)
+              </div>
+              <ul className="list-disc space-y-1 pl-4 font-medium opacity-85">
+                <li><strong>Streamline</strong> (Streamline Color, Plump Color, Emojis) — streamlinehq.com • <em>CC BY 4.0</em></li>
+                <li><strong>Twemoji</strong> — Twitter / X • <em>CC BY 4.0</em></li>
+                <li><strong>EmojiOne v2</strong> — Emoji One • <em>CC BY 4.0</em></li>
+                <li><strong>Font Awesome 6 Free</strong> — Dave Gandy (fontawesome.com) • <em>CC BY 4.0</em></li>
+                <li><strong>Game-Icons.net</strong> — Lorc, Delapouite &amp; Katkıda Bulunanlar • <em>CC BY 3.0</em></li>
+              </ul>
+            </div>
+
+            <div className="space-y-1.5 rounded-2xl border p-3.5" style={{ borderColor: 'var(--hud-border)' }}>
+              <div className="text-[11px] font-black tracking-wide uppercase opacity-65">
+                MIT / Apache-2.0 / ISC İkon &amp; Yazılım Kütüphaneleri
+              </div>
+              <ul className="list-disc space-y-1 pl-4 font-medium opacity-85">
+                <li><strong>Microsoft Fluent UI Emoji &amp; Fluent Color</strong> — Microsoft (MIT)</li>
+                <li><strong>Google Noto Emoji</strong> — Google (Apache-2.0)</li>
+                <li><strong>Mozilla FxEmoji</strong> — Mozilla (Apache-2.0)</li>
+                <li><strong>ByteDance IconPark</strong> — ByteDance (Apache-2.0)</li>
+                <li><strong>HealthIcons &amp; Medical Icons</strong> — Resolve to Save Lives / Samuel Frémondière (MIT)</li>
+                <li><strong>Phosphor Icons, Tabler Icons, Marketeq, Meteocons, Flat Color Icons, Circle Flags</strong> (MIT)</li>
+                <li><strong>IBM Carbon Icons &amp; Pictogrammers Material Design Icons</strong> (Apache-2.0)</li>
+                <li><strong>Lucide Icons</strong> (ISC) • <strong>React, Capacitor, jsPDF, Yjs, MiniSearch, RBush</strong> (MIT) • <strong>Dexie</strong> (Apache-2.0)</li>
+              </ul>
+            </div>
+
+            <div className="space-y-1 rounded-2xl border p-3.5" style={{ borderColor: 'var(--hud-border)' }}>
+              <div className="text-[11px] font-black tracking-wide uppercase opacity-65">
+                Üçüncü Taraf Marka Feragatnamesi
+              </div>
+              <p className="font-medium opacity-80">
+                Ücretsiz eğitim referansı olarak sunulan teknoloji ve yazılım logoları (Devicon, SVG Logos, Skill Icons, VSCode Icons — MIT/CC0) ilgili şirketlerin tescilli ticari markalarıdır; yalnızca ders/sistem diyagramı çizimlerinde referans amacıyla sunulur.
+              </p>
+            </div>
+          </div>
+        ) : legalIframeSrc ? (
           <div className="flex h-[70dvh] flex-col">
             <iframe
               src={legalIframeSrc}
@@ -670,9 +716,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
 
-            {/* 4. Legal & Support Links */}
+            {/* 4. Legal, Licenses & Support Links */}
             <div
-              className="grid grid-cols-1 gap-2 rounded-2xl border p-3 sm:grid-cols-3"
+              className="grid grid-cols-2 gap-2 rounded-2xl border p-3"
               style={{
                 backgroundColor: 'var(--hud-bg)',
                 borderColor: 'var(--hud-border)',
@@ -698,12 +744,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
               <button
                 type="button"
+                onClick={() => setActiveLegalView('licenses')}
+                data-testid="settings-licenses-link"
+                className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold hover:bg-slate-500/10"
+              >
+                <Layers className="h-3.5 w-3.5 text-violet-500" />
+                <span>Açık Kaynak Lisansları</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveLegalView('support')}
                 data-testid="settings-support-link"
                 className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold hover:bg-slate-500/10"
               >
                 <Mail className="h-3.5 w-3.5 text-amber-500" />
-                <span>İletişim & Destek</span>
+                <span>İletişim &amp; Destek</span>
               </button>
             </div>
           </div>

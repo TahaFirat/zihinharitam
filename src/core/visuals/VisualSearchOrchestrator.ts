@@ -28,7 +28,6 @@ import {
 } from './SemanticTaxonomyTR';
 import type { MapContextAnalysis } from './TopicContextIntelligence';
 import { searchBuiltInAtlasV3 } from './providers/BuiltInMultiColorAtlas';
-import { searchArasaacPictograms } from './providers/ArasaacPictogramAdapter';
 import {
   searchIconifyLive,
   translateTurkishToEnglishLive,
@@ -304,15 +303,8 @@ export class VisualSearchOrchestrator {
       )
     );
     const primaryEn = enTerms[0] || clean;
-    const translatedHeadWord =
-      liveTranslatedEn && liveTranslatedEn.includes(' ')
-        ? liveTranslatedEn.split(/\s+/).slice(-1)[0]
-        : '';
-    const arasaacEnTerms = Array.from(
-      new Set([liveTranslatedEn || primaryEn, translatedHeadWord, ...(expanded.headEnTokens ?? [])].filter(Boolean))
-    );
 
-    // Step 3: Race Global Engines in Parallel (skipping ARASAAC TR substring noise when curated offline already nailed it!)
+    // Step 3: Race verified commercial-safe Global Engines in Parallel
     const settled = await Promise.race([
       Promise.allSettled([
         liveTranslatedEn && liveTranslatedEn.toLowerCase() !== clean.toLowerCase()
@@ -331,9 +323,6 @@ export class VisualSearchOrchestrator {
           headEnTerms: expanded.headEnTokens,
           blockedTokens: expanded.blockedTokens,
         }),
-        offlineHasStrongFullMatch
-          ? Promise.resolve([] as VisualSearchResult[])
-          : searchArasaacPictograms([clean], arasaacEnTerms, signal),
         AIStickerDirector.searchSharedPool(clean, 4),
       ]),
       new Promise<PromiseSettledResult<VisualSearchResult[]>[]>((r) =>

@@ -337,7 +337,7 @@ export const RAW_TAXONOMY_CLUSTERS = [
   [
     'medicine_bio',
     'bakteri|basil|kok|stafilokok|streptokok|escherichia|salmonella|gram pozitif|gram negatif|kamcili|sporlu bakteri|antibiyotik direnci|koloni',
-    'bacteria|bacterium|microbe|petri|petri-dish|microscope|cell|pill|antibiotic|test-tube|biology|infection|laboratory|biohazard',
+    'bacteria|microbe|petri|petri-dish|microscope|germs|bacterium|cell|flask|pill|antibiotic|test-tube|biology|infection|laboratory|biohazard',
     'microchip|chip|cpu|server|gate|stair|ladder|chimney|microphone',
     'bio_bacteria_bacillus|bio_cocci_colony|bio_petri_culture|bio_microscope_lab|med_pharma_capsule',
   ],

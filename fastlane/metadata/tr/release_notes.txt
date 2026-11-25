@@ -1,4 +1,4 @@
-• Gelişmiş Akademik & Türkçe İkon Arama: Lise ve tüm üniversite bölümlerini kapsayan genişletilmiş ikon araması, kararlı anlık öneriler ve çok kelimeli Türkçe-İngilizce eşleştirme.
-• Native Sesle Dikte: Dal eklerken veya metinden zihin haritası oluştururken iOS ve Android yerel ses tanıma ile kesintisiz konuşarak not alma.
-• Akıllı Metinden Zihin Haritası: Başlık altı açıklama cümlelerini, madde işaretlerini ve kalın başlıkları otomatik olarak dal başlığı ve açıklama kutusuna dönüştürür.
-• Mobil & Tablet Deneyimi: Çizim modunda parmakla çizim varsayılan kapalı (isteğe bağlı tek dokunuşla açılabilir), ikon seçerken gereksiz klavye açılmaması ve düşük GPU tüketimiyle daha akıcı performans.
+• YENİ Ders Notunu Formata Çevir: PDF, slayt veya düz paragraf ders notlarını tek dokunuşla ZihinHaritam formatına çevirir; harita oluşturduktan sonra giriş kutularını otomatik temizler.
+• Daha Akıcı Harita Performansı: Stabilize tuval motoru, önbellekli çizim yolları ve sıfır-render sürükleme ile harita içinde kasma olmadan yüksek akıcılık.
+• 45.500+ Ticari Lisanslı Çevrimdışı İkon: Phosphor ve IBM Carbon ikon setleriyle büyüyen katalog, Ayarlar altında çevrimdışı Açık Kaynak Lisansları sayfası ve çok kelimeli Türkçe-İngilizce arama.
+• Native Sesle Dikte & Tablet Deneyimi: iOS ve Android yerel ses tanıma, parmakla çizim koruması ve geliştirilmiş akıllı metinden harita dönüşümü.

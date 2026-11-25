@@ -1,0 +1,4 @@
+v1.1.1 — Ders Notunu Formata Çevir, Daha Akıcı Tuval & 45.500+ Temiz İkon:
+• YENİ "Ders Notunu Formata Çevir": PDF, slayt veya düz paragraf ders notlarını tek dokunuşla ZihinHaritam formatına çevirir ve harita sonrası giriş kutusunu otomatik temizler
+• Harita İçi Performans: Sıfır-render not/kement sürükleme, önbellekli çizim yolları ve stabilize tuval motoruyla daha akıcı çalışma
+• 45.500+ Ticari Lisanslı Çevrimdışı İkon (Phosphor & Carbon eklendi) + Ayarlar'da Açık Kaynak Lisansları

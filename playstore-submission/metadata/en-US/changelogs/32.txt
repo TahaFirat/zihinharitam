@@ -1,0 +1,4 @@
+v1.1.1 — Lecture Note Converter, Smoother Canvas & 45,500+ Clean Icons:
+• NEW "Convert Lecture Note to Format": Turns raw PDFs, slides, and paragraphs into structured ZihinHaritam outlines in one tap, with automatic input reset after map creation
+• Canvas Performance: Zero-render sticky/lasso dragging, cached ink SVG paths, and stabilized canvas memoization for smoother panning and editing
+• 45,500+ Commercially-Licensed Offline Icons (added Phosphor & Carbon) + in-app Open-Source Licenses viewer

@@ -110,13 +110,13 @@
         <li><strong>Fotoğraf Arşivi (<code>NSPhotoLibraryUsageDescription</code>):</strong> Yalnızca seçtiğiniz bir şema görselini içe aktarmak veya dışa aktardığınız zihin haritası posterini cihazınıza kaydetmek için kullanılır. Arka plan temizleme ve kontur (die-cut) işlemleri %100 cihaz içinde (on-device WebAssembly/Canvas) gerçekleşir; fotoğraflarınız hiçbir dış sunucuya gönderilmez.</li>
       </ul>
 
-      <h2>4. İsteğe Bağlı Çevrimiçi Görsel Arama ve AI Çıkartma Stüdyosu</h2>
+      <h2>4. İsteğe Bağlı Çevrimiçi Görsel Arama ve Cihaz İçi Çıkartma Stüdyosu</h2>
       <p>
-        Uygulamanın 25.200+ ikonluk temel çıkartma motoru tamamen çevrimdışıdır. Kullanıcı çevrimiçiyken tam çıkartma galerisini veya isteğe bağlı "AI Çiz" (AI Sticker Studio) aracını kullandığında:
+        Uygulamanın 45.000+ ikonluk temel çıkartma motoru ve "Özel Çıkartma Stüdyosu" tamamen cihaz içinde (%100 çevrimdışı) çalışır. Kullanıcı çevrimiçiyken genişletilmiş arama yaptığında yalnızca şu salt-okunur sorgular iletilir:
       </p>
       <ul>
-        <li>Açık lisanslı eğitim görseli kataloglarına (Wikimedia Commons, Openverse, ARASAAC) yalnızca aranan akademik kavram kelimesi salt-okunur sorgu olarak iletilir.</li>
-        <li>"AI Çiz" stüdyosunda kullanıcı bir kavram yazdığında, yalnızca bu kısa nesne betimlemesi (prompt) görsel üretim uç noktasına (varsayılan Pollinations Flux servisi veya kullanıcının kendi isteğiyle cihazında yerel sakladığı Google Gemini / OpenAI / Fal.ai / Together AI API anahtarı) gönderilir. Hiçbir kişisel veri, kullanıcı kimliği, fotoğraf veya harita içeriği paylaşılmaz.</li>
+        <li>Ticari lisanslı açık vektör kataloğuna (Iconify) ve nadir kavramların İngilizce karşılığı için halka açık sözlük/ansiklopedi uç noktalarına (Wikipedia TR, MyMemory) yalnızca aranan kısa kavram kelimesi iletilir.</li>
+        <li>Hiçbir kişisel veri, kullanıcı kimliği, fotoğraf, ders notu veya harita içeriği dış sunuculara gönderilmez.</li>
       </ul>
 
       <h2>5. Uygulama İçi Satın Alma (Apple StoreKit 2)</h2>
@@ -139,7 +139,7 @@
         <li><strong>No Account Required &amp; 100% On-Device Storage:</strong> No registration or sign-in is required. All mind maps, node notes, Apple Pencil sketches, and cropped notebook diagrams are stored exclusively on your device (local IndexedDB &amp; app storage). We do not collect or store personal user data on external servers.</li>
         <li><strong>Zero Tracking &amp; Zero Ads:</strong> We do not embed any third-party advertising SDKs, analytics trackers, or cross-app tracking technologies (<code>NSPrivacyTracking = false</code>; App Store Privacy Label: <em>Data Not Collected</em>).</li>
         <li><strong>Camera &amp; Photo Library:</strong> Accessed strictly when initiated by you to photograph or import study diagrams for local die-cut sticker cropping, or to save exported PDF/PNG posters. All image segmentation runs 100% locally on-device; your photos never leave your device.</li>
-        <li><strong>Optional Online Visual Catalogs &amp; AI Sticker Studio:</strong> While the 25,200+ vector icon engine runs 100% offline, if you optionally search online catalogs (Wikimedia Commons, Openverse, ARASAAC) or request an AI-generated object illustration in the AI Sticker Studio (via Pollinations Flux or an optional user-supplied API key stored solely in local device storage), only the non-personal concept keyword you typed is sent to retrieve the illustration—never personal data, identifiers, or document files.</li>
+        <li><strong>Optional Online Icon Enrichment:</strong> While the 45,000+ vector icon engine and custom die-cut sticker synthesizer run 100% locally on-device, if you search while online, only the non-personal concept keyword is sent as a read-only query to Iconify, Wikipedia, or MyMemory to find matching vector icons—never personal data, identifiers, photos, or mind map documents.</li>
         <li><strong>In-App Purchases (StoreKit 2):</strong> One-time Non-Consumable <em>Lifetime Pro</em> (<code>com.tahafirat.zihinharitam.lifetime_pro</code>) purchases and <em>Restore Purchases</em> are processed natively and exclusively by Apple StoreKit 2. We never receive or store financial or billing details.</li>
       </ul>
       <p>Developer &amp; Privacy Contact: <a href="mailto:tafifirat@gmail.com">tafifirat@gmail.com</a> (Taha Firat)</p>

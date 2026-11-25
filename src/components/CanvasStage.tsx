@@ -303,6 +303,17 @@ function computeBranchSvgPathForNode(
   return generateTaperedBranchSvgPath(sx, sy, ex, ey, depth);
 }
 
+// O(1) WeakMap cache for ink SVG path strings so static strokes NEVER recompute quadratic Bezier math on React renders!
+const INK_SVG_PATH_CACHE = new WeakMap<CanvasInkStroke['points'], { key: string; d: string }>();
+function getCachedInkSvgPath(stroke: CanvasInkStroke): string {
+  const cacheKey = `${stroke.tool}|${stroke.width}|${stroke.points.length}`;
+  const hit = INK_SVG_PATH_CACHE.get(stroke.points);
+  if (hit && hit.key === cacheKey) return hit.d;
+  const d = buildInkSvgPath(stroke.tool, stroke.points, stroke.width);
+  INK_SVG_PATH_CACHE.set(stroke.points, { key: cacheKey, d });
+  return d;
+}
+
 function buildCrossLinkArrowTransform(tipX: number, tipY: number, angleRad: number): string {
   const deg = (angleRad * 180) / Math.PI;
   return `translate(${tipX.toFixed(1)}, ${tipY.toFixed(1)}) rotate(${deg.toFixed(1)})`;
@@ -401,6 +412,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     pointerId: number;
     startWorldX: number;
     startWorldY: number;
+    lastDx: number;
+    lastDy: number;
     baseStrokes: CanvasInkStroke[];
   } | null>(null);
   const stickyDragRef = useRef<{
@@ -410,7 +423,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     startClientY: number;
     origX: number;
     origY: number;
+    lastX: number;
+    lastY: number;
   } | null>(null);
+  const stickyDomRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const inkStrokeGroupRefs = useRef<Map<string, SVGGElement>>(new Map());
+  const lassoBoxRectRef = useRef<SVGRectElement | null>(null);
   const activeEraserPointerRef = useRef<number | null>(null);
   const lastEraserWorldPtRef = useRef<{ x: number; y: number } | null>(null);
   const eraserPushedHistoryRef = useRef<boolean>(false);
@@ -786,10 +804,25 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
   }, []);
 
+  // Rebuild RBush spatial index ONLY when node coordinates/membership/visibility actually change
+  // (avoids double-rendering all cards & rebuilding RBush on every single keystroke during title/note editing!)
+  const spatialLayoutSigRef = useRef<string>('');
   useEffect(() => {
+    const vals = Object.values(nodes);
+    let sig = `${rootNodeId}|${treeMeta.hiddenNodeIds.size}|${vals.length}|`;
+    for (let i = 0; i < vals.length; i++) {
+      const n = vals[i];
+      sig += `${n.id}:${Math.round(n.x)},${Math.round(n.y)};`;
+    }
+    if (sig === spatialLayoutSigRef.current) return;
+    spatialLayoutSigRef.current = sig;
+
     spatialIndexRef.current.rebuild(nodes, rootNodeId, treeMeta.hiddenNodeIds);
     requestRender();
-    setCullTick((t) => t + 1);
+    // For <= 64 nodes, `visibleNodeIds` already includes all visible nodes directly from `nodes` — no second cullTick render needed!
+    if (vals.length > 64) {
+      setCullTick((t) => t + 1);
+    }
   }, [nodes, rootNodeId, treeMeta.hiddenNodeIds, requestRender]);
 
   const callbacksRef = useRef({
@@ -1423,6 +1456,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                 pointerId: e.pointerId,
                 startWorldX: wPt.x,
                 startWorldY: wPt.y,
+                lastDx: 0,
+                lastDy: 0,
                 baseStrokes: inkStrokes,
               };
               return;
@@ -1486,6 +1521,26 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
 
   const handleStagePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'touch' && penActiveRef.current) return;
+
+    // Fast idle bailout: ZERO coalesced-event / world-projection allocations during idle mouse hover!
+    const hasActiveGesture =
+      activeTouchesRef.current.size > 0 ||
+      stickyDragRef.current !== null ||
+      lassoMoveRef.current !== null ||
+      activeLassoRef.current !== null ||
+      activeLaserRef.current !== null ||
+      activeEraserPointerRef.current !== null ||
+      activeInkRef.current !== null ||
+      branchDragRef.current !== null ||
+      nodeDragRef.current !== null ||
+      panStateRef.current !== null;
+    const isPenHoverCandidate =
+      (e.pointerType === 'pen' || (e.pointerType as string) === 'eraser') &&
+      (drawingMode || hardwareEraserActive);
+    if (!hasActiveGesture && !linkingFromNodeId && !isPenHoverCandidate && collaborators.length <= 1) {
+      return;
+    }
+
     // Zero forced reflow: read cached stageRectRef instead of calling getBoundingClientRect() 120-240x/sec!
     const rect = stageRectRef.current;
 
@@ -1543,28 +1598,33 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       }
     }
 
-    // Sticky Note Drag Move (World Space)
-    if (stickyDragRef.current && stickyDragRef.current.pointerId === e.pointerId && onUpdateStickyNote) {
+    // 120Hz Zero-React-Render Sticky Note Drag Move (DOM GPU transform during move; commits ONCE on pointerup!)
+    if (stickyDragRef.current && stickyDragRef.current.pointerId === e.pointerId) {
       const sd = stickyDragRef.current;
       const sc = Math.max(0.2, viewportRef.current.getTransform().scale);
-      const dx = (e.clientX - sd.startClientX) / sc;
-      const dy = (e.clientY - sd.startClientY) / sc;
-      onUpdateStickyNote(sd.noteId, {
-        x: Math.round(sd.origX + dx),
-        y: Math.round(sd.origY + dy),
-      });
+      const nextX = Math.round(sd.origX + (e.clientX - sd.startClientX) / sc);
+      const nextY = Math.round(sd.origY + (e.clientY - sd.startClientY) / sc);
+      sd.lastX = nextX;
+      sd.lastY = nextY;
+      const el = stickyDomRefs.current.get(sd.noteId);
+      if (el) {
+        el.style.transform = `translate3d(${nextX}px, ${nextY}px, 0)`;
+      }
       return;
     }
 
-    // Lasso Selection Move (Drag all enclosed ink strokes smoothly!)
-    if (lassoMoveRef.current && lassoMoveRef.current.pointerId === e.pointerId && onReplaceInkStrokes) {
+    // 120Hz Zero-React-Render Lasso Selection Move (direct SVG transform during move; commits ONCE on pointerup!)
+    if (lassoMoveRef.current && lassoMoveRef.current.pointerId === e.pointerId) {
       const lm = lassoMoveRef.current;
       const dx = worldPt.x - lm.startWorldX;
       const dy = worldPt.y - lm.startWorldY;
-      const selSet = new Set(selectedLassoIds);
-      onReplaceInkStrokes(
-        lm.baseStrokes.map((st) => (selSet.has(st.id) ? translateInkStroke(st, dx, dy) : st))
-      );
+      lm.lastDx = dx;
+      lm.lastDy = dy;
+      const tf = `translate(${dx.toFixed(1)}, ${dy.toFixed(1)})`;
+      for (const id of selectedLassoIds) {
+        inkStrokeGroupRefs.current.get(id)?.setAttribute('transform', tf);
+      }
+      lassoBoxRectRef.current?.setAttribute('transform', tf);
       return;
     }
 
@@ -1917,12 +1977,30 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     }
 
     if (stickyDragRef.current && stickyDragRef.current.pointerId === e.pointerId) {
+      const sd = stickyDragRef.current;
       stickyDragRef.current = null;
+      if (onUpdateStickyNote && (sd.lastX !== sd.origX || sd.lastY !== sd.origY)) {
+        onUpdateStickyNote(sd.noteId, { x: sd.lastX, y: sd.lastY });
+      }
       return;
     }
 
     if (lassoMoveRef.current && lassoMoveRef.current.pointerId === e.pointerId) {
+      const lm = lassoMoveRef.current;
       lassoMoveRef.current = null;
+      for (const id of selectedLassoIds) {
+        inkStrokeGroupRefs.current.get(id)?.removeAttribute('transform');
+      }
+      lassoBoxRectRef.current?.removeAttribute('transform');
+      if (onReplaceInkStrokes && (Math.abs(lm.lastDx) > 0.5 || Math.abs(lm.lastDy) > 0.5)) {
+        onPushInkHistory?.();
+        const selSet = new Set(selectedLassoIds);
+        onReplaceInkStrokes(
+          lm.baseStrokes.map((st) =>
+            selSet.has(st.id) ? translateInkStroke(st, lm.lastDx, lm.lastDy) : st
+          )
+        );
+      }
       return;
     }
 
@@ -2499,9 +2577,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
         >
           {(inkStrokes ?? []).map((stroke) => {
             const isLassoSelected = selectedLassoIds.includes(stroke.id);
-            const pathD = buildInkSvgPath(stroke.tool, stroke.points, stroke.width);
+            const pathD = getCachedInkSvgPath(stroke);
             return (
-              <g key={stroke.id}>
+              <g
+                key={stroke.id}
+                ref={(el) => {
+                  if (el) inkStrokeGroupRefs.current.set(stroke.id, el);
+                  else inkStrokeGroupRefs.current.delete(stroke.id);
+                }}
+              >
                 {isLassoSelected && (
                   <path
                     d={pathD}
@@ -2534,6 +2618,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
             if (!box) return null;
             return (
               <rect
+                ref={lassoBoxRectRef}
                 x={box.minX - 12}
                 y={box.minY - 12}
                 width={Math.max(24, box.maxX - box.minX + 24)}
@@ -2584,6 +2669,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
           return (
             <div
               key={note.id}
+              ref={(el) => {
+                if (el) stickyDomRefs.current.set(note.id, el);
+                else stickyDomRefs.current.delete(note.id);
+              }}
               data-testid={`canvas-sticky-${note.id}`}
               onPointerDown={(e) => {
                 if (isEventHardwareEraser(e)) return;
@@ -2607,6 +2696,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     startClientY: e.clientY,
                     origX: note.x,
                     origY: note.y,
+                    lastX: note.x,
+                    lastY: note.y,
                   };
                   try {
                     containerRef.current?.setPointerCapture?.(e.pointerId);
@@ -2897,7 +2988,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
               {hideTextInExam ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 rounded-2xl border-2 border-dashed border-violet-500/60 bg-violet-500/15 px-4 py-2 text-xs font-extrabold text-violet-700 shadow-sm backdrop-blur-xs dark:text-violet-200"
+                  className="inline-flex items-center gap-1.5 rounded-2xl border-2 border-dashed border-violet-500/60 bg-violet-100/95 px-4 py-2 text-xs font-extrabold text-violet-700 shadow-sm dark:bg-violet-950/90 dark:text-violet-200"
                 >
                   <Eye className="h-3.5 w-3.5" />
                   <span>Terimi Hatırla • Dokun Aç</span>

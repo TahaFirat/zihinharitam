@@ -278,83 +278,92 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   const hasBranchNote = (activeNode?.note ?? '').trim().length > 0;
   const activeBranchColor = activeNode?.branchColor ?? '#0EA5E9';
 
-  // Gamified Instant Search: <2ms Offline Shards + ALWAYS-ON Parallel Turkish->English Live Enrichment for new words!
+  // Zero-Keystroke-Lag Search: instant on node switch, 110ms debounced while typing rapidly!
+  const lastSearchNodeIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeNode) return;
 
     const seq = ++requestSeqRef.current;
     const controller = new AbortController();
-
-    const wave1 = VisualSearchOrchestrator.getInstantWave1Results(
-      searchQuery,
-      mapContext,
-      activeBranchColor
-    );
-    if (wave1.results.length > 0) {
-      setAllFederated(wave1.results);
-    }
-    if (carouselRef.current) {
-      carouselRef.current.scrollLeft = 0;
-    }
+    const isNodeSwitch = lastSearchNodeIdRef.current !== activeNode.id;
+    lastSearchNodeIdRef.current = activeNode.id;
 
     let cancelled = false;
     let onlineTimer: number | undefined;
 
-    void VisualSearchOrchestrator.searchOfflineWave(
-      searchQuery,
-      mapContext,
-      activeBranchColor,
-      48
-    ).then((offlineWave) => {
-      if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
-        return;
-      }
-      setAllFederated(offlineWave.results);
+    const executeSearch = () => {
+      if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) return;
 
-      // ALWAYS enrich via Live Google-Translated 540K+ Gamified Iconify + ARASAAC whenever:
-      // 1) Offline Turkish lexicon did NOT fully match ALL words (`!offlineWave.allWordsMatched` / `!offlineWave.hasLexiconMatch`), OR
-      // 2) Query is multi-word (e.g. "tablet kılıfı") so full-phrase EN translation + head-noun icons ALWAYS appear, OR
-      // 3) Offline returned fewer than 12 icons or weak top confidence (< 0.90)
-      const isMultiWordQuery = searchQuery.trim().includes(' ');
-      const needsOnlineEnrichment =
-        searchQuery.trim().length >= 2 &&
-        typeof navigator !== 'undefined' &&
-        navigator.onLine &&
-        (!offlineWave.hasLexiconMatch ||
-          offlineWave.allWordsMatched === false ||
-          isMultiWordQuery ||
-          offlineWave.results.length < 12 ||
-          (offlineWave.results[0]?.score ?? 0) < 0.9);
-
-      if (needsOnlineEnrichment) {
-        onlineTimer = window.setTimeout(async () => {
-          if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
-            return;
-          }
-          setLoadingRemote(true);
-          try {
-            const fullRes = await VisualSearchOrchestrator.searchFederatedGallery(
-              searchQuery,
-              mapContext,
-              activeBranchColor,
-              controller.signal
-            );
-            if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
-              setAllFederated(fullRes.results);
-            }
-          } finally {
-            if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
-              setLoadingRemote(false);
-            }
-          }
-        }, 95);
-      } else {
-        setLoadingRemote(false);
+      const wave1 = VisualSearchOrchestrator.getInstantWave1Results(
+        searchQuery,
+        mapContext,
+        activeBranchColor
+      );
+      if (wave1.results.length > 0) {
+        setAllFederated(wave1.results);
       }
-    });
+      if (carouselRef.current) {
+        carouselRef.current.scrollLeft = 0;
+      }
+
+      void VisualSearchOrchestrator.searchOfflineWave(
+        searchQuery,
+        mapContext,
+        activeBranchColor,
+        48
+      ).then((offlineWave) => {
+        if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
+          return;
+        }
+        setAllFederated(offlineWave.results);
+
+        // Enrich via verified commercial-safe Live Iconify when offline match is partial or multi-word
+        const isMultiWordQuery = searchQuery.trim().includes(' ');
+        const needsOnlineEnrichment =
+          searchQuery.trim().length >= 2 &&
+          typeof navigator !== 'undefined' &&
+          navigator.onLine &&
+          (!offlineWave.hasLexiconMatch ||
+            offlineWave.allWordsMatched === false ||
+            isMultiWordQuery ||
+            offlineWave.results.length < 12 ||
+            (offlineWave.results[0]?.score ?? 0) < 0.9);
+
+        if (needsOnlineEnrichment) {
+          onlineTimer = window.setTimeout(async () => {
+            if (cancelled || seq !== requestSeqRef.current || controller.signal.aborted) {
+              return;
+            }
+            setLoadingRemote(true);
+            try {
+              const fullRes = await VisualSearchOrchestrator.searchFederatedGallery(
+                searchQuery,
+                mapContext,
+                activeBranchColor,
+                controller.signal
+              );
+              if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
+                setAllFederated(fullRes.results);
+              }
+            } finally {
+              if (!cancelled && seq === requestSeqRef.current && !controller.signal.aborted) {
+                setLoadingRemote(false);
+              }
+            }
+          }, 95);
+        } else {
+          setLoadingRemote(false);
+        }
+      });
+    };
+
+    const debounceTimer = isNodeSwitch
+      ? (executeSearch(), undefined)
+      : window.setTimeout(executeSearch, 110);
 
     return () => {
       cancelled = true;
+      if (debounceTimer !== undefined) window.clearTimeout(debounceTimer);
       if (onlineTimer !== undefined) clearTimeout(onlineTimer);
       controller.abort();
     };
