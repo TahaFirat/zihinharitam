@@ -1,6 +1,4 @@
-v1.1.0 — Akış Diyagramı Stüdyosu, Çoklu Düzen, Flashcard & Sunum Güncellemesi:
-• YENİ Ayrı Akış Diyagramı Stüdyosu: Başla/Bitir, İşlem, Karar (Evet/Hayır), Veri, Veritabanı ve Doküman blokları, 90° akıllı oklar, 3 hazır şablon ve Mermaid kodundan tek tık diyagram oluşturma!
-• 4-Yönlü Harita Düzeni & 6 Stüdyo Renk Teması: Radyal, Sağa Ağaç, Org Şeması ve Zaman Çizgisi arasında tek tık geçiş + zihin haritasını akış diyagramına dönüştürme.
-• Aralıklı Tekrar (SM-2 Flashcard) & Tam Ekran Sinematik Sunum (Pitch) Modu.
-• Özel klasörler oluşturma, dallara tıklanabilir kaynak linki ekleme, canlı Türkçe/İngilizce dil seçimi.
-• Markdown (.md), Mermaid (.mmd), OPML ve Anki CSV dışa aktarım + Yıllık Pro’da 7 Gün Ücretsiz Deneme!
+• Gelişmiş Metinden Zihin Haritası: Paragraf, başlık ve açıklamalı maddeleri otomatik olarak dal başlığı ve dal açıklamasına (not kutusuna) dönüştürür.
+• Akıllı Çok Kelimeli İkon Arama: Türkçe ve İngilizce çok kelimeli aramalarda hedef kavramı doğrudan önceliklendirir ve tüm kategorilerde zengin görsel önerileri sunar.
+• Çizim & Klavye İyileştirmeleri: Sabit boyutlu taşınabilir çizim araç çubuğu ve iPhone/iPad klavye açıkken tam görünür ikon arama deneyimi.
+• Genel kararlılık ve hız iyileştirmeleri.
