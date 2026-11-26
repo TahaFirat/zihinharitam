@@ -27,6 +27,7 @@ interface Env {
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   AI_PRO_DAILY_LIMIT?: string;
+  AI_GLOBAL_DAILY_CAP?: string;
   PRO_ACCESS_SECRET?: string;
   ALLOWED_ORIGINS?: string;
 }
@@ -39,8 +40,9 @@ const DEPTH_RULES: Record<string, { maxMain: number; maxSub: number; maxTotal: n
   detailed: { maxMain: 10, maxSub: 5, maxTotal: 42 },
 };
 
-// Best-effort isolate-level burst & daily fair-use counters
+// Best-effort isolate-level burst, per-IP & global zero-billing daily counters
 const dailyHits = new Map<string, number>();
+const globalDailyHits = new Map<string, number>();
 const minuteHits = new Map<string, { count: number; resetAt: number }>();
 
 function buildCorsHeaders(origin: string | null, allowedCsv: string): Record<string, string> {
@@ -107,6 +109,7 @@ function sanitizeOutline(raw: string): string {
   let text = String(raw || '')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .trim()
     .replace(/^```(?:text|markdown|md)?\s*\n?/i, '')
     .replace(/\n?```\s*$/i, '')

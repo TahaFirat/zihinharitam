@@ -28,6 +28,7 @@ export interface AiOutlineResult {
 
 const PREF_STORAGE_KEY = 'zh_smartmap_ai_mode_v1';
 const REQUEST_TIMEOUT_MS = 13_000;
+const DEFAULT_MOBILE_AI_WORKER_URL = 'https://zihinharitam-ai-proxy.tahafirat3365.workers.dev';
 
 declare global {
   interface Window {
@@ -55,8 +56,10 @@ export function saveAiModePreference(enabled: boolean): void {
 
 /**
  * Resolves the active AI proxy base URL:
- *  1) Explicit `VITE_AI_API_URL` (e.g., deployed Cloudflare Worker HTTPS URL for iOS/Android/Web)
- *  2) Same-origin `web-platform` Node server when running over http(s) (NOT capacitor:// or file://)
+ *  1) Explicit `VITE_AI_API_URL` if set
+ *  2) Same-origin `web-platform` Node server when running in a standard web browser (http/https, not Capacitor)
+ *  3) Deployed Cloudflare Free AI Worker (`https://zihinharitam-ai-proxy.tahafirat3365.workers.dev`)
+ *     for native iOS & Android Capacitor apps so mobile & web have identical Pro AI!
  */
 export function resolveAiProxyBaseUrl(): string | null {
   const configured =
@@ -69,16 +72,18 @@ export function resolveAiProxyBaseUrl(): string | null {
   if (typeof window !== 'undefined') {
     const proto = window.location.protocol;
     const host = window.location.hostname;
-    // Capacitor iOS/Android webviews run on `capacitor://localhost` or `https://localhost` without our Node server
     const isCapacitorNative =
       proto === 'capacitor:' ||
       proto === 'file:' ||
       Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
-    if (!isCapacitorNative && (proto === 'http:' || proto === 'https:') && host) {
+    if (isCapacitorNative) {
+      return DEFAULT_MOBILE_AI_WORKER_URL;
+    }
+    if ((proto === 'http:' || proto === 'https:') && host) {
       return '';
     }
   }
-  return null;
+  return DEFAULT_MOBILE_AI_WORKER_URL;
 }
 
 /**
