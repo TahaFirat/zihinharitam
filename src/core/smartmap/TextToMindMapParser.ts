@@ -269,6 +269,10 @@ function classifyLine(rawLine: string): ClassifiedLine {
   const withoutBulletForNoteCheck = trimmed.replace(/^[-*•–—◦▪→▸►]\s+/, '').trim();
   const notePrefixMatch = withoutBulletForNoteCheck.match(NOTE_PREFIX_RE);
   if (notePrefixMatch) {
+    // Strip redundant generic `Not:` / `Note:` prefix while preserving semantic tags like `Örnek:`, `İpucu:`, `Formül:`
+    const cleanNoteContent = withoutBulletForNoteCheck
+      .replace(/^(?:not|notlar|note|notes)\s*[:\-–—]\s*/i, '')
+      .trim();
     return {
       raw: rawLine,
       trimmed,
@@ -276,7 +280,7 @@ function classifyLine(rawLine: string): ClassifiedLine {
       kind: 'note',
       headingDepth: 0,
       numberedDepth: 0,
-      content: withoutBulletForNoteCheck,
+      content: cleanNoteContent || withoutBulletForNoteCheck,
     };
   }
 
@@ -519,7 +523,319 @@ function buildStatsResult(
  *   explicit note lines (`Not:`, `Açıklama:`, `Örnek:`, `>`), checkboxes (`[x]`), badges (`[...]`),
  *   priority tags (`ÖNEMLİ`, `SINAV`), URLs, AND plain unformatted paragraphs!
  */
-export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult {
+export type MindMapDensity = LectureNoteDepth;
+
+const DENSITY_BUDGETS: Record<
+  MindMapDensity,
+  { maxMain: number; maxSubPerMain: number; maxDepth: number; maxTotal: number }
+> = {
+  compact: { maxMain: 5, maxSubPerMain: 3, maxDepth: 2, maxTotal: 18 },
+  balanced: { maxMain: 7, maxSubPerMain: 4, maxDepth: 2, maxTotal: 28 },
+  detailed: { maxMain: 10, maxSubPerMain: 6, maxDepth: 3, maxTotal: 48 },
+};
+
+function normWordsForMerge(s: string): Set<string> {
+  return new Set(
+    s
+      .toLocaleLowerCase('tr-TR')
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ı/g, 'i')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 3)
+  );
+}
+
+function jaccardWordOverlap(a: string, b: string): number {
+  const sa = normWordsForMerge(a);
+  const sb = normWordsForMerge(b);
+  if (sa.size === 0 || sb.size === 0) return 0;
+  let hits = 0;
+  for (const w of sa) {
+    if (sb.has(w)) hits++;
+  }
+  return hits / Math.min(sa.size, sb.size);
+}
+
+function summarizeNodeForFolding(node: ParsedOutlineNode): string {
+  const badgePart = node.techBadge ? ` [${node.techBadge}]` : '';
+  const prioPart =
+    node.priorityTag === 'exam'
+      ? ' [SINAV]'
+      : node.priorityTag === 'important'
+      ? ' [ÖNEMLİ]'
+      : '';
+  const cleanNote = (node.note || '').replace(/\s+/g, ' ').trim();
+  if (cleanNote) {
+    const clipped = cleanNote.length > 130 ? `${cleanNote.slice(0, 127).trim()}...` : cleanNote;
+    return `• ${node.title}${badgePart}${prioPart}: ${clipped}`;
+  }
+  return `• ${node.title}${badgePart}${prioPart}`;
+}
+
+/**
+ * Lossless Mind-Map Branch Compactor:
+ * Enforces a strict, zero-lag branch budget (`compact` default: <= 5 main branches, <= 3 sub-branches/main, <= 18 total nodes)
+ * while folding overflow sub-items & deep level-3+ details cleanly into their parent branch's `note` box so ZERO study facts are lost!
+ */
+export function compactParsedOutline(
+  parsed: ParsedOutlineResult,
+  density: MindMapDensity = 'compact'
+): ParsedOutlineResult {
+  const budget = DENSITY_BUDGETS[density] ?? DENSITY_BUDGETS.compact;
+  if (parsed.isSingleTopicSeed || parsed.nodes.length <= 4) {
+    return parsed;
+  }
+
+  // Deep clone nodes into mutable tree structure
+  interface TreeItem {
+    node: ParsedOutlineNode;
+    children: TreeItem[];
+  }
+  const byId = new Map<string, TreeItem>();
+  for (const n of parsed.nodes) {
+    byId.set(n.id, { node: { ...n }, children: [] });
+  }
+  const rootItem = byId.get(parsed.rootId);
+  if (!rootItem) return parsed;
+
+  for (const item of byId.values()) {
+    if (item.node.id === parsed.rootId) continue;
+    const parent = (item.node.parentId ? byId.get(item.node.parentId) : null) ?? rootItem;
+    parent.children.push(item);
+  }
+
+  const foldSubtreeIntoNote = (target: ParsedOutlineNode, sub: TreeItem) => {
+    target.note = appendNote(target.note, summarizeNodeForFolding(sub.node));
+    if (!target.priorityTag && sub.node.priorityTag) {
+      target.priorityTag = sub.node.priorityTag;
+    }
+    if (!target.techBadge && sub.node.techBadge) {
+      target.techBadge = sub.node.techBadge;
+    }
+    for (const grand of sub.children) {
+      foldSubtreeIntoNote(target, grand);
+    }
+  };
+
+  // 1. Fold anything deeper than `budget.maxDepth` cleanly into its ancestor's `note`
+  const enforceDepth = (item: TreeItem, depth: number) => {
+    item.node.level = depth;
+    if (depth >= budget.maxDepth) {
+      for (const ch of item.children) {
+        foldSubtreeIntoNote(item.node, ch);
+      }
+      item.children = [];
+      return;
+    }
+    for (const ch of item.children) {
+      enforceDepth(ch, depth + 1);
+    }
+  };
+  enforceDepth(rootItem, 0);
+
+  // 2. Merge semantically overlapping sibling main branches if root has > maxMain
+  if (rootItem.children.length > budget.maxMain) {
+    const mergedMains: TreeItem[] = [];
+    for (const main of rootItem.children) {
+      const similar = mergedMains.find(
+        (prev) => jaccardWordOverlap(prev.node.title, main.node.title) >= 0.48
+      );
+      if (similar) {
+        if (main.node.note) {
+          similar.node.note = appendNote(similar.node.note, `${main.node.title}: ${main.node.note}`);
+        }
+        similar.children.push(...main.children);
+      } else {
+        mergedMains.push(main);
+      }
+    }
+    rootItem.children = mergedMains;
+  }
+
+  // 3. Cap main branches to `budget.maxMain`: fold overflow sections into a crisp final bucket or last main branch
+  if (rootItem.children.length > budget.maxMain) {
+    const keepDirect = rootItem.children.slice(0, budget.maxMain - 1);
+    const overflow = rootItem.children.slice(budget.maxMain - 1);
+    if (overflow.length === 1) {
+      keepDirect.push(overflow[0]);
+    } else {
+      const summaryMain: TreeItem = {
+        node: {
+          id: `gen_summary_bucket`,
+          parentId: rootItem.node.id,
+          level: 1,
+          title: 'Diğer Önemli Konular',
+          branchColor: BRANCH_PALETTE[(budget.maxMain - 1) % BRANCH_PALETTE.length],
+        },
+        children: [],
+      };
+      // Promote up to `budget.maxSubPerMain` top overflow headings as clean L2 children, fold the rest into notes
+      for (let i = 0; i < overflow.length; i++) {
+        const ov = overflow[i];
+        if (summaryMain.children.length < budget.maxSubPerMain) {
+          const promoted: TreeItem = {
+            node: {
+              ...ov.node,
+              parentId: summaryMain.node.id,
+              level: 2,
+              branchColor: summaryMain.node.branchColor,
+            },
+            children: [],
+          };
+          for (const ch of ov.children) {
+            foldSubtreeIntoNote(promoted.node, ch);
+          }
+          summaryMain.children.push(promoted);
+        } else {
+          foldSubtreeIntoNote(summaryMain.node, ov);
+        }
+      }
+      keepDirect.push(summaryMain);
+    }
+    rootItem.children = keepDirect;
+  }
+
+  // 4. Cap sub-branches per main branch (prioritizing exam/important/noted branches) and fold extras into parent note
+  const scoreChildImportance = (c: TreeItem): number => {
+    let s = 0;
+    if (c.node.priorityTag === 'exam') s += 4;
+    if (c.node.priorityTag === 'important') s += 3;
+    if (c.node.techBadge) s += 1.5;
+    if (c.node.note && c.node.note.length >= 12) s += 1.2;
+    if (c.children.length > 0) s += 1;
+    return s;
+  };
+
+  for (const main of rootItem.children) {
+    if (main.children.length > budget.maxSubPerMain) {
+      const indexed = main.children.map((c, idx) => ({ c, idx, score: scoreChildImportance(c) }));
+      const keptIdx = new Set(
+        [...indexed]
+          .sort((a, b) => b.score - a.score || a.idx - b.idx)
+          .slice(0, budget.maxSubPerMain)
+          .map((x) => x.idx)
+      );
+      const kept: TreeItem[] = [];
+      for (const entry of indexed) {
+        if (keptIdx.has(entry.idx)) {
+          kept.push(entry.c);
+        } else {
+          foldSubtreeIntoNote(main.node, entry.c);
+        }
+      }
+      main.children = kept;
+    }
+    // Also cap L3 children if in detailed mode
+    for (const sub of main.children) {
+      if (sub.children.length > 3) {
+        const extra = sub.children.slice(3);
+        sub.children = sub.children.slice(0, 3);
+        for (const e of extra) {
+          foldSubtreeIntoNote(sub.node, e);
+        }
+      }
+    }
+  }
+
+  // 5. Enforce global `budget.maxTotal` cap by folding lowest-priority leaf nodes from largest main branches
+  const countAll = (item: TreeItem): number =>
+    1 + item.children.reduce((acc, ch) => acc + countAll(ch), 0);
+
+  while (countAll(rootItem) > budget.maxTotal) {
+    const fattestMain = [...rootItem.children]
+      .filter((m) => m.children.length > 0)
+      .sort((a, b) => b.children.length - a.children.length)[0];
+    if (!fattestMain) break;
+    const dropped = fattestMain.children.pop();
+    if (dropped) {
+      foldSubtreeIntoNote(fattestMain.node, dropped);
+    }
+  }
+
+  // 6. Flatten back to clean `ParsedOutlineNode[]` with coherent branch colors & parentIds
+  const flat: ParsedOutlineNode[] = [];
+  rootItem.node.level = 0;
+  rootItem.node.parentId = null;
+  flat.push(rootItem.node);
+
+  rootItem.children.forEach((main, mIdx) => {
+    const color = BRANCH_PALETTE[mIdx % BRANCH_PALETTE.length];
+    const visit = (it: TreeItem, parentId: string, level: number) => {
+      it.node.parentId = parentId;
+      it.node.level = level;
+      it.node.branchColor = color;
+      if (it.node.note && it.node.note.length > 650) {
+        it.node.note = `${it.node.note.slice(0, 646).trim()}...`;
+      }
+      flat.push(it.node);
+      for (const ch of it.children) {
+        visit(ch, it.node.id, level + 1);
+      }
+    };
+    visit(main, rootItem.node.id, 1);
+  });
+
+  return buildStatsResult(rootItem.node.id, flat, false);
+}
+
+export function serializeParsedOutlineToText(parsed: ParsedOutlineResult): string {
+  const byParent = new Map<string | null, ParsedOutlineNode[]>();
+  for (const n of parsed.nodes) {
+    const arr = byParent.get(n.parentId) ?? [];
+    arr.push(n);
+    byParent.set(n.parentId, arr);
+  }
+  const root = parsed.nodes.find((n) => n.id === parsed.rootId) ?? parsed.nodes[0];
+  if (!root) return '';
+
+  const lines: string[] = [root.title];
+  if (root.note) {
+    lines.push(`  Not: ${root.note.replace(/\n+/g, ' · ')}`);
+  }
+
+  const emitChildren = (parentId: string, depth: number) => {
+    const kids = byParent.get(parentId) ?? [];
+    const pad = '  '.repeat(Math.max(0, depth - 1));
+    for (const k of kids) {
+      const badge = k.techBadge ? ` [${k.techBadge}]` : '';
+      const prio =
+        k.priorityTag === 'exam'
+          ? ' [SINAV]'
+          : k.priorityTag === 'important'
+          ? ' [ÖNEMLİ]'
+          : '';
+      const rawNote = (k.note || '').trim();
+      const noteLines = rawNote ? rawNote.split('\n').map((s) => s.trim()).filter(Boolean) : [];
+      if (noteLines.length === 1 && !noteLines[0].startsWith('•') && noteLines[0].length <= 160) {
+        lines.push(`${pad}- ${k.title}: ${noteLines[0]}${badge}${prio}`);
+      } else {
+        lines.push(`${pad}- ${k.title}${badge}${prio}`);
+        for (const nl of noteLines.slice(0, 4)) {
+          const cleanNl = nl
+            .replace(/^•\s*/, '')
+            .replace(/^(?:not|notlar|note|notes)\s*[:\-–—]\s*/i, '')
+            .trim();
+          if (cleanNl) {
+            lines.push(`${pad}  Not: ${cleanNl}`);
+          }
+        }
+      }
+      emitChildren(k.id, depth + 1);
+    }
+  };
+  emitChildren(root.id, 1);
+  return lines.join('\n').trim();
+}
+
+export function parseTextToMindMapOutline(
+  rawInput: string,
+  options?: { density?: MindMapDensity }
+): ParsedOutlineResult {
   const trimmedAll = rawInput.trim();
   if (!trimmedAll) {
     return buildStatsResult(
@@ -555,7 +871,8 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
     const looksLikeShortLineList =
       rawLines.length >= 3 && rawLines.every((l) => l.trim().length <= 75);
     if (!looksLikeShortLineList) {
-      return parseProseTextToMindMap(rawInput);
+      const proseRes = parseProseTextToMindMap(rawInput);
+      return options?.density ? compactParsedOutline(proseRes, options.density) : proseRes;
     }
   }
 
@@ -700,7 +1017,8 @@ export function parseTextToMindMapOutline(rawInput: string): ParsedOutlineResult
     lastCreatedIndent = line.indent;
   }
 
-  return buildStatsResult(rootId, nodes, false);
+  const rawResult = buildStatsResult(rootId, nodes, false);
+  return options?.density ? compactParsedOutline(rawResult, options.density) : rawResult;
 }
 
 // =============================================================================
@@ -1089,9 +1407,9 @@ export function convertLectureNoteToMindMapFormat(
   rawLectureNote: string,
   options?: LectureNoteConversionOptions
 ): LectureNoteConversionResult {
-  const depth: LectureNoteDepth = options?.depth ?? 'balanced';
-  const maxSubsPerSection = depth === 'compact' ? 3 : depth === 'detailed' ? 10 : 6;
-  const maxParagraphs = depth === 'compact' ? 6 : depth === 'detailed' ? 14 : 9;
+  const depth: LectureNoteDepth = options?.depth ?? 'compact';
+  const maxSubsPerSection = depth === 'compact' ? 3 : depth === 'detailed' ? 6 : 4;
+  const maxParagraphs = depth === 'compact' ? 5 : depth === 'detailed' ? 10 : 7;
 
   const cleaned = cleanPdfAndRawText(rawLectureNote);
   if (!cleaned) {
@@ -1129,14 +1447,18 @@ export function convertLectureNoteToMindMapFormat(
   if (isMostlyStructured) {
     const structured = structureRawLectureNoteToOutline(rawLectureNote, { depth });
     if (structured.formattedOutline) {
-      const parsedVerify = parseTextToMindMapOutline(structured.formattedOutline);
+      const compacted = compactParsedOutline(
+        parseTextToMindMapOutline(structured.formattedOutline),
+        depth
+      );
+      const compactOutline = serializeParsedOutlineToText(compacted);
       return {
-        formattedOutline: structured.formattedOutline,
+        formattedOutline: compactOutline,
         stats: {
-          totalNodes: parsedVerify.stats.totalNodes,
-          mainBranches: parsedVerify.stats.mainBranches,
-          subBranches: parsedVerify.stats.subBranches,
-          notedBranches: parsedVerify.stats.notedBranches,
+          totalNodes: compacted.stats.totalNodes,
+          mainBranches: compacted.stats.mainBranches,
+          subBranches: compacted.stats.subBranches,
+          notedBranches: compacted.stats.notedBranches,
           badgesCount: structured.badgesCount,
         },
       };
@@ -1423,16 +1745,17 @@ export function convertLectureNoteToMindMapFormat(
     }
   }
 
-  const formattedOutline = outputLines.join('\n').trim();
-  const parsedVerify = parseTextToMindMapOutline(formattedOutline);
+  const rawFormatted = outputLines.join('\n').trim();
+  const compacted = compactParsedOutline(parseTextToMindMapOutline(rawFormatted), depth);
+  const formattedOutline = serializeParsedOutlineToText(compacted);
 
   return {
     formattedOutline,
     stats: {
-      totalNodes: parsedVerify.stats.totalNodes,
-      mainBranches: parsedVerify.stats.mainBranches,
-      subBranches: parsedVerify.stats.subBranches,
-      notedBranches: parsedVerify.stats.notedBranches,
+      totalNodes: compacted.stats.totalNodes,
+      mainBranches: compacted.stats.mainBranches,
+      subBranches: compacted.stats.subBranches,
+      notedBranches: compacted.stats.notedBranches,
       badgesCount,
     },
   };

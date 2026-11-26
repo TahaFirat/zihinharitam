@@ -1,0 +1,78 @@
+@import "../../src/index.css";
+@source "../../src";
+@source "./";
+
+/*
+ * Default Web Document Flow:
+ * Overrides mobile WKWebView scroll-lock from src/index.css so Landing (/), Auth (/auth)
+ * and Public Share (/s/:slug) scroll smoothly on desktop wheel, trackpad & mobile touch!
+ */
+html,
+body,
+#root {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 100dvh !important;
+  overflow-x: clip !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/* Lock full viewport ONLY while inside the interactive mind-map canvas route (/app) */
+html.web-app-locked,
+html.web-app-locked body,
+html.web-app-locked #root {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Scope embedded ZihinHaritam App cleanly below the WebTopBar with zero overlap */
+.web-app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--canvas-bg);
+}
+
+.web-app-frame {
+  position: relative;
+  flex: 1 1 0%;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.web-app-frame > main,
+.web-app-frame > div {
+  height: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+}
+
+@keyframes webFloatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-web-float {
+  animation: webFloatSlow 5.5s ease-in-out infinite;
+}

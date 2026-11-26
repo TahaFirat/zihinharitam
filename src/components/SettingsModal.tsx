@@ -271,7 +271,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <li><strong>Energy Icons, Siemens IX, Iconoir, Phosphor Icons, Tabler Icons, Marketeq, Meteocons, Flat Color Icons, Circle Flags</strong> (MIT)</li>
                 <li><strong>Temaki Civil &amp; Infrastructure Icons</strong> (CC0 Public Domain)</li>
                 <li><strong>IBM Carbon Icons &amp; Pictogrammers Material Design Icons</strong> (Apache-2.0)</li>
-                <li><strong>Lucide Icons</strong> (ISC) • <strong>React, Capacitor, jsPDF, Yjs, MiniSearch, RBush</strong> (MIT) • <strong>Dexie</strong> (Apache-2.0)</li>
+                <li><strong>Lucide Icons</strong> (ISC) • <strong>React, Capacitor, jsPDF, fflate, Yjs, MiniSearch, RBush</strong> (MIT) • <strong>Mozilla PDF.js, Dexie</strong> (Apache-2.0)</li>
               </ul>
             </div>
 

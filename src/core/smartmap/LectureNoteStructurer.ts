@@ -532,7 +532,10 @@ function preprocessLines(rawInput: string): RawParsedLine[] {
 
 function isStandaloneShortHeading(line: RawParsedLine): boolean {
   if (line.isHeadingMd) return true;
-  if (line.isBullet || line.isNumbered) return false;
+  if (line.isBullet) return false;
+  if (line.isNumbered) {
+    if (line.indent >= 2 || STEP_LINE_RE.test(line.trimmed)) return false;
+  }
   if (GLUED_TABLE_HEADER_RE.test(line.content)) return false;
   if (TRANSITION_STUB_RE.test(line.content)) return false;
   const c = line.content;
@@ -644,6 +647,19 @@ function classifyHeadingLevels(
     const line = lines[idx];
     if (line.isHeadingMd) {
       const lvl = (line.mdDepth <= 2 ? 1 : line.mdDepth === 3 ? 2 : 3) as 1 | 2 | 3;
+      levels.set(idx, lvl);
+      if (lvl === 1) {
+        hasSeenL1 = true;
+        hasSeenL2InCurrentL1 = false;
+      } else if (lvl === 2) {
+        hasSeenL2InCurrentL1 = true;
+      }
+      continue;
+    }
+
+    if (line.isNumbered) {
+      const subDotMatch = line.trimmed.match(/^(\d+(?:\.\d+)+)[.)]\s+/);
+      const lvl = (subDotMatch ? (subDotMatch[1].split('.').length >= 3 ? 3 : 2) : 1) as 1 | 2 | 3;
       levels.set(idx, lvl);
       if (lvl === 1) {
         hasSeenL1 = true;

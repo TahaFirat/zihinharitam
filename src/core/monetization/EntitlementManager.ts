@@ -387,6 +387,14 @@ class EntitlementStore {
     const refreshedPlans = await BillingService.fetchAllProPlans().catch(() => this.snapshot.plans);
     this.update({ isLifetimePro: false, plans: refreshedPlans });
   }
+
+  public syncVerifiedWebStatus(isPro: boolean, trialEligible = true): void {
+    const nextPlans = { ...this.snapshot.plans };
+    if (!trialEligible && nextPlans.yearly?.introOffer) {
+      nextPlans.yearly = { ...nextPlans.yearly, introOffer: undefined };
+    }
+    this.update({ isLifetimePro: Boolean(isPro), plans: nextPlans });
+  }
 }
 
 export const EntitlementManager = new EntitlementStore();

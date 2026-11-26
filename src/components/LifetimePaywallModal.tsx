@@ -117,8 +117,13 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
     type: 'success' | 'info' | 'error';
     text: string;
   } | null>(null);
+  const isNativeStore = BillingService.isNativeStorePlatform();
   const isNativeIos = BillingService.isNativeIos();
-  const storeName = isNativeIos ? 'App Store' : 'Google Play';
+  const storeName = isNativeStore
+    ? isNativeIos
+      ? 'App Store'
+      : 'Google Play'
+    : 'ZihinHaritam Web';
 
   useEffect(() => {
     if (isOpen) {
@@ -236,7 +241,9 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
         type: 'info',
         text:
           res.errorMessage ||
-          'Bu Apple hesabına tanımlı aktif bir ZihinHaritam Pro aboneliği veya ömür boyu lisansı bulunamadı.',
+          (isNativeStore
+            ? 'Bu mağaza hesabına tanımlı aktif bir ZihinHaritam Pro aboneliği veya ömür boyu lisansı bulunamadı.'
+            : 'Bu ZihinHaritam hesabına tanımlı aktif bir Pro paketi bulunamadı.'),
       });
     }
   };

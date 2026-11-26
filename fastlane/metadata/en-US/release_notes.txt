@@ -1,4 +1,4 @@
-• 52,700+ Royalty-Free Icons & Zero-Vanish Search: Added 9 new commercial-safe engineering, science, and medical icon packs (MIT/Apache-2.0/CC0/CC-BY 4.0) with local-first vector hydration so icons never vanish while typing or offline.
-• Exact Turkish-English Parity & 3D Studio Reliability: Fixed bilingual mismatches and broken previews with guaranteed 512x512 on-device rendering.
-• Live Raw Lecture Note Converter Tab: Analyzes unstructured paragraphs and study notes into clean structured mind-map outlines (Central Topic, Branches with Descriptions/Badges, Sub-concepts & Notes) with Compact/Balanced/Detailed depth modes.
-• Updated v8 offline cache and overall stability improvements.
+• NEW PDF, Word (.docx) & PowerPoint (.pptx) to Mind Map: Analyzes lecture PDFs, slides, and documents 100% on-device offline and turns them into crisp visual mind maps.
+• Smart Document Photo Matching: Extracts diagrams and figures from PDFs/slides (filtering out repeated logos) and places them directly on the matching branches, paired with 45,500+ commercially licensed icons.
+• Compact Low-Branch Summary Engine: Automatically keeps mind maps clean and lag-free (default 5 main branches) while folding extra details losslessly into branch notes.
+• Lecture Note Converter & Canvas Polish: Automatic input reset after creation, smoother zero-render dragging, and faster multilingual search.

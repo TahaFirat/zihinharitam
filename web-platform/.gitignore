@@ -1,0 +1,6 @@
+dist/
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/.server-secret
+*.log

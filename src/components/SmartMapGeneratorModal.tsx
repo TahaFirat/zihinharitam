@@ -14,6 +14,9 @@ import {
   ArrowRight,
   BookOpen,
   Copy,
+  FileUp,
+  Image as ImageIcon,
+  AlertCircle,
 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -29,7 +32,14 @@ import {
   parseTextToMindMapOutline,
   type LectureNoteConversionResult,
   type LectureNoteDepth,
+  type MindMapDensity,
 } from '../core/smartmap/TextToMindMapParser';
+import {
+  attachDocumentImagesToBestBranches,
+  extractDocumentForMindMap,
+  type DocumentExtractionResult,
+  type ExtractedDocumentImage,
+} from '../core/smartmap/DocumentImportExtractor';
 import {
   TopicContextIntelligence,
   type MapContextAnalysis,
@@ -107,10 +117,16 @@ Dirlik Toprakları: Gelir büyüklüğüne göre Has, Zeamet ve Tımar olmak üz
 
 async function buildSmartMapFromOutlineText(
   rawInput: string,
-  deptHint: AcademicDepartment = 'genel'
+  deptHint: AcademicDepartment = 'genel',
+  options?: {
+    density?: MindMapDensity;
+    documentImages?: ExtractedDocumentImage[];
+  }
 ): Promise<MindMapDocument> {
   const now = Date.now();
-  const parsed = parseTextToMindMapOutline(rawInput);
+  const parsed = parseTextToMindMapOutline(rawInput, {
+    density: options?.density ?? 'compact',
+  });
   const rootId = parsed.rootId;
 
   const nodes: Record<string, MindNode> = {};
@@ -131,6 +147,11 @@ async function buildSmartMapFromOutlineText(
       collapsed: false,
     };
   });
+
+  // If user uploaded a PDF / PPTX / DOCX with diagrams/photos, attach real document images to the best-matching branches first!
+  if (options?.documentImages && options.documentImages.length > 0) {
+    attachDocumentImagesToBestBranches(nodes, rootId, options.documentImages);
+  }
 
   // If user only typed a 1-line topic title, expand it automatically via `TopicContextIntelligence.getProactiveSubBranches`!
   if (parsed.isSingleTopicSeed && parsed.nodes.length === 1) {
@@ -426,11 +447,18 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 }) => {
   const kb = useKeyboardInset();
   const [tab, setTab] = useState<'text_to_map' | 'proactive_branches'>(initialTab);
-  const [inputMode, setInputMode] = useState<'outline' | 'converter'>('outline');
+  const [inputMode, setInputMode] = useState<'outline' | 'converter' | 'document'>('outline');
   const [outlineText, setOutlineText] = useState('');
   const [rawLectureNote, setRawLectureNote] = useState('');
-  const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('balanced');
+  const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('compact');
   const [converterPreviewMode, setConverterPreviewMode] = useState<'text' | 'tree'>('text');
+  const [docResult, setDocResult] = useState<DocumentExtractionResult | null>(null);
+  const [docImages, setDocImages] = useState<ExtractedDocumentImage[]>([]);
+  const [useDocImages, setUseDocImages] = useState(true);
+  const [docLoading, setDocLoading] = useState<{ label: string; pct: number } | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copiedConverted, setCopiedConverted] = useState(false);
   const [convertFeedback, setConvertFeedback] = useState<
     LectureNoteConversionResult['stats'] | null
@@ -498,10 +526,10 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const liveParsedPreview = useMemo(() => {
     const trimmed = outlineText.trim();
     if (!trimmed) return null;
-    return parseTextToMindMapOutline(trimmed);
-  }, [outlineText]);
+    return parseTextToMindMapOutline(trimmed, { density: analysisDepth });
+  }, [outlineText, analysisDepth]);
 
-  // Real-time Photo-6 Structure Converter Preview inside the Lecture Note Analyzer tab!
+  // Real-time Structure Converter Preview inside the Lecture Note Analyzer tab!
   const liveConvertedPreview = useMemo(() => {
     const trimmed = rawLectureNote.trim();
     if (!trimmed) return null;
@@ -510,8 +538,17 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
   const liveConvertedTree = useMemo(() => {
     if (!liveConvertedPreview?.formattedOutline) return null;
-    return parseTextToMindMapOutline(liveConvertedPreview.formattedOutline);
-  }, [liveConvertedPreview]);
+    return parseTextToMindMapOutline(liveConvertedPreview.formattedOutline, {
+      density: analysisDepth,
+    });
+  }, [liveConvertedPreview, analysisDepth]);
+
+  const liveDocumentOutline = useMemo(() => {
+    if (!docResult?.extractedText) return null;
+    return convertLectureNoteToMindMapFormat(docResult.extractedText, {
+      depth: analysisDepth,
+    });
+  }, [docResult, analysisDepth]);
 
   useEffect(() => {
     if (isOpen) {
@@ -586,11 +623,48 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const resetAllInputs = () => {
     setOutlineText('');
     setRawLectureNote('');
+    setDocResult(null);
+    setDocImages([]);
+    setUseDocImages(true);
+    setDocLoading(null);
+    setDocError(null);
     setConvertFeedback(null);
     setShowLivePreview(false);
     setDeptHint('genel');
     setInputMode('outline');
     setDictationError(null);
+  };
+
+  const handleDocumentFileSelected = async (file: File | null | undefined) => {
+    if (!file) return;
+    void hapticLight();
+    setDocError(null);
+    setDocLoading({ label: 'Belge hazırlanıyor...', pct: 5 });
+    try {
+      const res = await extractDocumentForMindMap(file, (label, pct) => {
+        setDocLoading({ label, pct });
+      });
+      setDocResult(res);
+      setDocImages(res.images);
+      setUseDocImages(res.images.length > 0);
+      void hapticSuccess();
+    } catch (err) {
+      setDocResult(null);
+      setDocImages([]);
+      setDocError(
+        err instanceof Error ? err.message : 'Dosya okunamadı. Lütfen geçerli bir PDF, DOCX, PPTX veya TXT dosyası seçin.'
+      );
+    } finally {
+      setDocLoading(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const toggleDocImageSelected = (imgId: string) => {
+    void hapticLight();
+    setDocImages((prev) =>
+      prev.map((im) => (im.id === imgId ? { ...im, selected: !im.selected } : im))
+    );
   };
 
   const handleConvertLectureNote = (andCreateMap = false) => {
@@ -611,15 +685,23 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     }
   };
 
-  const executeGenerateFromText = async (sourceText: string) => {
+  const executeGenerateFromText = async (
+    sourceText: string,
+    overrideImages?: ExtractedDocumentImage[]
+  ) => {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
       const input = sourceText.trim() || QUICK_SAMPLE_NOTES[0].text;
-      const generatedDoc = await buildSmartMapFromOutlineText(input, deptHint);
+      const activeImages =
+        overrideImages ?? (useDocImages ? docImages.filter((i) => i.selected) : []);
+      const generatedDoc = await buildSmartMapFromOutlineText(input, deptHint, {
+        density: analysisDepth,
+        documentImages: activeImages,
+      });
       void hapticSuccess();
       void dismissNativeKeyboard();
-      // Always clear BOTH input boxes right after map creation so reopening starts completely clean!
+      // Always clear ALL input boxes & document state right after map creation so reopening starts completely clean!
       resetAllInputs();
       onGenerateCompleteMap(generatedDoc);
       onClose();
@@ -710,9 +792,9 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {tab === 'text_to_map' ? (
             <div className="space-y-3.5">
-              {/* Sub-mode Switcher: Structured Outline vs Dedicated Lecture-Note-to-Format Converter */}
+              {/* Sub-mode Switcher: Structured Outline vs Lecture-Note Converter vs PDF/Document Importer */}
               <div
-                className="grid grid-cols-2 gap-1.5 rounded-2xl border p-1"
+                className="grid grid-cols-3 gap-1 rounded-2xl border p-1"
                 style={{
                   backgroundColor: 'var(--hud-bg)',
                   borderColor: 'var(--hud-border)',
@@ -725,14 +807,14 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     void hapticLight();
                     setInputMode('outline');
                   }}
-                  className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
+                  className={`inline-flex min-h-[38px] items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-extrabold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs ${
                     inputMode === 'outline'
                       ? 'bg-sky-500 text-white shadow-xs'
                       : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
                   }`}
                 >
                   <FileText className="h-3.5 w-3.5 shrink-0" />
-                  <span>Harita Formatı</span>
+                  <span className="truncate">Harita Formatı</span>
                 </button>
                 <button
                   type="button"
@@ -741,18 +823,283 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     void hapticLight();
                     setInputMode('converter');
                   }}
-                  className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition-colors ${
+                  className={`inline-flex min-h-[38px] items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-extrabold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs ${
                     inputMode === 'converter'
                       ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xs'
                       : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
                   }`}
                 >
                   <BookOpen className="h-3.5 w-3.5 shrink-0" />
-                  <span>Ders Notunu Formata Çevir</span>
+                  <span className="truncate">Ders Notu Çevir</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="smart-map-mode-document-btn"
+                  onClick={() => {
+                    void hapticLight();
+                    setInputMode('document');
+                  }}
+                  className={`inline-flex min-h-[38px] items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-extrabold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs ${
+                    inputMode === 'document'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs'
+                      : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
+                  }`}
+                >
+                  <FileUp className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">PDF / Dosya</span>
                 </button>
               </div>
 
-              {inputMode === 'converter' ? (
+              {inputMode === 'document' ? (
+                <div className="space-y-3" data-testid="document-import-panel">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 p-3 text-xs leading-relaxed font-semibold">
+                    <span className="min-w-0 flex-1">
+                      <strong>PDF, Word (.docx), PowerPoint (.pptx) veya TXT/MD</strong> dosyanı seç — uygulama metni az dallı akıcı bir zihin haritasına özetler ve belgedeki{' '}
+                      <strong>şema/fotoğrafları</strong> ilgili dallara otomatik yerleştirir.
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1 rounded-xl border border-emerald-500/25 bg-white/70 p-0.5 dark:bg-slate-900/60">
+                      {(
+                        [
+                          { id: 'compact', label: 'Az Dal' },
+                          { id: 'balanced', label: 'Dengeli' },
+                          { id: 'detailed', label: 'Detaylı' },
+                        ] as Array<{ id: LectureNoteDepth; label: string }>
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          data-testid={`doc-depth-${opt.id}`}
+                          onClick={() => {
+                            void hapticLight();
+                            setAnalysisDepth(opt.id);
+                          }}
+                          className={`rounded-lg px-2 py-1 text-[11px] font-extrabold transition ${
+                            analysisDepth === opt.id
+                              ? 'bg-emerald-600 text-white shadow-2xs'
+                              : 'opacity-75 hover:opacity-100'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hidden Native/Web Document Input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    data-testid="document-file-input"
+                    accept=".pdf,.docx,.pptx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown"
+                    onChange={(e) => void handleDocumentFileSelected(e.target.files?.[0])}
+                    className="hidden"
+                  />
+
+                  {/* Dropzone / File Picker Card */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    data-testid="document-dropzone"
+                    onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingFile(true);
+                    }}
+                    onDragLeave={() => setIsDraggingFile(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingFile(false);
+                      const f = e.dataTransfer?.files?.[0];
+                      void handleDocumentFileSelected(f);
+                    }}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-5 text-center transition ${
+                      isDraggingFile
+                        ? 'border-emerald-500 bg-emerald-500/12'
+                        : 'border-slate-400/35 hover:border-emerald-500/70 hover:bg-emerald-500/5'
+                    }`}
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                      {docLoading ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : (
+                        <FileUp className="h-6 w-6" />
+                      )}
+                    </div>
+                    <div className="mt-2.5 text-sm font-extrabold">
+                      {docLoading
+                        ? docLoading.label
+                        : docResult
+                        ? `${docResult.fileName} (${docResult.pageCount} sayfa)`
+                        : 'PDF, Word, PowerPoint veya TXT Dosyası Seç'}
+                    </div>
+                    <p className="mt-1 text-[11px] font-semibold opacity-70">
+                      {docLoading
+                        ? `%${docLoading.pct} tamamlandı • Tüm işlem cihazında çevrimdışı yapılır`
+                        : 'Sürükleyip bırak veya dokunarak seç (Maks. 20 MB • %100 cihaz içi gizli işleme)'}
+                    </p>
+                    {docLoading && (
+                      <div className="mt-3 h-2 w-full max-w-xs overflow-hidden rounded-full bg-slate-500/15">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all duration-200"
+                          style={{ width: `${Math.max(8, docLoading.pct)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {docError && (
+                    <div
+                      data-testid="document-error-banner"
+                      className="flex items-start gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-bold text-rose-700 dark:text-rose-300"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{docError}</span>
+                    </div>
+                  )}
+
+                  {docResult && (
+                    <div className="space-y-3" data-testid="document-extracted-summary">
+                      {docResult.warnings.length > 0 && (
+                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] font-bold text-amber-800 dark:text-amber-200">
+                          {docResult.warnings.join(' ')}
+                        </div>
+                      )}
+
+                      {/* Extracted PDF / Slide Photos Selection Strip */}
+                      {docImages.length > 0 && (
+                        <div
+                          data-testid="document-extracted-images"
+                          className="space-y-2 rounded-2xl border border-sky-500/30 bg-sky-500/6 p-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 text-xs font-extrabold">
+                              <ImageIcon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                              <span>
+                                Belgeden {docImages.length} Görsel Çıkarıldı (
+                                {docImages.filter((i) => i.selected).length} seçili)
+                              </span>
+                            </div>
+                            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-extrabold">
+                              <input
+                                type="checkbox"
+                                checked={useDocImages}
+                                onChange={(e) => setUseDocImages(e.target.checked)}
+                                className="h-4 w-4 rounded accent-sky-600"
+                              />
+                              <span>Dallara görsel olarak ekle</span>
+                            </label>
+                          </div>
+                          <p className="text-[11px] font-medium opacity-75">
+                            Seçili PDF/slayt görselleri en ilgili kavram dallarına ikon yerine yerleştirilir; diğer dallar otomatik ikon alır. İstemezseniz görsele dokunup kaldırabilirsiniz.
+                          </p>
+                          <div className="no-scrollbar flex gap-2 overflow-x-auto pt-1 pb-0.5">
+                            {docImages.map((img) => (
+                              <button
+                                key={img.id}
+                                type="button"
+                                onClick={() => toggleDocImageSelected(img.id)}
+                                title={img.nearbyHeading}
+                                className={`relative h-16 w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-white transition ${
+                                  useDocImages && img.selected
+                                    ? 'border-sky-500 shadow-xs'
+                                    : 'border-slate-300 opacity-45 grayscale'
+                                }`}
+                              >
+                                <img
+                                  src={img.dataUrl}
+                                  alt={img.nearbyHeading}
+                                  className="h-full w-full object-contain p-0.5"
+                                />
+                                <span className="absolute right-0.5 bottom-0.5 rounded bg-slate-900/80 px-1 py-0.2 text-[9px] font-black text-white">
+                                  S.{img.pageIndex}
+                                </span>
+                                {useDocImages && img.selected && (
+                                  <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white">
+                                    <Check className="h-2.5 w-2.5 stroke-[3]" />
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Compact Branch Preview */}
+                      {liveDocumentOutline && liveDocumentOutline.formattedOutline && (
+                        <div className="space-y-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/6 p-3">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
+                            <span className="rounded-lg bg-emerald-500/18 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
+                              ⚡ {liveDocumentOutline.stats.totalNodes} Dal (Akıcı Özet)
+                            </span>
+                            <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
+                              🌿 {liveDocumentOutline.stats.mainBranches} Ana Dal
+                            </span>
+                            <span className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
+                              📝 {liveDocumentOutline.stats.notedBranches} Detaylı Not
+                            </span>
+                          </div>
+                          <pre
+                            data-testid="document-outline-preview"
+                            className="max-h-44 overflow-y-auto rounded-xl border bg-white/85 p-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/65"
+                            style={{ borderColor: 'var(--hud-border)' }}
+                          >
+                            {liveDocumentOutline.formattedOutline}
+                          </pre>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (liveDocumentOutline?.formattedOutline) {
+                              setOutlineText(liveDocumentOutline.formattedOutline);
+                              setConvertFeedback(liveDocumentOutline.stats);
+                              setInputMode('outline');
+                              setShowLivePreview(true);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-200"
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          <span>Formatı Düzenle</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="document-create-map-btn"
+                          disabled={isGenerating || !liveDocumentOutline?.formattedOutline}
+                          onClick={() => {
+                            if (liveDocumentOutline?.formattedOutline) {
+                              void executeGenerateFromText(
+                                liveDocumentOutline.formattedOutline,
+                                useDocImages ? docImages.filter((i) => i.selected) : []
+                              );
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-50"
+                        >
+                          {isGenerating ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-4 w-4" />
+                          )}
+                          <span>
+                            {isGenerating
+                              ? 'Görsel Harita Hazırlanıyor...'
+                              : 'Belgeden Görsel Harita Oluştur'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : inputMode === 'converter' ? (
                 <div className="space-y-3" data-testid="lecture-note-converter-panel">
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-violet-500/25 bg-violet-500/8 p-3 text-xs leading-relaxed font-semibold">
                     <span className="min-w-0 flex-1">
@@ -1061,8 +1408,36 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   )}
 
                   <div>
-                    <div className="mb-1.5 text-xs font-extrabold opacity-75">
-                      Hızlı Tek Tıkla Örnek Ders Notları:
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-extrabold opacity-75">
+                        Hızlı Örnekler &amp; Dal Yoğunluğu:
+                      </span>
+                      <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-sky-500/25 bg-white/60 p-0.5 dark:bg-slate-900/60">
+                        {(
+                          [
+                            { id: 'compact', label: 'Az Dal' },
+                            { id: 'balanced', label: 'Dengeli' },
+                            { id: 'detailed', label: 'Detaylı' },
+                          ] as Array<{ id: LectureNoteDepth; label: string }>
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            data-testid={`outline-depth-${opt.id}`}
+                            onClick={() => {
+                              void hapticLight();
+                              setAnalysisDepth(opt.id);
+                            }}
+                            className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
+                              analysisDepth === opt.id
+                                ? 'bg-sky-500 text-white shadow-2xs'
+                                : 'opacity-75 hover:opacity-100'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap">
                       {QUICK_SAMPLE_NOTES.map((sample) => (

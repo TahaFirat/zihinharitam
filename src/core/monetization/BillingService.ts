@@ -34,6 +34,18 @@ export interface RestoreResult {
   errorMessage?: string;
 }
 
+export interface WebBillingBridge {
+  purchaseProPlan(tier: ProPlanTier, expectedProductId?: string): Promise<PurchaseResult>;
+  restorePurchases(): Promise<RestoreResult>;
+  checkEntitlements(): Promise<{ isLifetimePro: boolean; trialEligible?: boolean }>;
+}
+
+function getWebBillingBridge(): WebBillingBridge | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as { __ZH_WEB_BILLING_BRIDGE__?: WebBillingBridge };
+  return w.__ZH_WEB_BILLING_BRIDGE__ ?? null;
+}
+
 interface StoreKitBillingPlugin {
   getProducts(options: { productIds: string[] }): Promise<{ products: StoreProductInfo[] }>;
   purchaseLifetime(options: { productId: string }): Promise<PurchaseResult>;
@@ -310,6 +322,16 @@ export const BillingService = {
       }
     }
 
+    // 1.5. Verified Web Platform Checkout Bridge (only active inside web-platform/, untouched on iOS/Android)
+    const webBridge = getWebBillingBridge();
+    if (webBridge) {
+      const res = await webBridge.purchaseProPlan(tier, expectedProductId);
+      if (res.purchased) {
+        await persistVerifiedEntitlement(true, res.transactionId, res.productId || productId, 'store');
+      }
+      return res;
+    }
+
     // 2. Web / Desktop Sandbox StoreKit Simulator
     const isTrial = tier === 'yearly' && !isSandboxTrialAlreadyUsed();
     const txId = `sk2_sandbox_${tier}_${Date.now()}`;
@@ -367,6 +389,14 @@ export const BillingService = {
       }
     }
 
+    // 1.5. Verified Web Platform Restore Bridge
+    const webBridge = getWebBillingBridge();
+    if (webBridge) {
+      const res = await webBridge.restorePurchases();
+      await persistVerifiedEntitlement(Boolean(res.isLifetimePro), res.isLifetimePro ? 'web_verified' : 'web_none', undefined, 'store');
+      return res;
+    }
+
     // 2. Web / Desktop Sandbox Restore
     try {
       const localReceipt = localStorage.getItem(SANDBOX_RECEIPT_STORAGE_KEY);
@@ -421,6 +451,19 @@ export const BillingService = {
       } catch {
         // Offline launch: gracefully trust cached entitlement until next network sync
         return cachedUnlocked;
+      }
+    }
+
+    // Reconcile strictly with server-verified Web Billing status when running on Web Platform
+    const webBridge = getWebBillingBridge();
+    if (webBridge) {
+      try {
+        const res = await webBridge.checkEntitlements();
+        const unlocked = Boolean(res?.isLifetimePro);
+        await persistVerifiedEntitlement(unlocked, unlocked ? 'web_verified' : 'web_free', undefined, 'store');
+        return unlocked;
+      } catch {
+        return false;
       }
     }
 

@@ -1,0 +1,4 @@
+v1.1.2 (b36) — PDF/Word/Slayttan Harita, Belge Fotoğrafları & Az Dal Özet Motoru:
+• YENİ PDF, Word (.docx), PowerPoint (.pptx) ve TXT yükleme: Belgeleri cihaz içinde çevrimdışı analiz edip zihin haritasına dönüştürür
+• PDF & Slayt Fotoğrafları: Belgedeki gerçek şema ve fotoğrafları otomatik çıkarıp ilgili dallara yerleştirir (tekrarlayan logoları filtreler)
+• Az Dal · Sıfır Kasma: Uzun notları varsayılan en fazla 5 ana dalda akıcı şekilde özetler, detayları dal açıklamasına (Not) saklar

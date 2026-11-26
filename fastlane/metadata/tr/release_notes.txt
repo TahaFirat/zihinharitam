@@ -1,4 +1,4 @@
-• 52.700+ Telifsiz İkon & Sıfır Kaybolma Garantisi: Tüm mühendislik dalları (Bilgisayar/Ağ/TCP-IP, Elektrik-Elektronik, Makine, İnşaat, Kimya, Mimarlık), lise dersleri ve tıp alanı için 9 yeni telifsiz ikon paketi eklendi; yazarken veya kelime bitince ikonların kaybolma sorunu tamamen giderildi.
-• Kusursuz Türkçe = İngilizce İkon Eşleşmesi: Türkçe ve İngilizce aramalarda birebir doğru sonuçlar, kırık görsel sıfırlama (batch SVG hidrasyonu) ve 3D İkon Stüdyosu güvenilirliği.
-• Ders Notunu Zihin Haritası Formatına Çevirici Sekmesi: Ham paragraf veya ders notlarını anında analiz ederek Merkezi Konu, Ana Dal: Açıklama [Rozet], Alt Kavram ve Not: yapısına canlı dönüştürür (Özet/Dengeli/Detaylı modları ile).
-• Yeni v8 önbellek ve genel kararlılık iyileştirmeleri.
+• YENİ PDF, Word (.docx) ve PowerPoint (.pptx) → Görsel Zihin Haritası: Ders slaytlarını ve PDF notlarını %100 cihaz içinde çevrimdışı analiz edip anında haritaya dönüştürür.
+• Akıllı Belge Görseli Eşleştirme: PDF ve slaytlardaki gerçek diyagram ve fotoğrafları otomatik çıkarıp ilgili kavram dallarına yerleştirir; diğer dalları 45.500+ telifsiz ikonla zenginleştirir.
+• Az Dal · Sıfır Kasma Özet Motoru: Uzun metin ve belgeleri varsayılan olarak en fazla 5 ana dalda temizce özetler, detayları kayıpsız şekilde dal açıklamalarına (Not) ekler.
+• Ders Notunu Formata Çevir & Performans: Giriş kutusu otomatik sıfırlama, daha akıcı tuval sürükleme ve geliştirilmiş Türkçe-İngilizce arama.

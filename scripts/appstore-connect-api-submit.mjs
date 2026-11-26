@@ -1307,21 +1307,49 @@ async function syncReviewDetail(client, versionId) {
 }
 
 async function attachBuildAndOptionallySubmit(client, appId, versionId) {
-  console.log(`\n[8/8] Yüklenen en güncel VALID iOS Build (.ipa) kontrol ediliyor (${TARGET_VERSION})...`);
-  const buildsResp = await client.request(
-    'GET',
-    `/v1/builds?filter[app]=${appId}&filter[processingState]=VALID&include=preReleaseVersion&sort=-uploadedDate&limit=10`
+  const expectedBuildNum = (process.env.EXPECTED_BUILD_NUMBER || '').trim();
+  const maxPolls = SUBMIT_FOR_REVIEW ? 36 : 1; // Up to ~12 min when waiting for fresh CI build to finish processing
+  console.log(
+    `\n[8/8] Yüklenen en güncel VALID iOS Build (.ipa) kontrol ediliyor (${TARGET_VERSION}${
+      expectedBuildNum ? ` · beklenen build #${expectedBuildNum}` : ''
+    })...`
   );
-  const preRelById = new Map(
-    (buildsResp?.included || [])
-      .filter((x) => x.type === 'preReleaseVersions')
-      .map((x) => [x.id, x.attributes?.version])
-  );
-  const matchingBuilds = (buildsResp?.data || []).filter((b) => {
-    const prId = b.relationships?.preReleaseVersion?.data?.id;
-    return preRelById.get(prId) === TARGET_VERSION;
-  });
-  const latestBuild = matchingBuilds[0] || null;
+
+  let latestBuild = null;
+  for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
+    const buildsResp = await client.request(
+      'GET',
+      `/v1/builds?filter[app]=${appId}&filter[processingState]=VALID&include=preReleaseVersion&sort=-uploadedDate&limit=15`
+    );
+    const preRelById = new Map(
+      (buildsResp?.included || [])
+        .filter((x) => x.type === 'preReleaseVersions')
+        .map((x) => [x.id, x.attributes?.version])
+    );
+    const matchingBuilds = (buildsResp?.data || []).filter((b) => {
+      const prId = b.relationships?.preReleaseVersion?.data?.id;
+      return preRelById.get(prId) === TARGET_VERSION;
+    });
+
+    if (expectedBuildNum) {
+      latestBuild =
+        matchingBuilds.find((b) => String(b.attributes?.version || '') === expectedBuildNum) ||
+        null;
+      if (latestBuild) break;
+      if (attempt < maxPolls) {
+        console.log(
+          `  -> Build #${expectedBuildNum} Apple tarafından işleniyor (${attempt}/${maxPolls})... 20 sn bekleniyor.`
+        );
+        await new Promise((r) => setTimeout(r, 20_000));
+        continue;
+      }
+      // Fallback to newest valid build if expected didn't show up in window
+      latestBuild = matchingBuilds[0] || null;
+    } else {
+      latestBuild = matchingBuilds[0] || null;
+      break;
+    }
+  }
 
   if (!latestBuild) {
     console.log(`  -> Henüz işlenmiş (VALID) bir .ipa derlemesi görünmüyor.`);

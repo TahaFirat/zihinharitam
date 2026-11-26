@@ -170,6 +170,7 @@ jobs:
             MARKETING_VER="$(node -p "require('./package.json').version")"
           fi
           echo "MARKETING_VERSION=$MARKETING_VER" >> "$GITHUB_ENV"
+          echo "BUILD_NUM=$BUILD_NUM" >> "$GITHUB_ENV"
 
           cd ios/App
           xcrun agvtool new-marketing-version "$MARKETING_VER"
@@ -320,17 +321,17 @@ jobs:
             --apiKey "$APPSTORE_KEY_ID" \
             --apiIssuer "$APPSTORE_ISSUER_ID"
 
-      - name: Sync TR/EN Store Metadata, 15 Screenshots & 499 TL IAP via ASC API
+      - name: Sync TR/EN Store Metadata, Attach Build & Submit to Apple Review via ASC API
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.sync_store_metadata == true }}
-        continue-on-error: true
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APPSTORE_PRIVATE_KEY_P8: ${{ secrets.APPSTORE_PRIVATE_KEY_P8 }}
           APPSTORE_PUBLIC_BASE_URL: ${{ vars.APPSTORE_PUBLIC_BASE_URL }}
           MARKETING_VERSION: ${{ env.MARKETING_VERSION }}
+          EXPECTED_BUILD_NUMBER: ${{ env.BUILD_NUM }}
         run: |
-          node scripts/appstore-connect-api-submit.mjs --skip-screenshots
+          node scripts/appstore-connect-api-submit.mjs --skip-screenshots --submit
 
       - name: Save Signed .ipa & App Store Submission Kit as Artifacts
         if: always()
