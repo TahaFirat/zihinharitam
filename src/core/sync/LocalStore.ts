@@ -130,6 +130,36 @@ class MindMapDatabase extends Dexie {
 export const db = new MindMapDatabase();
 
 const lastSnapshotTimeByMap = new Map<string, number>();
+const DELETED_TOMBSTONES_KEY = 'zh_v11_deleted_tombstones_v1';
+
+function readDeletedTombstones(): string[] {
+  try {
+    const raw =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem(DELETED_TOMBSTONES_KEY)
+        : null;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDeletedTombstones(ids: string[]): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(
+        DELETED_TOMBSTONES_KEY,
+        JSON.stringify(Array.from(new Set(ids)).slice(-120))
+      );
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 async function recordAtomicRecoverySnapshot(doc: MindMapDocument): Promise<void> {
   const now = Date.now();
@@ -204,10 +234,27 @@ export const LocalStore = {
       }
     }
 
+    if (!toSave.deletedAt) {
+      const prev = readDeletedTombstones();
+      if (prev.includes(toSave.id)) {
+        writeDeletedTombstones(prev.filter((x) => x !== toSave.id));
+      }
+    }
+
     if (options?.forceSnapshot) {
       lastSnapshotTimeByMap.delete(doc.id);
     }
     void recordAtomicRecoverySnapshot(toSave);
+  },
+
+  getDeletedMapTombstones(): string[] {
+    return readDeletedTombstones();
+  },
+
+  clearDeletedMapTombstones(ids: string[]): void {
+    if (!ids.length) return;
+    const drop = new Set(ids);
+    writeDeletedTombstones(readDeletedTombstones().filter((x) => !drop.has(x)));
   },
 
   async getMap(id: string): Promise<MindMapDocument | undefined> {
@@ -226,6 +273,7 @@ export const LocalStore = {
       deletedAt: Date.now(),
       isPinned: false,
     });
+    writeDeletedTombstones([...readDeletedTombstones(), id]);
   },
 
   async restoreFromTrash(id: string): Promise<void> {
@@ -236,6 +284,7 @@ export const LocalStore = {
       deletedAt: null,
       updatedAt: Date.now(),
     });
+    writeDeletedTombstones(readDeletedTombstones().filter((x) => x !== id));
   },
 
   async deleteMapPermanently(id: string): Promise<void> {
@@ -246,6 +295,7 @@ export const LocalStore = {
         await db.recoverySnapshots.bulkDelete(snaps);
       }
     });
+    writeDeletedTombstones([...readDeletedTombstones(), id]);
     // Also clean up orphaned Yjs CRDT IndexedDB store so long-term device storage never leaks!
     try {
       if (typeof indexedDB !== 'undefined' && typeof indexedDB.deleteDatabase === 'function') {

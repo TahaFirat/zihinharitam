@@ -22,6 +22,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import type { EraserMode, InkToolType, PaperStyleType } from '../types/mindmap';
+import { trEn } from '../core/i18n/i18n';
 import { hapticLight } from '../core/native/NativeBridge';
 import { useKeyboardInset } from '../core/native/useKeyboardInset';
 
@@ -65,25 +66,27 @@ const DOCK_STORAGE_KEY = 'zh_draw_dock_pos_v2';
 
 const INK_TOOLS: Array<{
   id: InkToolType;
-  label: string;
+  labelTr: string;
+  labelEn: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'pen', label: 'Kalem', icon: PenTool },
-  { id: 'highlighter', label: 'Fosforlu', icon: Highlighter },
-  { id: 'laser', label: 'Lazer', icon: Sparkles },
-  { id: 'lasso', label: 'Kement', icon: Lasso },
-  { id: 'eraser', label: 'Silgi', icon: Eraser },
+  { id: 'pen', labelTr: 'Kalem', labelEn: 'Pen', icon: PenTool },
+  { id: 'highlighter', labelTr: 'Fosforlu', labelEn: 'Highlighter', icon: Highlighter },
+  { id: 'laser', labelTr: 'Lazer', labelEn: 'Laser', icon: Sparkles },
+  { id: 'lasso', labelTr: 'Kement', labelEn: 'Lasso', icon: Lasso },
+  { id: 'eraser', labelTr: 'Silgi', labelEn: 'Eraser', icon: Eraser },
 ];
 
 const SHAPE_TOOLS: Array<{
   id: InkToolType;
-  label: string;
+  labelTr: string;
+  labelEn: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'arrow', label: 'Ok', icon: ArrowUpRight },
-  { id: 'line', label: 'Çizgi', icon: Minus },
-  { id: 'rect', label: 'Kutu', icon: Square },
-  { id: 'ellipse', label: 'Daire', icon: Circle },
+  { id: 'arrow', labelTr: 'Ok', labelEn: 'Arrow', icon: ArrowUpRight },
+  { id: 'line', labelTr: 'Çizgi', labelEn: 'Line', icon: Minus },
+  { id: 'rect', labelTr: 'Kutu', labelEn: 'Box', icon: Square },
+  { id: 'ellipse', labelTr: 'Daire', labelEn: 'Circle', icon: Circle },
 ];
 
 const INK_COLORS = [
@@ -331,14 +334,18 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
     INK_TOOLS.find((t) => t.id === activeTool)?.icon ||
     SHAPE_TOOLS.find((t) => t.id === activeTool)?.icon ||
     PenTool;
+  const matchedInkTool = INK_TOOLS.find((t) => t.id === activeTool);
+  const matchedShapeTool = SHAPE_TOOLS.find((t) => t.id === activeTool);
   const activeToolLabel =
     activeTool === 'eraser' || hardwareEraserActive
       ? eraserMode === 'stroke'
-        ? 'Çizgi Sil'
-        : 'Alan Sil'
-      : INK_TOOLS.find((t) => t.id === activeTool)?.label ||
-        SHAPE_TOOLS.find((t) => t.id === activeTool)?.label ||
-        'Kalem';
+        ? trEn('Çizgi Sil', 'Stroke Eraser')
+        : trEn('Alan Sil', 'Area Eraser')
+      : matchedInkTool
+      ? trEn(matchedInkTool.labelTr, matchedInkTool.labelEn)
+      : matchedShapeTool
+      ? trEn(matchedShapeTool.labelTr, matchedShapeTool.labelEn)
+      : trEn('Kalem', 'Pen');
 
   return (
     <>
@@ -502,7 +509,14 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                           onChangeTool(tool.id);
                         }
                       }}
-                      title={tool.id === 'eraser' ? `Silgi (${eraserMode === 'stroke' ? 'Çizgi Sil' : 'Alan Sil'})` : tool.label}
+                      title={
+                        tool.id === 'eraser'
+                          ? trEn(
+                              `Silgi (${eraserMode === 'stroke' ? 'Çizgi Sil' : 'Alan Sil'})`,
+                              `Eraser (${eraserMode === 'stroke' ? 'Stroke' : 'Area'})`
+                            )
+                          : trEn(tool.labelTr, tool.labelEn)
+                      }
                       className={`flex h-10 w-10 items-center justify-center rounded-xl transition active:scale-95 ${
                         active
                           ? tool.id === 'eraser'
@@ -536,7 +550,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                         void hapticLight();
                         onChangeTool(sh.id);
                       }}
-                      title={sh.label}
+                      title={trEn(sh.labelTr, sh.labelEn)}
                       className={`flex h-8 w-8 items-center justify-center rounded-lg transition active:scale-95 ${
                         active
                           ? 'bg-violet-600 text-white shadow-xs'
@@ -697,8 +711,11 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                           }}
                           title={
                             tool.id === 'eraser'
-                              ? `Silgi (${eraserMode === 'stroke' ? 'Çizgi Sil' : 'Alan Sil'} — tekrar dokun değiştir)`
-                              : tool.label
+                              ? trEn(
+                                  `Silgi (${eraserMode === 'stroke' ? 'Çizgi Sil' : 'Alan Sil'} — tekrar dokun değiştir)`,
+                                  `Eraser (${eraserMode === 'stroke' ? 'Stroke' : 'Area'} — tap again to toggle)`
+                                )
+                              : trEn(tool.labelTr, tool.labelEn)
                           }
                           className={`inline-flex h-10 min-w-[38px] items-center justify-center gap-1 rounded-xl px-2 text-xs font-extrabold whitespace-nowrap transition-colors active:scale-95 sm:px-2.5 ${
                             active
@@ -713,7 +730,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                           }`}
                         >
                           <Icon className="h-4 w-4 shrink-0" />
-                          <span className="hidden sm:inline">{tool.label}</span>
+                          <span className="hidden sm:inline">{trEn(tool.labelTr, tool.labelEn)}</span>
                         </button>
                       );
                     })}
@@ -733,7 +750,7 @@ export const CanvasDrawingToolbar: React.FC<CanvasDrawingToolbarProps> = React.m
                             void hapticLight();
                             onChangeTool(sh.id);
                           }}
-                          title={sh.label}
+                          title={trEn(sh.labelTr, sh.labelEn)}
                           className={`inline-flex h-10 w-9 items-center justify-center rounded-xl text-xs font-extrabold transition-colors active:scale-95 ${
                             active
                               ? 'bg-violet-600 text-white shadow-xs'

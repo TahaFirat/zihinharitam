@@ -226,16 +226,20 @@ export const WebApi = {
     return requestJson('/api/v1/maps');
   },
 
-  async syncCloudMaps(maps: MindMapDocument[]): Promise<{
+  async syncCloudMaps(
+    maps: MindMapDocument[],
+    deletedIds: string[] = []
+  ): Promise<{
     ok: boolean;
     upserted: number;
+    deleted: number;
     totalCloudMaps: number;
     maps: MindMapDocument[];
     syncedAt: number;
   }> {
     return requestJson('/api/v1/maps/sync', {
       method: 'POST',
-      body: { maps },
+      body: { maps, deletedIds },
     });
   },
 

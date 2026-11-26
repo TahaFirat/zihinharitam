@@ -32,6 +32,7 @@ import {
   LayoutGrid,
   Palette,
   Workflow,
+  ClipboardCheck,
 } from 'lucide-react';
 import {
   STUDIO_THEMES,
@@ -65,6 +66,8 @@ interface TopMinimalHUDProps {
   onApplyStudioTheme?: (themeId: StudioThemeId) => void;
   onConvertToFlowchart?: () => void;
   onOpenFlashcards: () => void;
+  onOpenQuiz?: () => void;
+  onOpenCanvasFind?: () => void;
   onStartPresentation: () => void;
   onToggleDefaultNodeStyle: () => void;
   onCyclePaperStyle: () => void;
@@ -118,6 +121,8 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
   onApplyStudioTheme,
   onConvertToFlowchart,
   onOpenFlashcards,
+  onOpenQuiz,
+  onOpenCanvasFind,
   onStartPresentation,
   onToggleDefaultNodeStyle,
   onCyclePaperStyle,
@@ -373,11 +378,11 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
             type="button"
             data-testid="hud-search-btn"
             onClick={onOpenCommandPalette}
-            title="Hızlı Dal & İkon Arama"
+            title={t('Hızlı Dal & İkon Arama', 'Quick Node & Icon Search')}
             className="flex h-10 w-9 items-center justify-center rounded-xl hover:bg-sky-500/12 hover:text-sky-600 active:scale-95 sm:w-auto sm:gap-1.5 sm:px-3 dark:hover:text-sky-300"
           >
             <Search className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-            <span className="hidden text-xs font-extrabold lg:inline">Ara</span>
+            <span className="hidden text-xs font-extrabold lg:inline">{t('Ara', 'Search')}</span>
           </button>
 
           {collaborators.length > 1 && (
@@ -399,11 +404,11 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
           <button
             type="button"
             onClick={onOpenExport}
-            title="300 DPI PDF / PNG / SVG Çıktı ve Paylaşım"
+            title={t('300 DPI PDF / PNG / SVG Çıktı ve Paylaşım', 'Export 300 DPI PDF / PNG / SVG & Share')}
             className="flex h-10 w-9 items-center justify-center gap-1.5 rounded-xl bg-slate-900 text-xs font-extrabold text-white shadow-xs hover:opacity-95 active:scale-95 sm:w-auto sm:px-3 dark:bg-sky-500 dark:text-slate-950"
           >
             <Share2 className="h-4 w-4" />
-            <span className="hidden md:inline">Paylaş</span>
+            <span className="hidden md:inline">{t('Paylaş', 'Export')}</span>
           </button>
 
           {/* Spacious Overflow Menu (`⋯`) — Holds Theme, Paper, Guide, Pro, Settings */}
@@ -487,6 +492,26 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   <span>{t('Metinden Harita Oluştur', 'Text to Mind Map')}</span>
                 </button>
 
+                {onOpenCanvasFind && (
+                  <button
+                    type="button"
+                    data-testid="hud-find-in-map-btn"
+                    onClick={() => {
+                      onOpenCanvasFind();
+                      setMoreMenuOpen(false);
+                    }}
+                    className="flex min-h-[42px] w-full items-center justify-between rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Search className="h-4 w-4 text-sky-500" />
+                      <span>{t('Haritada Bul', 'Find in Map')}</span>
+                    </span>
+                    <span className="rounded-lg bg-slate-500/10 px-2 py-0.5 text-[10.5px] font-bold">
+                      Ctrl+F
+                    </span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -496,7 +521,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   className="flex min-h-[42px] w-full items-center gap-2.5 rounded-2xl px-3 text-xs font-extrabold hover:bg-slate-500/10"
                 >
                   <Sparkles className="h-4 w-4 text-amber-500" />
-                  <span>Otomatik Düzenle</span>
+                  <span>{t('Otomatik Düzenle', 'Auto Layout')}</span>
                 </button>
 
                 <button
@@ -509,7 +534,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                 >
                   <span className="flex items-center gap-2.5">
                     <Maximize2 className="h-4 w-4 text-sky-500" />
-                    <span>Ekrana Sığdır</span>
+                    <span>{t('Ekrana Sığdır', 'Fit to Screen')}</span>
                   </span>
                   <span className="rounded-lg bg-slate-500/10 px-2 py-0.5 text-[11px] tabular-nums">
                     %{zoomPercent}
@@ -525,7 +550,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                 >
                   <span className="flex items-center gap-2.5">
                     <Grid3X3 className="h-4 w-4 text-indigo-500" />
-                    <span>Kağıt Deseni</span>
+                    <span>{t('Kağıt Deseni', 'Paper Style')}</span>
                   </span>
                   <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-[11px] text-indigo-700 dark:text-indigo-300">
                     {PAPER_LABELS[paperStyle]}
@@ -542,10 +567,10 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                 >
                   <span className="flex items-center gap-2.5">
                     <Layers className="h-4 w-4 text-emerald-500" />
-                    <span>Düğüm Stili</span>
+                    <span>{t('Düğüm Stili', 'Node Style')}</span>
                   </span>
                   <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
-                    {defaultNodeStyle === 'organic' ? 'Organik' : 'Modern Kart'}
+                    {defaultNodeStyle === 'organic' ? t('Organik', 'Organic') : t('Modern Kart', 'Modern Card')}
                   </span>
                 </button>
 
@@ -562,7 +587,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
                   ) : (
                     <Moon className="h-4 w-4 text-indigo-500" />
                   )}
-                  <span>{darkMode ? 'Açık Tema' : 'Koyu Tema'}</span>
+                  <span>{darkMode ? t('Açık Tema', 'Light Mode') : t('Koyu Tema', 'Dark Mode')}</span>
                 </button>
 
                 <div className="my-1.5 h-px bg-slate-400/20" />
@@ -809,6 +834,18 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
               <span>{t('Flashcard', 'Flashcards')}</span>
             </button>
 
+            {onOpenQuiz && (
+              <button
+                type="button"
+                data-testid="study-quiz-btn"
+                onClick={onOpenQuiz}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-500/12 px-3 text-xs font-extrabold whitespace-nowrap text-indigo-700 hover:bg-indigo-500/20 active:scale-95 dark:text-indigo-300"
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                <span>{t('Mini Test', 'Mini Quiz')}</span>
+              </button>
+            )}
+
             <button
               type="button"
               data-testid="study-presentation-btn"
@@ -829,7 +866,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
               }`}
             >
               <Target className="h-4 w-4" />
-              <span>Odak</span>
+              <span>{t('Odak', 'Focus')}</span>
             </button>
 
             <button
@@ -843,7 +880,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
               }`}
             >
               <Timer className="h-4 w-4" />
-              <span>{timerSeconds > 0 ? formattedTimer : 'Sayaç'}</span>
+              <span>{timerSeconds > 0 ? formattedTimer : t('Sayaç', 'Timer')}</span>
             </button>
 
             <button
@@ -853,7 +890,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-500/12 px-3 text-xs font-extrabold whitespace-nowrap text-indigo-700 hover:bg-indigo-500/20 active:scale-95 dark:text-indigo-300"
             >
               <ListTree className="h-4 w-4" />
-              <span>Anahat</span>
+              <span>{t('Anahat', 'Outline')}</span>
             </button>
 
             <button
@@ -862,7 +899,7 @@ export const TopMinimalHUD: React.FC<TopMinimalHUDProps> = React.memo(({
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-amber-500/15 px-3 text-xs font-extrabold whitespace-nowrap text-amber-700 hover:bg-amber-500/25 active:scale-95 dark:text-amber-300"
             >
               <Wand2 className="h-4 w-4" />
-              <span>Akıllı Dal</span>
+              <span>{t('Akıllı Dal', 'Smart Map')}</span>
             </button>
           </div>
         </div>

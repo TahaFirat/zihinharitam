@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Brain,
   CheckCircle2,
+  ClipboardCheck,
   Flame,
   RotateCw,
   Sparkles,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { MindMapDocument, MindNode, SrsCardProgress } from '../types/mindmap';
 import { LocalStore } from '../core/sync/LocalStore';
+import { StudyTracker } from '../core/study/StudyTracker';
 import { useI18n } from '../core/i18n/i18n';
 import { hapticLight, hapticMedium, hapticSuccess } from '../core/native/NativeBridge';
 
@@ -18,6 +20,7 @@ interface FlashcardStudyModalProps {
   doc: MindMapDocument;
   onClose: () => void;
   onSessionComplete?: () => void;
+  onStartQuiz?: () => void;
 }
 
 interface FlashcardItem {
@@ -25,9 +28,10 @@ interface FlashcardItem {
   node: MindNode;
   parentTitle: string;
   childrenTitles: string[];
+  retryCount: number;
 }
 
-function computeNextSm2(
+export function computeNextSm2(
   prev: SrsCardProgress | undefined,
   mapId: string,
   nodeId: string,
@@ -69,90 +73,220 @@ function computeNextSm2(
   };
 }
 
+function buildFrozenDeck(
+  doc: MindMapDocument,
+  srsSnapshot: Record<string, SrsCardProgress>
+): FlashcardItem[] {
+  const allNodes = Object.values(doc.nodes);
+  const childrenByParent = new Map<string, string[]>();
+  for (const n of allNodes) {
+    if (n.parentId) {
+      if (!childrenByParent.has(n.parentId)) childrenByParent.set(n.parentId, []);
+      childrenByParent.get(n.parentId)!.push(n.title);
+    }
+  }
+  const items: FlashcardItem[] = [];
+  for (const n of allNodes) {
+    if (n.id === doc.rootNodeId) continue;
+    const parentTitle = n.parentId ? doc.nodes[n.parentId]?.title || doc.title : doc.title;
+    items.push({
+      cardKey: `${doc.id}::${n.id}`,
+      node: n,
+      parentTitle,
+      childrenTitles: childrenByParent.get(n.id) ?? [],
+      retryCount: 0,
+    });
+  }
+  const now = Date.now();
+  return items.sort((a, b) => {
+    const aDue = (srsSnapshot[a.cardKey]?.dueAt ?? 0) <= now ? 0 : 1;
+    const bDue = (srsSnapshot[b.cardKey]?.dueAt ?? 0) <= now ? 0 : 1;
+    if (aDue !== bDue) return aDue - bDue;
+    const aPri =
+      a.node.priorityTag === 'exam'
+        ? 0
+        : a.node.priorityTag === 'important'
+        ? 1
+        : a.node.priorityTag === 'review'
+        ? 1
+        : 2;
+    const bPri =
+      b.node.priorityTag === 'exam'
+        ? 0
+        : b.node.priorityTag === 'important'
+        ? 1
+        : b.node.priorityTag === 'review'
+        ? 1
+        : 2;
+    return aPri - bPri;
+  });
+}
+
+function formatSm2IntervalLabel(
+  intervalDays: number,
+  t: (tr: string, en: string) => string
+): string {
+  if (intervalDays <= 0) return t('Bu turda', 'This round');
+  if (intervalDays === 1) return t('1 gün', '1 day');
+  if (intervalDays < 30) return t(`${intervalDays} gün`, `${intervalDays} days`);
+  const months = Math.max(1, Math.round(intervalDays / 30));
+  return t(`${months} ay`, `${months} mo`);
+}
+
 export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
   isOpen,
   doc,
   onClose,
   onSessionComplete,
+  onStartQuiz,
 }) => {
   const { t } = useI18n();
   const [srsMap, setSrsMap] = useState<Record<string, SrsCardProgress>>({});
+  const [sessionQueue, setSessionQueue] = useState<FlashcardItem[]>([]);
+  const [initialDeckSize, setInitialDeckSize] = useState(0);
   const [cardIndex, setCardIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [reviewedCount, setReviewedCount] = useState(0);
   const [masteredCount, setMasteredCount] = useState(0);
+  const [requeuedCount, setRequeuedCount] = useState(0);
   const [finished, setFinished] = useState(false);
+
+  const startFreshSession = useCallback(
+    (loadedSrs: Record<string, SrsCardProgress>) => {
+      const deck = buildFrozenDeck(doc, loadedSrs);
+      setSessionQueue(deck);
+      setInitialDeckSize(deck.length);
+      setCardIndex(0);
+      setFlipped(false);
+      setReviewedCount(0);
+      setMasteredCount(0);
+      setRequeuedCount(0);
+      setFinished(false);
+    },
+    [doc]
+  );
 
   useEffect(() => {
     if (!isOpen) return;
-    setCardIndex(0);
-    setFlipped(false);
-    setReviewedCount(0);
-    setMasteredCount(0);
-    setFinished(false);
-    void LocalStore.loadSrsProgressMap().then(setSrsMap);
-  }, [isOpen, doc.id]);
-
-  const cards = useMemo<FlashcardItem[]>(() => {
-    const allNodes = Object.values(doc.nodes);
-    const childrenByParent = new Map<string, string[]>();
-    for (const n of allNodes) {
-      if (n.parentId) {
-        if (!childrenByParent.has(n.parentId)) childrenByParent.set(n.parentId, []);
-        childrenByParent.get(n.parentId)!.push(n.title);
-      }
-    }
-    const items: FlashcardItem[] = [];
-    for (const n of allNodes) {
-      if (n.id === doc.rootNodeId) continue;
-      const parentTitle = n.parentId ? doc.nodes[n.parentId]?.title || doc.title : doc.title;
-      items.push({
-        cardKey: `${doc.id}::${n.id}`,
-        node: n,
-        parentTitle,
-        childrenTitles: childrenByParent.get(n.id) ?? [],
-      });
-    }
-    // Prioritize due & exam/important cards first
-    const now = Date.now();
-    return items.sort((a, b) => {
-      const aDue = (srsMap[a.cardKey]?.dueAt ?? 0) <= now ? 0 : 1;
-      const bDue = (srsMap[b.cardKey]?.dueAt ?? 0) <= now ? 0 : 1;
-      if (aDue !== bDue) return aDue - bDue;
-      const aPri = a.node.priorityTag === 'exam' ? 0 : a.node.priorityTag === 'important' ? 1 : 2;
-      const bPri = b.node.priorityTag === 'exam' ? 0 : b.node.priorityTag === 'important' ? 1 : 2;
-      return aPri - bPri;
+    let cancelled = false;
+    void LocalStore.loadSrsProgressMap().then((loaded) => {
+      if (cancelled) return;
+      setSrsMap(loaded);
+      startFreshSession(loaded);
     });
-  }, [doc, srsMap]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, doc.id, startFreshSession]);
+
+  const current = sessionQueue[cardIndex];
+
+  const handleGrade = useCallback(
+    (quality: 1 | 3 | 4 | 5) => {
+      if (!current) return;
+      const nextRec = computeNextSm2(srsMap[current.cardKey], doc.id, current.node.id, quality);
+      const nextMap = { ...srsMap, [current.cardKey]: nextRec };
+      setSrsMap(nextMap);
+      void LocalStore.saveSrsProgressMap(nextMap);
+      StudyTracker.recordStudyActivity(1);
+
+      setReviewedCount((c) => c + 1);
+      if (quality >= 4) {
+        setMasteredCount((c) => c + 1);
+        void hapticSuccess();
+      } else {
+        void hapticLight();
+      }
+
+      // If learner picked "Again" (`quality === 1`), re-queue this card 2 slots ahead (max 2 retries in one round)
+      let nextQueueLen = sessionQueue.length;
+      if (quality === 1 && current.retryCount < 2) {
+        const retryItem: FlashcardItem = {
+          ...current,
+          retryCount: current.retryCount + 1,
+        };
+        const insertAt = Math.min(sessionQueue.length, cardIndex + 3);
+        const updatedQueue = [
+          ...sessionQueue.slice(0, insertAt),
+          retryItem,
+          ...sessionQueue.slice(insertAt),
+        ];
+        setSessionQueue(updatedQueue);
+        setRequeuedCount((c) => c + 1);
+        nextQueueLen = updatedQueue.length;
+      }
+
+      if (cardIndex + 1 >= nextQueueLen) {
+        setFinished(true);
+        onSessionComplete?.();
+      } else {
+        setFlipped(false);
+        setCardIndex((i) => i + 1);
+      }
+    },
+    [cardIndex, current, doc.id, onSessionComplete, sessionQueue, srsMap]
+  );
+
+  // Desktop & Tablet Keyboard Shortcuts (`Space` flip, `1/2/3/4` grade, `Escape` close)
+  useEffect(() => {
+    if (!isOpen || finished || !current) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (!flipped && (e.code === 'Space' || e.key === 'Enter')) {
+        e.preventDefault();
+        void hapticLight();
+        setFlipped(true);
+        return;
+      }
+      if (flipped) {
+        if (e.key === '1') {
+          e.preventDefault();
+          handleGrade(1);
+        } else if (e.key === '2') {
+          e.preventDefault();
+          handleGrade(3);
+        } else if (e.key === '3') {
+          e.preventDefault();
+          handleGrade(4);
+        } else if (e.key === '4') {
+          e.preventDefault();
+          handleGrade(5);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [current, finished, flipped, handleGrade, isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  const current = cards[cardIndex];
-  const progressPct = cards.length > 0 ? Math.min(100, Math.round((reviewedCount / cards.length) * 100)) : 100;
+  const progressPct =
+    sessionQueue.length > 0
+      ? Math.min(100, Math.round((cardIndex / sessionQueue.length) * 100))
+      : 100;
 
-  const handleGrade = (quality: 1 | 3 | 4 | 5) => {
-    if (!current) return;
-    const nextRec = computeNextSm2(srsMap[current.cardKey], doc.id, current.node.id, quality);
-    const nextMap = { ...srsMap, [current.cardKey]: nextRec };
-    setSrsMap(nextMap);
-    void LocalStore.saveSrsProgressMap(nextMap);
-
-    setReviewedCount((c) => c + 1);
-    if (quality >= 4) {
-      setMasteredCount((c) => c + 1);
-      void hapticSuccess();
-    } else {
-      void hapticLight();
-    }
-
-    if (cardIndex + 1 >= cards.length) {
-      setFinished(true);
-      onSessionComplete?.();
-    } else {
-      setFlipped(false);
-      setCardIndex((i) => i + 1);
-    }
-  };
+  const previewHard = current
+    ? formatSm2IntervalLabel(
+        computeNextSm2(srsMap[current.cardKey], doc.id, current.node.id, 3).intervalDays,
+        t
+      )
+    : t('1 gün', '1 day');
+  const previewGood = current
+    ? formatSm2IntervalLabel(
+        computeNextSm2(srsMap[current.cardKey], doc.id, current.node.id, 4).intervalDays,
+        t
+      )
+    : t('2 gün', '2 days');
+  const previewEasy = current
+    ? formatSm2IntervalLabel(
+        computeNextSm2(srsMap[current.cardKey], doc.id, current.node.id, 5).intervalDays,
+        t
+      )
+    : t('4 gün', '4 days');
 
   return (
     <div
@@ -182,7 +316,8 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                 {t('Aralıklı Tekrar (Flashcard)', 'Spaced Repetition Flashcards')}
               </h2>
               <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                {doc.title} • {cards.length} {t('kart', 'cards')}
+                {doc.title} • {initialDeckSize} {t('kart', 'cards')}
+                {requeuedCount > 0 && ` (+${requeuedCount} ${t('tekrar', 'retry')})`}
               </p>
             </div>
           </div>
@@ -200,11 +335,11 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
         <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-500/15">
           <div
             className="h-full rounded-full bg-gradient-to-r from-violet-500 to-sky-500 transition-all duration-300"
-            style={{ width: `${progressPct}%` }}
+            style={{ width: `${finished ? 100 : progressPct}%` }}
           />
         </div>
 
-        {cards.length === 0 ? (
+        {sessionQueue.length === 0 ? (
           <div className="py-12 text-center">
             <Sparkles className="mx-auto h-10 w-10 text-amber-500" />
             <p className="mt-3 text-sm font-bold">
@@ -224,25 +359,32 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
             </h3>
             <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {t(
-                `${reviewedCount} kart gözden geçirildi • ${masteredCount} kart kalıcı hafızaya eklendi (SM-2).`,
-                `${reviewedCount} cards reviewed • ${masteredCount} cards mastered (SM-2).`
+                `${reviewedCount} değerlendirme yapıldı • ${masteredCount} kart kalıcı hafızaya eklendi (SM-2).`,
+                `${reviewedCount} reviews completed • ${masteredCount} cards mastered (SM-2).`
               )}
             </p>
-            <div className="mt-5 flex items-center justify-center gap-2">
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setCardIndex(0);
-                  setFlipped(false);
-                  setReviewedCount(0);
-                  setMasteredCount(0);
-                  setFinished(false);
-                }}
+                onClick={() => startFreshSession(srsMap)}
                 className="rounded-2xl border px-4 py-2.5 text-xs font-extrabold hover:bg-slate-500/10"
                 style={{ borderColor: 'var(--hud-border)' }}
               >
                 {t('Tekrar Çalış', 'Study Again')}
               </button>
+              {onStartQuiz && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onStartQuiz();
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-violet-700"
+                >
+                  <ClipboardCheck className="h-4 w-4" />
+                  {t('Mini Teste Geç', 'Take Mini Quiz')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -255,8 +397,15 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
         ) : current ? (
           <div className="mt-4 flex flex-col">
             <div className="mb-2 flex items-center justify-between text-[11px] font-bold opacity-75">
-              <span>
-                {t('Kart', 'Card')} {cardIndex + 1} / {cards.length}
+              <span className="inline-flex items-center gap-1.5" data-testid="flashcard-counter">
+                <span>
+                  {t('Kart', 'Card')} {cardIndex + 1} / {sessionQueue.length}
+                </span>
+                {current.retryCount > 0 && (
+                  <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-black text-rose-600 dark:text-rose-300">
+                    {t('Tekrar Turu', 'Retry')}
+                  </span>
+                )}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5">
                 {current.node.priorityTag === 'exam' && (
@@ -286,7 +435,7 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                     <img
                       src={current.node.sticker.url}
                       alt={current.node.title}
-                      className="mb-3 h-16 w-16 object-contain drop-shadow-sm"
+                      className="mb-3 h-16 w-16 rounded-xl object-contain drop-shadow-sm"
                     />
                   )}
                   <span
@@ -298,7 +447,7 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                   >
                     {t('Aktif Hatırlama Sorusu', 'Active Recall Prompt')}
                   </span>
-                  <div className="text-lg leading-snug font-black sm:text-xl">
+                  <div className="text-lg leading-snug font-black sm:text-xl" data-testid="flashcard-card-title">
                     {current.node.title}
                   </div>
                   <p
@@ -317,7 +466,7 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                   </p>
                   <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-slate-500/10 px-3 py-1 text-[11px] font-extrabold opacity-80">
                     <RotateCw className="h-3.5 w-3.5" />
-                    {t('Cevabı Görmek İçin Dokun', 'Tap to Reveal Answer')}
+                    {t('Cevabı Görmek İçin Dokun (Boşluk)', 'Tap to Reveal Answer (Space)')}
                   </div>
                 </>
               ) : (
@@ -338,7 +487,7 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                   )}
                   {current.node.note && (
                     <div
-                      className="mt-2 max-h-28 overflow-y-auto rounded-xl border p-2.5 text-xs leading-relaxed"
+                      className="mt-2 max-h-28 overflow-y-auto rounded-xl border p-2.5 text-xs leading-relaxed whitespace-pre-line"
                       style={{
                         backgroundColor: 'var(--canvas-bg)',
                         borderColor: 'var(--hud-border)',
@@ -365,33 +514,39 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                       </div>
                     </div>
                   )}
-                  {!current.node.subtitle && !current.node.note && current.childrenTitles.length === 0 && (
-                    <p className="mt-2 text-xs font-medium opacity-75">
-                      {t('Üst Konu:', 'Parent Topic:')} <strong>{current.parentTitle}</strong>
-                    </p>
-                  )}
+                  {!current.node.subtitle &&
+                    !current.node.note &&
+                    current.childrenTitles.length === 0 && (
+                      <p className="mt-2 text-xs font-medium opacity-75">
+                        {t('Üst Konu:', 'Parent Topic:')} <strong>{current.parentTitle}</strong>
+                      </p>
+                    )}
                 </div>
               )}
             </button>
 
-            {/* SM-2 Rating Controls */}
+            {/* SM-2 Rating Controls with Live Computed Intervals */}
             {flipped ? (
               <div className="mt-4 grid grid-cols-4 gap-1.5" data-testid="flashcard-sm2-buttons">
                 <button
                   type="button"
+                  data-testid="flashcard-grade-again"
                   onClick={() => handleGrade(1)}
                   className="rounded-2xl bg-rose-500/15 py-2.5 text-center text-xs font-extrabold text-rose-600 transition active:scale-95 dark:text-rose-300"
                 >
                   <div>{t('Tekrar', 'Again')}</div>
-                  <div className="text-[10px] opacity-75">1 {t('dk', 'min')}</div>
+                  <div className="text-[10px] opacity-75">
+                    {current.retryCount < 2 ? t('Bu turda', 'This round') : t('1 dk', '1 min')}
+                  </div>
                 </button>
                 <button
                   type="button"
+                  data-testid="flashcard-grade-hard"
                   onClick={() => handleGrade(3)}
                   className="rounded-2xl bg-amber-500/15 py-2.5 text-center text-xs font-extrabold text-amber-700 transition active:scale-95 dark:text-amber-300"
                 >
                   <div>{t('Zor', 'Hard')}</div>
-                  <div className="text-[10px] opacity-75">1 {t('gün', 'day')}</div>
+                  <div className="text-[10px] opacity-75">{previewHard}</div>
                 </button>
                 <button
                   type="button"
@@ -400,15 +555,16 @@ export const FlashcardStudyModal: React.FC<FlashcardStudyModalProps> = ({
                   className="rounded-2xl bg-sky-500/15 py-2.5 text-center text-xs font-extrabold text-sky-700 transition active:scale-95 dark:text-sky-300"
                 >
                   <div>{t('İyi', 'Good')}</div>
-                  <div className="text-[10px] opacity-75">3 {t('gün', 'days')}</div>
+                  <div className="text-[10px] opacity-75">{previewGood}</div>
                 </button>
                 <button
                   type="button"
+                  data-testid="flashcard-grade-easy"
                   onClick={() => handleGrade(5)}
                   className="rounded-2xl bg-emerald-500/15 py-2.5 text-center text-xs font-extrabold text-emerald-700 transition active:scale-95 dark:text-emerald-300"
                 >
                   <div>{t('Kolay', 'Easy')}</div>
-                  <div className="text-[10px] opacity-75">6 {t('gün', 'days')}</div>
+                  <div className="text-[10px] opacity-75">{previewEasy}</div>
                 </button>
               </div>
             ) : (

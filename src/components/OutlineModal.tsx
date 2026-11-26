@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { MindNode, NodePriorityTag } from '../types/mindmap';
 import { computeTreeMeta } from '../core/canvas/RadialAutoLayout';
+import { useI18n } from '../core/i18n/i18n';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
 import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 
@@ -47,6 +48,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
   onOpenStickerPickerForNode,
   onJumpToNode,
 }) => {
+  const { t } = useI18n();
   const kb = useKeyboardInset();
   const [filterText, setFilterText] = useState('');
   const [onlyTasks, setOnlyTasks] = useState(false);
@@ -144,7 +146,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-sm font-extrabold sm:text-base">
-                  Anahat ({flatRows.length})
+                  {t('Anahat', 'Outline')} ({flatRows.length})
                 </h2>
                 {taskStats.total > 0 && (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-300">
@@ -158,7 +160,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
           <button
             type="button"
             onClick={handleCloseClean}
-            aria-label="Kapat"
+            aria-label={t('Kapat', 'Close')}
             className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
           >
             <X className="h-5 w-5" />
@@ -176,14 +178,14 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
               type="text"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Başlık veya notlarda ara..."
+              placeholder={t('Başlık veya notlarda ara...', 'Search titles or notes...')}
               className="allow-text-input min-h-[40px] w-full rounded-xl border bg-transparent py-1.5 pr-9 pl-8 text-base font-semibold outline-none focus:ring-2 focus:ring-indigo-500"
               style={{ borderColor: 'var(--hud-border)' }}
             />
             {filterText && (
               <button
                 type="button"
-                aria-label="Temizle"
+                aria-label={t('Temizle', 'Clear')}
                 onClick={() => setFilterText('')}
                 className="absolute top-1/2 right-2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-500/12 opacity-75 hover:opacity-100"
               >
@@ -203,7 +205,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
             style={{ borderColor: onlyPriority ? undefined : 'var(--hud-border)' }}
           >
             <Flame className="h-3.5 w-3.5" />
-            <span>Önemli & Sınav</span>
+            <span>{t('Önemli & Sınav', 'Important & Exam')}</span>
           </button>
 
           <button
@@ -217,7 +219,7 @@ export const OutlineModal: React.FC<OutlineModalProps> = ({
             style={{ borderColor: onlyTasks ? undefined : 'var(--hud-border)' }}
           >
             <CheckSquare className="h-3.5 w-3.5" />
-            <span>Sadece Görevler</span>
+            <span>{t('Sadece Görevler', 'Tasks Only')}</span>
           </button>
         </div>
 

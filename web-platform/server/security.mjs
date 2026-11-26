@@ -450,8 +450,8 @@ export function validateAndSanitizeMindMapDoc(raw) {
   }
 
   const serialized = JSON.stringify(sanitizedDoc);
-  if (Buffer.byteLength(serialized, 'utf8') > 3 * 1024 * 1024) {
-    throw new HttpError(413, 'Tek harita boyutu 3 MB sınırını aşıyor.', 'MAP_TOO_LARGE');
+  if (Buffer.byteLength(serialized, 'utf8') > 5 * 1024 * 1024) {
+    throw new HttpError(413, 'Tek harita boyutu 5 MB sınırını aşıyor.', 'MAP_TOO_LARGE');
   }
 
   const updatedAt =

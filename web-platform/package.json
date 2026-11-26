@@ -8,6 +8,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "prebuild": "node ../scripts/clean-dist.mjs dist",
     "build": "vite build --config vite.config.ts",
     "dev:web": "vite --config vite.config.ts --port 5174",
     "start": "node --no-warnings=ExperimentalWarning server/index.mjs",

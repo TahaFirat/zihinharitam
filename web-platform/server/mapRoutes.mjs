@@ -41,10 +41,24 @@ export async function handleMapRoute(req, res, pathname, ctx) {
   // POST /api/v1/maps/sync
   if (method === 'POST' && pathname === '/api/v1/maps/sync') {
     assertCsrfToken(req, session);
-    const body = await readJsonBody(req, 4 * 1024 * 1024);
+    const body = await readJsonBody(req, 8 * 1024 * 1024);
     const incoming = Array.isArray(body.maps) ? body.maps : [];
+    const deletedIds = Array.isArray(body.deletedIds) ? body.deletedIds : [];
     if (incoming.length > 50) {
       throw new HttpError(400, 'Tek eşitleme isteğinde en fazla 50 harita gönderilebilir.', 'TOO_MANY_MAPS');
+    }
+    if (deletedIds.length > 120) {
+      throw new HttpError(400, 'Tek eşitleme isteğinde en fazla 120 silme kaydı gönderilebilir.', 'TOO_MANY_DELETES');
+    }
+
+    let deleted = 0;
+    const deleteNow = Date.now();
+    for (const rawDelId of deletedIds) {
+      if (typeof rawDelId !== 'string' || !/^[a-zA-Z0-9_-]{3,96}$/.test(rawDelId)) {
+        continue;
+      }
+      const info = vault.stmts.softDeleteMapForUser.run(deleteNow, deleteNow, rawDelId, session.user_id);
+      if (info.changes) deleted += 1;
     }
 
     let upserted = 0;
@@ -77,6 +91,7 @@ export async function handleMapRoute(req, res, pathname, ctx) {
     sendJson(res, 200, {
       ok: true,
       upserted,
+      deleted,
       totalCloudMaps: mergedMaps.length,
       maps: mergedMaps,
       syncedAt: Date.now(),

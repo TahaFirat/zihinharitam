@@ -51,6 +51,7 @@ import {
   SpeechDictationController,
 } from '../core/native/SpeechDictation';
 import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
+import { useI18n } from '../core/i18n/i18n';
 
 interface SmartMapGeneratorModalProps {
   isOpen: boolean;
@@ -445,6 +446,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   onGenerateCompleteMap,
   onAddProactiveBranches,
 }) => {
+  const { t } = useI18n();
   const kb = useKeyboardInset();
   const [tab, setTab] = useState<'text_to_map' | 'proactive_branches'>(initialTab);
   const [inputMode, setInputMode] = useState<'outline' | 'converter' | 'document'>('outline');
@@ -743,12 +745,12 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
               <Wand2 className="h-4.5 w-4.5" />
             </div>
             <h2 className="truncate text-sm font-extrabold sm:text-base">
-              Akıllı Harita
+              {t('Akıllı Harita', 'Smart Mind Map')}
             </h2>
           </div>
           <button
             type="button"
-            aria-label="Kapat"
+            aria-label={t('Kapat', 'Close')}
             onClick={handleCloseClean}
             className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-500/10"
           >
@@ -771,7 +773,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
             }`}
           >
             <FileText className="h-3.5 w-3.5" />
-            <span>Metinden Harita</span>
+            <span>{t('Metinden Harita', 'Text / PDF to Map')}</span>
           </button>
           {activeNode && (
             <button
@@ -784,7 +786,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
               }`}
             >
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">Alt Dal Öner</span>
+              <span className="truncate">{t('Alt Dal Öner', 'Suggest Branches')}</span>
             </button>
           )}
         </div>
@@ -814,7 +816,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   }`}
                 >
                   <FileText className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">Harita Formatı</span>
+                  <span className="truncate">{t('Harita Formatı', 'Outline Format')}</span>
                 </button>
                 <button
                   type="button"
@@ -830,7 +832,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   }`}
                 >
                   <BookOpen className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">Ders Notu Çevir</span>
+                  <span className="truncate">{t('Ders Notu Çevir', 'Convert Notes')}</span>
                 </button>
                 <button
                   type="button"
@@ -846,7 +848,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   }`}
                 >
                   <FileUp className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">PDF / Dosya</span>
+                  <span className="truncate">{t('PDF / Dosya', 'PDF / File')}</span>
                 </button>
               </div>
 
@@ -854,15 +856,18 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                 <div className="space-y-3" data-testid="document-import-panel">
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 p-3 text-xs leading-relaxed font-semibold">
                     <span className="min-w-0 flex-1">
-                      <strong>PDF, Word (.docx), PowerPoint (.pptx) veya TXT/MD</strong> dosyanı seç — uygulama metni az dallı akıcı bir zihin haritasına özetler ve belgedeki{' '}
-                      <strong>şema/fotoğrafları</strong> ilgili dallara otomatik yerleştirir.
+                      <strong>PDF, Word (.docx), PowerPoint (.pptx) {t('veya', 'or')} TXT/MD</strong>{' '}
+                      {t(
+                        'dosyanı seç — uygulama metni az dallı akıcı bir zihin haritasına özetler ve belgedeki şema/fotoğrafları ilgili dallara otomatik yerleştirir.',
+                        '— extracts a clean low-branch mind map offline and places real diagrams/photos directly onto matching branches.'
+                      )}
                     </span>
                     <div className="flex shrink-0 items-center gap-1 rounded-xl border border-emerald-500/25 bg-white/70 p-0.5 dark:bg-slate-900/60">
                       {(
                         [
-                          { id: 'compact', label: 'Az Dal' },
-                          { id: 'balanced', label: 'Dengeli' },
-                          { id: 'detailed', label: 'Detaylı' },
+                          { id: 'compact', label: t('Az Dal', 'Compact') },
+                          { id: 'balanced', label: t('Dengeli', 'Balanced') },
+                          { id: 'detailed', label: t('Detaylı', 'Detailed') },
                         ] as Array<{ id: LectureNoteDepth; label: string }>
                       ).map((opt) => (
                         <button
@@ -935,13 +940,19 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       {docLoading
                         ? docLoading.label
                         : docResult
-                        ? `${docResult.fileName} (${docResult.pageCount} sayfa)`
-                        : 'PDF, Word, PowerPoint veya TXT Dosyası Seç'}
+                        ? `${docResult.fileName} (${docResult.pageCount} ${t('sayfa', 'pages')})`
+                        : t('PDF, Word, PowerPoint veya TXT Dosyası Seç', 'Select PDF, Word, PowerPoint, or TXT File')}
                     </div>
                     <p className="mt-1 text-[11px] font-semibold opacity-70">
                       {docLoading
-                        ? `%${docLoading.pct} tamamlandı • Tüm işlem cihazında çevrimdışı yapılır`
-                        : 'Sürükleyip bırak veya dokunarak seç (Maks. 20 MB • %100 cihaz içi gizli işleme)'}
+                        ? t(
+                            `%${docLoading.pct} tamamlandı • Tüm işlem cihazında çevrimdışı yapılır`,
+                            `${docLoading.pct}% complete • Processed 100% offline on your device`
+                          )
+                        : t(
+                            'Sürükleyip bırak veya dokunarak seç (Maks. 20 MB • %100 cihaz içi gizli işleme)',
+                            'Drag & drop or tap to browse (Max 20 MB • 100% private on-device processing)'
+                          )}
                     </p>
                     {docLoading && (
                       <div className="mt-3 h-2 w-full max-w-xs overflow-hidden rounded-full bg-slate-500/15">
@@ -981,8 +992,10 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                             <div className="flex items-center gap-1.5 text-xs font-extrabold">
                               <ImageIcon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                               <span>
-                                Belgeden {docImages.length} Görsel Çıkarıldı (
-                                {docImages.filter((i) => i.selected).length} seçili)
+                                {t(
+                                  `Belgeden ${docImages.length} Görsel Çıkarıldı (${docImages.filter((i) => i.selected).length} seçili)`,
+                                  `${docImages.length} Images Extracted (${docImages.filter((i) => i.selected).length} selected)`
+                                )}
                               </span>
                             </div>
                             <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-extrabold">
@@ -992,11 +1005,14 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                                 onChange={(e) => setUseDocImages(e.target.checked)}
                                 className="h-4 w-4 rounded accent-sky-600"
                               />
-                              <span>Dallara görsel olarak ekle</span>
+                              <span>{t('Dallara görsel olarak ekle', 'Attach images to branches')}</span>
                             </label>
                           </div>
                           <p className="text-[11px] font-medium opacity-75">
-                            Seçili PDF/slayt görselleri en ilgili kavram dallarına ikon yerine yerleştirilir; diğer dallar otomatik ikon alır. İstemezseniz görsele dokunup kaldırabilirsiniz.
+                            {t(
+                              'Seçili PDF/slayt görselleri en ilgili kavram dallarına ikon yerine yerleştirilir; diğer dallar otomatik ikon alır. İstemezseniz görsele dokunup kaldırabilirsiniz.',
+                              'Selected figures are placed directly onto the closest matching branch instead of a generic icon; other branches receive vector icons automatically.'
+                            )}
                           </p>
                           <div className="no-scrollbar flex gap-2 overflow-x-auto pt-1 pb-0.5">
                             {docImages.map((img) => (
@@ -1017,7 +1033,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                                   className="h-full w-full object-contain p-0.5"
                                 />
                                 <span className="absolute right-0.5 bottom-0.5 rounded bg-slate-900/80 px-1 py-0.2 text-[9px] font-black text-white">
-                                  S.{img.pageIndex}
+                                  {t('S.', 'P.')}{img.pageIndex}
                                 </span>
                                 {useDocImages && img.selected && (
                                   <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white">
@@ -1035,13 +1051,13 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                         <div className="space-y-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/6 p-3">
                           <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
                             <span className="rounded-lg bg-emerald-500/18 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
-                              ⚡ {liveDocumentOutline.stats.totalNodes} Dal (Akıcı Özet)
+                              ⚡ {liveDocumentOutline.stats.totalNodes} {t('Dal (Akıcı Özet)', 'Nodes (Compact)')}
                             </span>
                             <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
-                              🌿 {liveDocumentOutline.stats.mainBranches} Ana Dal
+                              🌿 {liveDocumentOutline.stats.mainBranches} {t('Ana Dal', 'Main')}
                             </span>
                             <span className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
-                              📝 {liveDocumentOutline.stats.notedBranches} Detaylı Not
+                              📝 {liveDocumentOutline.stats.notedBranches} {t('Detaylı Not', 'Notes')}
                             </span>
                           </div>
                           <pre
@@ -1068,7 +1084,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                           className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-200"
                         >
                           <ArrowRight className="h-4 w-4" />
-                          <span>Formatı Düzenle</span>
+                          <span>{t('Formatı Düzenle', 'Edit Outline')}</span>
                         </button>
                         <button
                           type="button"
@@ -1091,8 +1107,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                           )}
                           <span>
                             {isGenerating
-                              ? 'Görsel Harita Hazırlanıyor...'
-                              : 'Belgeden Görsel Harita Oluştur'}
+                              ? t('Görsel Harita Hazırlanıyor...', 'Building Visual Map...')
+                              : t('Belgeden Görsel Harita Oluştur', 'Create Mind Map from File')}
                           </span>
                         </button>
                       </div>
@@ -1103,15 +1119,17 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                 <div className="space-y-3" data-testid="lecture-note-converter-panel">
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-violet-500/25 bg-violet-500/8 p-3 text-xs leading-relaxed font-semibold">
                     <span className="min-w-0 flex-1">
-                      Ham ders notunu, PDF paragrafını veya slayt metnini yapıştır — uygulama analiz edip otomatik olarak{' '}
-                      <strong>Merkezi Konu / - Ana Dal: Açıklama [Rozet] / - Alt Kavram / Not:</strong> yapısına çevirir.
+                      {t(
+                        'Ham ders notunu, PDF paragrafını veya slayt metnini yapıştır — uygulama analiz edip otomatik olarak Merkezi Konu / Ana Dal / Not yapısına çevirir.',
+                        'Paste raw lecture notes, paragraphs, or slides — we analyze them offline into a clean Central Topic / Branch / Note outline.'
+                      )}
                     </span>
                     <div className="flex shrink-0 items-center gap-1 rounded-xl border border-violet-500/25 bg-white/60 p-0.5 dark:bg-slate-900/60">
                       {(
                         [
-                          { id: 'compact', label: 'Özet' },
-                          { id: 'balanced', label: 'Dengeli' },
-                          { id: 'detailed', label: 'Detaylı' },
+                          { id: 'compact', label: t('Özet', 'Compact') },
+                          { id: 'balanced', label: t('Dengeli', 'Balanced') },
+                          { id: 'detailed', label: t('Detaylı', 'Detailed') },
                         ] as Array<{ id: LectureNoteDepth; label: string }>
                       ).map((opt) => (
                         <button
@@ -1367,7 +1385,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/12 px-4 py-2.5 text-xs font-extrabold text-violet-700 transition-transform hover:bg-violet-500/20 active:scale-95 disabled:opacity-45 dark:text-violet-200"
                     >
                       <ArrowRight className="h-4 w-4" />
-                      <span>Harita Formatında Düzenle</span>
+                      <span>{t('Harita Formatında Düzenle', 'Edit in Outline View')}</span>
                     </button>
                     <button
                       type="button"
@@ -1381,7 +1399,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       ) : (
                         <Wand2 className="h-4 w-4" />
                       )}
-                      <span>{isGenerating ? 'Harita Oluşturuluyor...' : 'Bu Yapıdan Harita Oluştur'}</span>
+                      <span>
+                        {isGenerating
+                          ? t('Harita Oluşturuluyor...', 'Building Map...')
+                          : t('Bu Yapıdan Harita Oluştur', 'Generate Mind Map')}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -1608,7 +1630,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       onClick={handleCloseClean}
                       className="rounded-xl px-4 py-2.5 text-xs font-bold hover:bg-slate-500/10"
                     >
-                      Vazgeç
+                      {t('Vazgeç', 'Cancel')}
                     </button>
                     <button
                       type="submit"
@@ -1622,7 +1644,9 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                         <Wand2 className="h-4 w-4" />
                       )}
                       <span>
-                        {isGenerating ? 'İkonlar Eşleştiriliyor...' : 'Görsel Haritayı Oluştur'}
+                        {isGenerating
+                          ? t('İkonlar Eşleştiriliyor...', 'Matching Icons...')
+                          : t('Görsel Haritayı Oluştur', 'Generate Visual Mind Map')}
                       </span>
                     </button>
                   </div>

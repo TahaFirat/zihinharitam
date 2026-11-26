@@ -71,8 +71,10 @@ import { TopicContextIntelligence } from './core/visuals/TopicContextIntelligenc
 import { OfflineVisualSearchClient } from './core/visuals/OfflineVisualSearchClient';
 import { VisualSearchOrchestrator } from './core/visuals/VisualSearchOrchestrator';
 import { CanvasStage } from './components/CanvasStage';
+import { CanvasFindBar } from './components/CanvasFindBar';
 import { FlowchartWorkspace } from './components/FlowchartWorkspace';
 import { FlashcardStudyModal } from './components/FlashcardStudyModal';
+import { MapQuizModal } from './components/MapQuizModal';
 import { PresentationOverlay } from './components/PresentationOverlay';
 import { CanvasDrawingToolbar } from './components/CanvasDrawingToolbar';
 import { TopMinimalHUD } from './components/TopMinimalHUD';
@@ -231,6 +233,11 @@ export const App: React.FC = () => {
   const [sketchPopoverOpen, setSketchPopoverOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [flashcardsOpen, setFlashcardsOpen] = useState(false);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [findBarOpen, setFindBarOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findActiveIndex, setFindActiveIndex] = useState(0);
+  const [findMatchIds, setFindMatchIds] = useState<string[]>([]);
   const [presentationOpen, setPresentationOpen] = useState(false);
   const [customFolders, setCustomFolders] = useState<CustomUserFolder[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -579,9 +586,16 @@ export const App: React.FC = () => {
 
     window.addEventListener('pagehide', flushImmediately);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    const onCloudUpdated = () => {
+      void LocalStore.listMaps().then((freshList) => {
+        setSavedMaps(freshList);
+      });
+    };
+    window.addEventListener('zh:cloud-maps-updated', onCloudUpdated);
     return () => {
       window.removeEventListener('pagehide', flushImmediately);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('zh:cloud-maps-updated', onCloudUpdated);
     };
   }, []);
 
@@ -1890,6 +1904,16 @@ export const App: React.FC = () => {
         return;
       }
 
+      if (
+        activeScreen === 'canvas' &&
+        (e.ctrlKey || e.metaKey) &&
+        e.key.toLowerCase() === 'f'
+      ) {
+        e.preventDefault();
+        setFindBarOpen(true);
+        return;
+      }
+
       if (activeScreen !== 'canvas') {
         if (e.key === 'Escape' && anyModalOpen) {
           setSettingsOpen(false);
@@ -2283,6 +2307,109 @@ export const App: React.FC = () => {
     }));
   }, [pushHistory]);
 
+  const handleReparentNode = useCallback(
+    (nodeId: string, newParentId: string) => {
+      const curDoc = docRef.current;
+      if (nodeId === curDoc.rootNodeId || nodeId === newParentId) return;
+      const moving = curDoc.nodes[nodeId];
+      const newParent = curDoc.nodes[newParentId];
+      if (!moving || !newParent || moving.parentId === newParentId) return;
+
+      // Cycle guard: ensure `newParentId` is NOT inside `nodeId`'s subtree
+      let walk: string | null | undefined = newParent.parentId;
+      while (walk) {
+        if (walk === nodeId) return;
+        walk = curDoc.nodes[walk]?.parentId;
+      }
+
+      pushHistory(curDoc);
+      const nextColor = resolveNewBranchColor(newParent, curDoc.nodes, curDoc.rootNodeId);
+      // Collect subtree of `nodeId` to harmonize its branch color
+      const subtreeIds = new Set<string>([nodeId]);
+      let expanded = true;
+      while (expanded) {
+        expanded = false;
+        for (const n of Object.values(curDoc.nodes)) {
+          if (n.parentId && subtreeIds.has(n.parentId) && !subtreeIds.has(n.id)) {
+            subtreeIds.add(n.id);
+            expanded = true;
+          }
+        }
+      }
+
+      setIsAutoLayoutAnimating(true);
+      setDoc((prev) => {
+        const nextNodes: Record<string, MindNode> = { ...prev.nodes };
+        if (nextNodes[newParentId]?.collapsed) {
+          nextNodes[newParentId] = { ...nextNodes[newParentId], collapsed: false };
+        }
+        for (const id of subtreeIds) {
+          const item = nextNodes[id];
+          if (!item) continue;
+          nextNodes[id] = {
+            ...item,
+            parentId: id === nodeId ? newParentId : item.parentId,
+            branchColor: nextColor,
+          };
+        }
+        return {
+          ...prev,
+          nodes: computeMindMapLayout(
+            nextNodes,
+            prev.rootNodeId,
+            prev.layoutType ?? 'radial'
+          ),
+          updatedAt: Date.now(),
+        };
+      });
+      setSelectedNodeId(nodeId);
+      window.setTimeout(() => setIsAutoLayoutAnimating(false), 380);
+    },
+    [pushHistory]
+  );
+
+  const handleMarkNodesForReview = useCallback(
+    (nodeIds: string[]) => {
+      if (!nodeIds.length) return;
+      pushHistory(docRef.current);
+      setDoc((prev) => {
+        const nextNodes = { ...prev.nodes };
+        for (const id of nodeIds) {
+          if (nextNodes[id]) {
+            nextNodes[id] = { ...nextNodes[id], priorityTag: 'review' };
+          }
+        }
+        return {
+          ...prev,
+          nodes: nextNodes,
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [pushHistory]
+  );
+
+  const searchMatchIdSet = useMemo(
+    () => (findBarOpen && findQuery.trim() ? new Set(findMatchIds) : undefined),
+    [findBarOpen, findMatchIds, findQuery]
+  );
+  const activeSearchMatchId =
+    findBarOpen && findQuery.trim() && findMatchIds.length > 0
+      ? findMatchIds[
+          ((findActiveIndex % findMatchIds.length) + findMatchIds.length) %
+            findMatchIds.length
+        ] ?? null
+      : null;
+
+  const handleFindJumpToNode = useCallback((node: MindNode) => {
+    setSelectedNodeId(node.id);
+    setRadarJump((prev) => ({
+      x: node.x,
+      y: node.y,
+      seq: (prev?.seq ?? 0) + 1,
+    }));
+  }, []);
+
   const defaultNodeStyle: NodeVisualStyle = doc.defaultNodeStyle ?? 'card';
   const activeEditNode = editingNodeId ? doc.nodes[editingNodeId] ?? null : null;
   const activeStudioNode = drawingMode
@@ -2327,6 +2454,10 @@ export const App: React.FC = () => {
             setSettingsOpen(true);
           }}
           onTriggerPaywall={(reason) => openPaywall(reason, null)}
+          onStartDueFlashcards={(targetMap) => {
+            openMapOnCanvas(targetMap, false);
+            window.setTimeout(() => setFlashcardsOpen(true), 120);
+          }}
         />
       ) : doc.documentType === 'flowchart' ? (
         <>
@@ -2387,6 +2518,8 @@ export const App: React.FC = () => {
             onApplyStudioTheme={handleApplyStudioTheme}
             onConvertToFlowchart={() => void handleConvertActiveMapToFlowchart()}
             onOpenFlashcards={() => setFlashcardsOpen(true)}
+            onOpenQuiz={() => setQuizOpen(true)}
+            onOpenCanvasFind={() => setFindBarOpen(true)}
             onStartPresentation={() => {
               setDrawingMode(false);
               setEditingNodeId(null);
@@ -2538,6 +2671,9 @@ export const App: React.FC = () => {
             onStartCrossLink={handleStartCrossLink}
             onOpenStickerGallery={handleOpenStickerGallery}
             onCommitBatchNodePositions={handleCommitBatchNodePositions}
+            onReparentNode={handleReparentNode}
+            searchMatchIds={searchMatchIdSet}
+            activeSearchMatchId={activeSearchMatchId}
             onCreateChildBranch={handleCreateChildBranch}
             onCompleteCrossLink={handleCompleteCrossLink}
             onCancelCrossLink={handleCancelCrossLink}
@@ -2979,11 +3115,38 @@ export const App: React.FC = () => {
             }}
           />
 
+          <CanvasFindBar
+            isOpen={findBarOpen}
+            query={findQuery}
+            nodes={doc.nodes}
+            activeIndex={findActiveIndex}
+            onQueryChange={setFindQuery}
+            onActiveIndexChange={setFindActiveIndex}
+            onMatchesComputed={setFindMatchIds}
+            onJumpToNode={handleFindJumpToNode}
+            onClose={() => {
+              setFindBarOpen(false);
+              setFindQuery('');
+              setFindMatchIds([]);
+            }}
+          />
+
           <FlashcardStudyModal
             isOpen={flashcardsOpen}
             doc={doc}
             onClose={() => setFlashcardsOpen(false)}
             onSessionComplete={() => {
+              void BillingService.recordDelightMomentAndMaybeRequestReview();
+            }}
+            onStartQuiz={() => setQuizOpen(true)}
+          />
+
+          <MapQuizModal
+            isOpen={quizOpen}
+            doc={doc}
+            onClose={() => setQuizOpen(false)}
+            onMarkNodesForReview={handleMarkNodesForReview}
+            onQuizComplete={() => {
               void BillingService.recordDelightMomentAndMaybeRequestReview();
             }}
           />

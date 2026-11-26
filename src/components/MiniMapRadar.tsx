@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Map, Minimize2 } from 'lucide-react';
 import type { MindNode, ViewportTransform } from '../types/mindmap';
+import { useI18n } from '../core/i18n/i18n';
 
 interface MiniMapRadarProps {
   nodes: Record<string, MindNode>;
@@ -23,6 +24,7 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = React.memo(({
   isObstructedByBottomBar,
   onJumpToWorldPoint,
 }) => {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
   const visibleNodes = useMemo(
@@ -80,7 +82,7 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = React.memo(({
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        title="Harita Radarını Aç"
+        title={t('Harita Radarını Aç', 'Open Minimap Radar')}
         style={{
           backgroundColor: 'var(--hud-bg)',
           borderColor: 'var(--hud-border)',
@@ -90,7 +92,7 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = React.memo(({
         className="fixed z-20 hidden items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md transition-transform hover:scale-103 active:scale-95 sm:flex"
       >
         <Map className="h-3.5 w-3.5 text-sky-500" />
-        <span>Radar ({visibleNodes.length})</span>
+        <span>{t('Radar', 'Map')} ({visibleNodes.length})</span>
       </button>
     );
   }
@@ -106,12 +108,12 @@ export const MiniMapRadar: React.FC<MiniMapRadarProps> = React.memo(({
       className="fixed z-20 hidden flex-col overflow-hidden rounded-2xl border p-2 shadow-xl backdrop-blur-md sm:flex"
     >
       <div className="mb-1 flex items-center justify-between px-1 text-[10px] font-extrabold opacity-70">
-        <span>Harita Radarı</span>
+        <span>{t('Harita Radarı', 'Minimap Radar')}</span>
         <button
           type="button"
           onClick={() => setExpanded(false)}
           className="rounded p-0.5 hover:bg-slate-500/15"
-          title="Küçült"
+          title={t('Küçült', 'Minimize')}
         >
           <Minimize2 className="h-3 w-3" />
         </button>

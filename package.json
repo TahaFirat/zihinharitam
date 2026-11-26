@@ -7,7 +7,7 @@
   "scripts": {
     "predev": "node scripts/build-offline-icon-shards.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/build-offline-icon-shards.mjs",
+    "prebuild": "node scripts/clean-dist.mjs dist && node scripts/build-offline-icon-shards.mjs",
     "build": "tsc -b && vite build",
     "generate:icons": "node scripts/generate-app-icons-and-splash.mjs",
     "ios:prepare": "npm run generate:icons && npm run build && npx cap sync ios",

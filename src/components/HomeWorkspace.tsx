@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Brain,
+  CalendarClock,
   Copy,
   Crown,
   Download,
+  Flame,
   FolderInput,
   FolderPlus,
   HelpCircle,
@@ -24,6 +27,8 @@ import { BrandLogo } from './BrandLogo';
 import { generateMapThumbnailDataUrl } from '../core/canvas/ThumbnailGenerator';
 import { useEntitlements } from '../core/monetization/EntitlementManager';
 import { useI18n } from '../core/i18n/i18n';
+import { LocalStore } from '../core/sync/LocalStore';
+import { StudyTracker, type StudyTrackerState } from '../core/study/StudyTracker';
 import { hapticLight, shareOrDownloadFile } from '../core/native/NativeBridge';
 import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 import { normalizeTrToken } from '../core/visuals/SemanticTaxonomyTR';
@@ -36,6 +41,7 @@ import {
   type MindMapDocument,
   type MindMapFolder,
   type PaywallTriggerReason,
+  type SrsCardProgress,
 } from '../types/mindmap';
 
 export type WorkspaceFolderFilter =
@@ -70,6 +76,7 @@ interface HomeWorkspaceProps {
   onOpenGuide: () => void;
   onOpenSettings: () => void;
   onTriggerPaywall: (reason: PaywallTriggerReason) => void;
+  onStartDueFlashcards?: (map: MindMapDocument) => void;
 }
 
 function formatRelativeDateTr(ts: number): string {
@@ -110,10 +117,16 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onOpenGuide,
   onOpenSettings,
   onTriggerPaywall,
+  onStartDueFlashcards,
 }) => {
   const { t, isEn } = useI18n();
   const kb = useKeyboardInset();
   const { isLifetimePro, localizedPrice } = useEntitlements();
+  const [studyState, setStudyState] = useState<StudyTrackerState>(() => StudyTracker.load());
+  const [srsMap, setSrsMap] = useState<Record<string, SrsCardProgress>>({});
+  const [examEditorOpen, setExamEditorOpen] = useState(false);
+  const [examTitleDraft, setExamTitleDraft] = useState(() => StudyTracker.load().examTitle);
+  const [examDateDraft, setExamDateDraft] = useState(() => StudyTracker.load().examDateIso);
   const [searchQuery, setSearchQuery] = useState('');
   const [folderFilter, setFolderFilter] = useState<WorkspaceFolderFilter>('all');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -140,6 +153,12 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   }, [isLifetimePro, folderFilter]);
 
   useEffect(() => {
+    const unsub = StudyTracker.subscribe(() => setStudyState(StudyTracker.load()));
+    void LocalStore.loadSrsProgressMap().then(setSrsMap);
+    return unsub;
+  }, [maps.length]);
+
+  useEffect(() => {
     const closeMenu = () => setMenuOpenId(null);
     window.addEventListener('pointerdown', closeMenu);
     return () => window.removeEventListener('pointerdown', closeMenu);
@@ -149,6 +168,32 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
     () => maps.filter((m) => !m.deletedAt),
     [maps]
   );
+
+  const dueSummary = useMemo(() => {
+    const now = Date.now();
+    let totalDue = 0;
+    let bestMap: MindMapDocument | null = null;
+    let bestMapDue = 0;
+    for (const m of activeMaps) {
+      if (m.documentType === 'flowchart') continue;
+      let mapDue = 0;
+      for (const n of Object.values(m.nodes || {})) {
+        if (n.id === m.rootNodeId) continue;
+        const rec = srsMap[`${m.id}::${n.id}`];
+        if (!rec || rec.dueAt <= now) {
+          mapDue += 1;
+        }
+      }
+      totalDue += mapDue;
+      if (mapDue > bestMapDue) {
+        bestMapDue = mapDue;
+        bestMap = m;
+      }
+    }
+    return { totalDue, bestMap, bestMapDue };
+  }, [activeMaps, srsMap]);
+
+  const daysUntilExam = StudyTracker.getDaysUntilExam(studyState);
   const trashedMaps = useMemo(
     () => maps.filter((m) => Boolean(m.deletedAt)),
     [maps]
@@ -287,7 +332,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 {APP_RELEASE_CONFIG.appName}
               </h1>
               <p className="hidden text-[11px] font-medium opacity-65 sm:block">
-                Görsel Zihin Haritası & Çizim Defteri
+                {t('Görsel Zihin Haritası & Çizim Defteri', 'Visual Mind Map & Study Notebook')}
               </p>
             </div>
           </div>
@@ -301,7 +346,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 data-testid="home-search-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Harita veya konu ara..."
+                placeholder={t('Harita veya konu ara...', 'Search maps or topics...')}
                 className="allow-text-input min-h-[44px] w-full rounded-2xl border bg-slate-500/5 py-2 pr-9 pl-9 text-base font-semibold outline-none focus:ring-2 focus:ring-sky-500"
                 style={{ borderColor: 'var(--hud-border)' }}
               />
@@ -309,7 +354,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  aria-label="Aramayı temizle"
+                  aria-label={t('Aramayı temizle', 'Clear search')}
                   className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-lg p-1 opacity-60 hover:opacity-100"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -344,19 +389,19 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               type="button"
               onClick={onOpenGuide}
               data-testid="home-guide-btn"
-              title="Uygulama Tanıtımı & Nasıl Kullanılır?"
+              title={t('Uygulama Tanıtımı & Nasıl Kullanılır?', 'Quick Tour & Guide')}
               className="inline-flex h-11 items-center gap-1.5 rounded-2xl border px-3 text-xs font-extrabold hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 dark:hover:text-sky-300"
               style={{ borderColor: 'var(--hud-border)' }}
             >
               <HelpCircle className="h-4.5 w-4.5 text-sky-500" />
-              <span className="hidden sm:inline">Rehber</span>
+              <span className="hidden sm:inline">{t('Rehber', 'Guide')}</span>
             </button>
 
             <button
               type="button"
               onClick={onOpenSettings}
               data-testid="home-settings-btn"
-              title="Ayarlar, Yedekleme ve Yasal Bilgiler"
+              title={t('Ayarlar, Yedekleme ve Yasal Bilgiler', 'Settings, Backup & Legal')}
               className="flex h-11 w-11 items-center justify-center rounded-2xl border hover:bg-slate-500/10 active:scale-95"
               style={{ borderColor: 'var(--hud-border)' }}
             >
@@ -371,12 +416,148 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
         className="flex-1 overflow-y-auto px-4 py-5 sm:px-6"
         style={{ paddingBottom: 'max(36px, calc(var(--safe-bottom) + 28px))' }}
       >
-        <div className="mx-auto max-w-6xl space-y-6">
+        <div className="mx-auto max-w-6xl space-y-5">
+          {/* Compact Daily Study Streak, SM-2 Due Flashcards & Exam Countdown Strip */}
+          {activeMaps.length > 0 && (
+            <section
+              data-testid="home-study-dashboard"
+              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border px-3.5 py-2.5 shadow-2xs"
+              style={{
+                backgroundColor: 'var(--hud-bg)',
+                borderColor: 'var(--hud-border)',
+              }}
+            >
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {/* Daily Study Streak */}
+                <div className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500/12 px-2.5 py-1 text-xs font-extrabold text-amber-700 dark:text-amber-300">
+                  <Flame className="h-3.5 w-3.5 text-amber-500" />
+                  <span>
+                    {studyState.currentStreak > 0
+                      ? t(`${studyState.currentStreak} Gün Seri`, `${studyState.currentStreak}-Day Streak`)
+                      : t('Serini Başlat', 'Start Streak')}
+                  </span>
+                  {studyState.todayReviewedCount > 0 && (
+                    <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[10px]">
+                      {t(`Bugün ${studyState.todayReviewedCount}`, `Today ${studyState.todayReviewedCount}`)}
+                    </span>
+                  )}
+                </div>
+
+                {/* SM-2 Due Flashcards */}
+                {dueSummary.totalDue > 0 && dueSummary.bestMap && onStartDueFlashcards && (
+                  <button
+                    type="button"
+                    data-testid="home-study-due-btn"
+                    onClick={() => onStartDueFlashcards(dueSummary.bestMap!)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-1 text-xs font-extrabold text-white shadow-2xs transition hover:bg-violet-700 active:scale-95"
+                  >
+                    <Brain className="h-3.5 w-3.5" />
+                    <span>
+                      {t(
+                        `Bugün ${dueSummary.totalDue} Kart Bekliyor • Çalış`,
+                        `${dueSummary.totalDue} Cards Due • Study`
+                      )}
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {/* Optional Exam Countdown Pill */}
+              <div className="relative">
+                <button
+                  type="button"
+                  data-testid="home-exam-countdown-btn"
+                  onClick={() => {
+                    setExamTitleDraft(studyState.examTitle);
+                    setExamDateDraft(studyState.examDateIso);
+                    setExamEditorOpen((v) => !v);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-extrabold transition hover:bg-slate-500/10"
+                  style={{ borderColor: 'var(--hud-border)' }}
+                >
+                  <CalendarClock className="h-3.5 w-3.5 text-sky-500" />
+                  {daysUntilExam !== null ? (
+                    <span>
+                      {studyState.examTitle || t('Sınav', 'Exam')} •{' '}
+                      <strong className="text-sky-600 dark:text-sky-300">
+                        {daysUntilExam > 0
+                          ? t(`${daysUntilExam} gün`, `${daysUntilExam}d left`)
+                          : daysUntilExam === 0
+                          ? t('Bugün!', 'Today!')
+                          : t('Tamamlandı', 'Passed')}
+                      </strong>
+                    </span>
+                  ) : (
+                    <span className="opacity-75">
+                      {t('+ Sınav Geri Sayımı', '+ Exam Countdown')}
+                    </span>
+                  )}
+                </button>
+
+                {examEditorOpen && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      StudyTracker.setExamCountdown(examTitleDraft, examDateDraft);
+                      setExamEditorOpen(false);
+                    }}
+                    className="absolute right-0 z-40 mt-2 w-64 space-y-2 rounded-2xl border p-3 shadow-2xl"
+                    style={{
+                      backgroundColor: 'var(--canvas-bg)',
+                      borderColor: 'var(--hud-border)',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="text-[11px] font-black">
+                      {t('Sınav Geri Sayımı Ayarla', 'Set Exam Countdown')}
+                    </div>
+                    <input
+                      type="text"
+                      value={examTitleDraft}
+                      onChange={(e) => setExamTitleDraft(e.target.value)}
+                      placeholder={t('Örn: YKS, TUS, KPSS, Final...', 'e.g. Finals, MCAT, Bar Exam...')}
+                      className="allow-text-input w-full rounded-xl border bg-slate-500/5 px-2.5 py-1.5 text-xs font-semibold outline-none"
+                      style={{ borderColor: 'var(--hud-border)' }}
+                    />
+                    <input
+                      type="date"
+                      value={examDateDraft}
+                      onChange={(e) => setExamDateDraft(e.target.value)}
+                      className="allow-text-input w-full rounded-xl border bg-slate-500/5 px-2.5 py-1.5 text-xs font-semibold outline-none"
+                      style={{ borderColor: 'var(--hud-border)' }}
+                    />
+                    <div className="flex items-center justify-end gap-1.5 pt-1">
+                      {studyState.examDateIso && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            StudyTracker.setExamCountdown('', '');
+                            setExamEditorOpen(false);
+                          }}
+                          className="rounded-lg px-2 py-1 text-[11px] font-bold text-rose-500 hover:bg-rose-500/10"
+                        >
+                          {t('Temizle', 'Clear')}
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        data-testid="home-exam-countdown-save"
+                        className="rounded-lg bg-sky-500 px-3 py-1 text-[11px] font-extrabold text-white"
+                      >
+                        {t('Kaydet', 'Save')}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* Quick Start Actions + Academic Templates Strip */}
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xs font-extrabold tracking-wider uppercase opacity-65">
-                Hemen Başla & Hazır Şablonlar
+                {t('Hemen Başla & Hazır Şablonlar', 'Quick Start & Ready Templates')}
               </h2>
 
               {/* Free Tier Transparent Map Counter (Clean & Simple) */}
@@ -392,11 +573,11 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   }}
                 >
                   <span>
-                    Ücretsiz Hak:{' '}
+                    {t('Ücretsiz Hak:', 'Free Plan:')}{' '}
                     <strong>
                       {Math.min(activeMapsCount, freeLimit)} / {freeLimit}
                     </strong>{' '}
-                    Harita
+                    {t('Harita', 'Maps')}
                   </span>
                   <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-400/25">
                     <span

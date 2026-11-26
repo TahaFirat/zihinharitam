@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';
 import './index.css';
 import App from './App.tsx';
+import { AppErrorBoundary } from './components/AppErrorBoundary.tsx';
 
 // Native Capacitor builds bundle 100% of assets locally inside the APK/IPA.
 // Never register a PWA Service Worker on native, and purge any legacy SW/caches from earlier installs
@@ -28,6 +29,8 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>
 );

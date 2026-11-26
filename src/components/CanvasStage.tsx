@@ -67,6 +67,7 @@ import {
 import { resolveStarterStickerForConcept } from '../data/academicTemplates';
 import { hapticLight, hapticMedium, hapticSuccess } from '../core/native/NativeBridge';
 import { getViewportKeyboardSnapshot, useKeyboardInset } from '../core/native/useKeyboardInset';
+import { useI18n } from '../core/i18n/i18n';
 
 interface CanvasStageProps {
   nodes: Record<string, MindNode>;
@@ -118,6 +119,9 @@ interface CanvasStageProps {
   onStartCrossLink?: (fromNodeId: string) => void;
   onOpenStickerGallery?: (nodeId: string) => void;
   onCommitBatchNodePositions: (updates: Record<string, { x: number; y: number }>) => void;
+  onReparentNode?: (nodeId: string, newParentId: string) => void;
+  searchMatchIds?: Set<string>;
+  activeSearchMatchId?: string | null;
   onCreateChildBranch: (
     parentId: string,
     worldX: number,
@@ -369,6 +373,9 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   onStartCrossLink,
   onOpenStickerGallery,
   onCommitBatchNodePositions,
+  onReparentNode,
+  searchMatchIds,
+  activeSearchMatchId = null,
   onCreateChildBranch,
   onCompleteCrossLink,
   onCancelCrossLink,
@@ -484,7 +491,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
     scheduleRenderRef.current();
   }, []);
 
+  const { t } = useI18n();
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [dropTargetNodeId, setDropTargetNodeId] = useState<string | null>(null);
+  const dropTargetNodeIdRef = useRef<string | null>(null);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({
     w: typeof window !== 'undefined' ? window.innerWidth : 1200,
     h: typeof window !== 'undefined' ? window.innerHeight : 800,
@@ -1866,6 +1876,31 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
             branchHaloRefs.current.get(childNode.id)?.setAttribute('d', dStr);
           }
 
+          // Drag-to-Reparent magnetic hit-test: when dragging a non-root branch directly over another valid non-descendant node, highlight it!
+          if (onReparentNode && nd.nodeId !== rootNodeId) {
+            const draggedPos = transientPositionsRef.current.get(nd.nodeId);
+            const currentParentId = nodes[nd.nodeId]?.parentId;
+            let bestTarget: string | null = null;
+            let bestDist = 96;
+            if (draggedPos) {
+              for (const cand of Object.values(nodes)) {
+                if (cand.id === nd.nodeId || cand.id === currentParentId) continue;
+                if (nd.initialPositions.has(cand.id)) continue; // Prevent reparenting into own descendant
+                if (treeMeta.hiddenNodeIds.has(cand.id)) continue;
+                const d = Math.hypot(draggedPos.x - cand.x, draggedPos.y - cand.y);
+                if (d < bestDist) {
+                  bestDist = d;
+                  bestTarget = cand.id;
+                }
+              }
+            }
+            if (bestTarget !== dropTargetNodeIdRef.current) {
+              dropTargetNodeIdRef.current = bestTarget;
+              setDropTargetNodeId(bestTarget);
+              if (bestTarget) void hapticLight();
+            }
+          }
+
           // Synchronize any CrossLink SVG curves & mid-curve pill DOM elements attached to moved nodes
           const curLinks = renderDataRef.current.crossLinks;
           if (curLinks && curLinks.length > 0) {
@@ -2104,6 +2139,19 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
       setActiveDragIds([]);
 
       if (nd.moved) {
+        const reparentTarget = dropTargetNodeIdRef.current;
+        if (reparentTarget && onReparentNode && nd.nodeId !== rootNodeId) {
+          dropTargetNodeIdRef.current = null;
+          setDropTargetNodeId(null);
+          transientPositionsRef.current.clear();
+          requestRender();
+          void hapticSuccess();
+          onReparentNode(nd.nodeId, reparentTarget);
+          return;
+        }
+        dropTargetNodeIdRef.current = null;
+        setDropTargetNodeId(null);
+
         const batchUpdates: Record<string, { x: number; y: number }> = {};
         transientPositionsRef.current.forEach((pos, id) => {
           batchUpdates[id] = {
@@ -2840,6 +2888,9 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
           const isSelected = selectedNodeId === node.id;
           const isEditing = editingNodeId === node.id;
           const isLinkSource = linkingFromNodeId === node.id;
+          const isDropTarget = dropTargetNodeId === node.id;
+          const isSearchMatch = Boolean(searchMatchIds && searchMatchIds.has(node.id));
+          const isActiveSearchMatch = activeSearchMatchId === node.id;
           const descendantCount = treeMeta.descendantCountMap.get(node.id) ?? 0;
           const mainBranchId = treeMeta.mainBranchMap.get(node.id) ?? node.id;
           const isDimmedByFocus =
@@ -2985,6 +3036,16 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
               }}
               className="mind-node-wrapper pointer-events-auto absolute top-0 left-0 flex flex-col items-center select-none"
             >
+              {/* Drag-to-Reparent Magnetic Drop Indicator Pill */}
+              {isDropTarget && (
+                <div
+                  data-testid="reparent-drop-pill"
+                  className="pointer-events-none absolute -top-9 left-1/2 z-40 -translate-x-1/2 rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-black whitespace-nowrap text-white shadow-lg"
+                >
+                  {t('Bırak: Buraya Bağla', 'Drop to Attach Here')}
+                </div>
+              )}
+
               {/* DIE-CUT VISUAL STICKER (Stable `node.sticker.id` key -> ZERO blink or remount on selection / Organic toggle!) */}
               {node.sticker && !hideVisualInExam && (
                 <div
@@ -3046,9 +3107,24 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                   data-priority-tag={node.priorityTag ?? undefined}
                   style={{
                     background: cardBackground,
-                    borderColor: cardBorderColor,
-                    borderWidth: priorityMeta ? '2.5px' : isDeepBranch && !isSelected && !isEditing ? '1.5px' : '2px',
-                    boxShadow: cardBoxShadow,
+                    borderColor: isDropTarget
+                      ? '#10B981'
+                      : isActiveSearchMatch
+                      ? '#F59E0B'
+                      : cardBorderColor,
+                    borderWidth:
+                      isDropTarget || isActiveSearchMatch || priorityMeta
+                        ? '2.5px'
+                        : isDeepBranch && !isSelected && !isEditing
+                        ? '1.5px'
+                        : '2px',
+                    boxShadow: isDropTarget
+                      ? '0 0 0 4px rgba(16, 185, 129, 0.35), 0 12px 26px rgba(16, 185, 129, 0.25)'
+                      : isActiveSearchMatch
+                      ? '0 0 0 4px rgba(245, 158, 11, 0.45), 0 12px 28px rgba(245, 158, 11, 0.28)'
+                      : isSearchMatch
+                      ? '0 0 0 3px rgba(56, 189, 248, 0.40), 0 8px 20px rgba(56, 189, 248, 0.20)'
+                      : cardBoxShadow,
                   }}
                   className={`relative flex flex-col items-center rounded-2xl border-solid text-center ${
                     isRoot

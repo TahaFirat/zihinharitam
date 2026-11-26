@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { ArrowRight, Check } from 'lucide-react';
 import { hapticLight, hapticSuccess } from '../core/native/NativeBridge';
+import { useI18n } from '../core/i18n/i18n';
 
 export const ONBOARDING_STORAGE_KEY = 'onboarding_v4_done';
 
@@ -53,8 +54,12 @@ interface OnboardingOverlayProps {
 const STEPS = [
   {
     step: '1 / 4',
-    title: 'Dalı Parmağınla Çek & Yaz',
-    desc: 'Merkez konunun yanındaki + noktasından parmağınla veya kalemle çekerek organik renkli dallar oluştur. Sesle dikte de desteklenir!',
+    titleTr: 'Dalı Parmağınla Çek & Yaz',
+    titleEn: 'Drag to Branch & Type',
+    descTr:
+      'Merkez konunun yanındaki + noktasından parmağınla veya kalemle çekerek organik renkli dallar oluştur. Sesle dikte ve sürükle-bırakla dal taşıma da desteklenir!',
+    descEn:
+      'Drag from the + handle next to the central topic to pull organic branches. Voice dictation and drag-to-reparent are built right in!',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />
@@ -84,8 +89,12 @@ const STEPS = [
   },
   {
     step: '2 / 4',
-    title: 'Yazarken Renkli Oyunlaştırılmış İkonları Seç',
-    desc: 'Türkçe veya İngilizce yazdığın anda 43.000+ çevrimdışı ve 540.000+ canlı renkli 3D ikon saniyeler içinde karşına gelir.',
+    titleTr: 'PDF & Slaytlardan Anında Görsel Harita',
+    titleEn: 'Turn PDFs & Slides into Visual Maps',
+    descTr:
+      'PDF, Word veya PowerPoint dosyanı ekle — metni az dallı özetlesin, içindeki gerçek şema ve fotoğrafları ilgili dallara yerleştirsin, 52.000+ çevrimdışı ikonla zenginleştirsin.',
+    descEn:
+      'Drop any PDF, Word, or PowerPoint file — it builds a clean compact map offline, attaches real diagrams to matching branches, and pairs them with 52,000+ offline icons.',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />
@@ -116,8 +125,12 @@ const STEPS = [
   },
   {
     step: '3 / 4',
-    title: 'Akış Diyagramı, Kalem & Aralıklı Tekrar',
-    desc: 'Ayrı Akış Diyagramı stüdyosuyla süreç şemaları kur; S-Pen / Apple Pencil ile kalem, fosforlu, oto-şekil (basılı tut) ve silgi kullan, haritanı Flashcard ve Sunum moduna çevir!',
+    titleTr: 'Akış Diyagramı, Kalem & Aralıklı Tekrar',
+    titleEn: 'Flowcharts, Stylus Ink & Flashcards',
+    descTr:
+      'Ayrı Akış Diyagramı stüdyosuyla süreç şemaları kur; S-Pen / Apple Pencil ile çizim yap, haritanı SM-2 Flashcard, Otomatik Mini Test ve Sunum moduna çevir!',
+    descEn:
+      'Build flowcharts, sketch with Apple Pencil or S-Pen, and turn any mind map into SM-2 Flashcards, Auto-Quizzes, and Pitch Presentations.',
     renderArt: () => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />
@@ -132,9 +145,13 @@ const STEPS = [
   },
   {
     step: '4 / 4',
-    title: 'Sınav Moduyla Hatırla & 300 DPI Poster Paylaş',
-    desc: 'Üstteki "Çalış" sekmesinden Sınav Modunu, Odaklanmayı veya Kronometreyi aç; haritanı çizimlerinle birlikte 300 DPI PDF poster olarak paylaş.',
-    renderArt: () => (
+    titleTr: 'Sınav Moduyla Hatırla & 300 DPI Poster Paylaş',
+    titleEn: 'Active Recall & 300 DPI Posters',
+    descTr:
+      'Üstteki "Çalış" sekmesinden Sınav Modunu, Mini Testi veya Kronometreyi aç; haritanı notları ve çizimleriyle 300 DPI PDF poster veya SVG olarak paylaş.',
+    descEn:
+      'Open Study mode for Active Recall, Mini Quizzes, or Timers — then export your map with notes and sketches as a 300 DPI PDF poster or SVG.',
+    renderArt: (isEn: boolean) => (
       <svg viewBox="0 0 280 140" className="h-32 w-full">
         <rect width="280" height="140" rx="20" fill="#F4F2EA" />
         <rect x="42" y="22" width="196" height="96" rx="14" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="2" />
@@ -143,7 +160,7 @@ const STEPS = [
         <rect x="54" y="56" width="48" height="28" rx="9" fill="#0F172A" />
         <rect x="154" y="32" width="68" height="28" rx="9" fill="#EDE9FE" stroke="#8B5CF6" strokeWidth="2" strokeDasharray="4 3" />
         <text x="188" y="50" textAnchor="middle" fontSize="11" fontWeight="800" fill="#6D28D9">
-          ? Dokun Aç
+          {isEn ? '? Tap Reveal' : '? Dokun Aç'}
         </text>
         <rect x="154" y="80" width="68" height="28" rx="9" fill="#ECFDF5" stroke="#10B981" strokeWidth="2" />
         <path d="M178 94 l5 5 l11 -11" stroke="#059669" strokeWidth="2.5" fill="none" strokeLinecap="round" />
@@ -153,6 +170,7 @@ const STEPS = [
 ];
 
 export const OnboardingOverlay: React.FC<OnboardingOverlayProps> = ({ onComplete }) => {
+  const { t, isEn } = useI18n();
   const [idx, setIdx] = useState(0);
 
   // Persist after initial mount settles so even if user closes app without clicking Atla, it never re-opens on next launch
@@ -201,20 +219,20 @@ export const OnboardingOverlay: React.FC<OnboardingOverlayProps> = ({ onComplete
             data-testid="onboarding-skip-btn"
             className="min-h-[44px] rounded-xl px-3 text-xs font-extrabold opacity-70 transition hover:bg-slate-500/10 hover:opacity-100"
           >
-            Atla
+            {t('Atla', 'Skip')}
           </button>
         </div>
 
-        <div className="mt-2 overflow-hidden rounded-2xl">{cur.renderArt()}</div>
+        <div className="mt-2 overflow-hidden rounded-2xl">{cur.renderArt(isEn)}</div>
 
         <h2 className="mt-4 text-lg leading-snug font-extrabold tracking-tight sm:text-xl">
-          {cur.title}
+          {t(cur.titleTr, cur.titleEn)}
         </h2>
         <p
           className="mt-1.5 text-[13.5px] leading-relaxed"
           style={{ color: 'var(--text-secondary)' }}
         >
-          {cur.desc}
+          {t(cur.descTr, cur.descEn)}
         </p>
 
         <div className="mt-5 flex items-center justify-between gap-3">
@@ -242,11 +260,11 @@ export const OnboardingOverlay: React.FC<OnboardingOverlayProps> = ({ onComplete
             {isLast ? (
               <>
                 <Check className="h-4 w-4" />
-                <span>Haritaya Başla</span>
+                <span>{t('Haritaya Başla', 'Start Mapping')}</span>
               </>
             ) : (
               <>
-                <span>Devam Et</span>
+                <span>{t('Devam Et', 'Continue')}</span>
                 <ArrowRight className="h-4 w-4" />
               </>
             )}

@@ -216,7 +216,8 @@ export const WebPlatformRoot: React.FC = () => {
         setCloudMapCount(res.totalCloudMaps);
         setLastSyncedAt(res.syncedAt);
         if (res.pulledNewOrUpdated > 0) {
-          setAppRemountKey((k) => k + 1);
+          // Non-destructive live refresh: notifies <App /> to update library in-place without unmounting canvas or wiping Undo!
+          window.dispatchEvent(new CustomEvent('zh:cloud-maps-updated'));
         }
         if (!silent) {
           showToast(`Bulut yedekleme güncellendi (${res.totalCloudMaps} harita)`);

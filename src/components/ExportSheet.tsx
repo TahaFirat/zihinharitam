@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { Capacitor } from '@capacitor/core';
 import type {
   CollaboratorPresence,
   MindMapDocument,
@@ -194,9 +195,89 @@ function loadExportImage(url: string): Promise<HTMLImageElement | null> {
   });
 }
 
+function resolveExportStickerSize(node: MindNode, isRoot: boolean): number {
+  const preset = node.stickerSize;
+  if (preset === 'sm') return isRoot ? 82 : 56;
+  if (preset === 'lg') return isRoot ? 168 : 132;
+  if (preset === 'xl') return isRoot ? 196 : 168;
+  return isRoot ? 148 : 98;
+}
+
+function wrapCanvasTextLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number
+): string[] {
+  const paragraphs = text.split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+  const lines: string[] = [];
+  for (const para of paragraphs) {
+    const words = para.split(/\s+/);
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth || !current) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        current = word;
+        if (lines.length >= maxLines) break;
+      }
+    }
+    if (lines.length >= maxLines) break;
+    if (current) lines.push(current);
+    if (lines.length >= maxLines) break;
+  }
+  if (lines.length === maxLines) {
+    const joined = paragraphs.join(' ');
+    const usedLen = lines.join(' ').length;
+    if (usedLen + 3 < joined.length) {
+      lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, Math.max(4, lines[maxLines - 1].length - 2))}…`;
+    }
+  }
+  return lines.slice(0, maxLines);
+}
+
+function wrapSvgTextLines(text: string, maxChars: number, maxLines: number): string[] {
+  const paragraphs = text.split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+  const lines: string[] = [];
+  for (const para of paragraphs) {
+    const words = para.split(/\s+/);
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= maxChars || !current) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        current = word;
+        if (lines.length >= maxLines) break;
+      }
+    }
+    if (lines.length >= maxLines) break;
+    if (current) lines.push(current);
+    if (lines.length >= maxLines) break;
+  }
+  if (lines.length === maxLines) {
+    const joined = paragraphs.join(' ');
+    if (lines.join(' ').length + 3 < joined.length) {
+      lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, Math.max(4, lines[maxLines - 1].length - 2))}…`;
+    }
+  }
+  return lines.slice(0, maxLines);
+}
+
+function getPriorityExportMeta(tag: MindNode['priorityTag']): { label: string; bg: string; fg: string } | null {
+  if (tag === 'exam') return { label: 'SINAV', bg: '#FEE2E2', fg: '#B91C1C' };
+  if (tag === 'important') return { label: 'ÖNEMLİ', bg: '#FEF3C7', fg: '#B45309' };
+  if (tag === 'review') return { label: 'TEKRAR', bg: '#E0F2FE', fg: '#0369A1' };
+  return null;
+}
+
 function computeVisibleMapWorldBounds(
   nodes: Record<string, MindNode>,
-  hiddenIds: Set<string>
+  hiddenIds: Set<string>,
+  rootNodeId?: string
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   let minX = Infinity;
   let minY = Infinity;
@@ -205,10 +286,13 @@ function computeVisibleMapWorldBounds(
 
   for (const n of Object.values(nodes)) {
     if (hiddenIds.has(n.id)) continue;
-    minX = Math.min(minX, n.x - 175);
-    maxX = Math.max(maxX, n.x + 175);
-    minY = Math.min(minY, n.y - 220);
-    maxY = Math.max(maxY, n.y + 100);
+    const isRoot = n.id === rootNodeId;
+    const sSize = resolveExportStickerSize(n, isRoot);
+    const extraNoteH = n.note?.trim() && !n.noteCollapsed ? 86 : 0;
+    minX = Math.min(minX, n.x - 195);
+    maxX = Math.max(maxX, n.x + 195);
+    minY = Math.min(minY, n.y - (sSize + 76));
+    maxY = Math.max(maxY, n.y + 84 + extraNoteH);
   }
 
   if (!Number.isFinite(minX)) {
@@ -228,7 +312,7 @@ async function renderHighResMapCanvas(
   includeSubtleFreeSignature = false
 ): Promise<HTMLCanvasElement> {
   const meta = computeTreeMeta(doc.nodes, doc.rootNodeId);
-  const bounds = computeVisibleMapWorldBounds(doc.nodes, meta.hiddenNodeIds);
+  const bounds = computeVisibleMapWorldBounds(doc.nodes, meta.hiddenNodeIds, doc.rootNodeId);
   const pad = 95;
   const worldW = bounds.maxX - bounds.minX + pad * 2;
   const worldH = bounds.maxY - bounds.minY + pad * 2;
@@ -302,16 +386,52 @@ async function renderHighResMapCanvas(
       drawInkStrokesToCanvas2D(ctx, doc.inkStrokes);
       drawStickyNotesToCanvas2D(ctx, doc.stickyNotes);
 
-      // 3. Nodes (Stickers + Pill Cards + Tech Badges)
+      // 3. Nodes (Stickers + Wrapped Pill Cards + Priority/Checkboxes + Tech Badges + Note Boxes!)
       visibleNodes.forEach((node, idx) => {
         const isRoot = node.id === doc.rootNodeId;
         const img = loadedImages[idx];
-        const stickerSize = isRoot ? 148 : 98;
-        const displayTitle = node.title || 'Yeni Konu';
+        const stickerSize = resolveExportStickerSize(node, isRoot);
+        const checkPrefix =
+          node.checked === true ? '☑ ' : node.checked === false ? '☐ ' : '';
+        const displayTitle = `${checkPrefix}${node.title || 'Yeni Konu'}`;
 
-        const hasSubLine = Boolean(node.subtitle || node.techBadge);
-        const labelCenterY = node.y;
-        const pillH = hasSubLine ? 48 : 32;
+        const titleFontSize = isRoot ? 18 : 14;
+        ctx.font = `${isRoot ? 800 : 700} ${titleFontSize}px "Plus Jakarta Sans", sans-serif`;
+        const maxCardTextW = isRoot ? 260 : 210;
+        const titleLines = wrapCanvasTextLines(ctx, displayTitle, maxCardTextW, 2);
+        const maxTitleLineW = Math.max(
+          ...titleLines.map((l) => ctx.measureText(l).width),
+          72
+        );
+
+        const subText = node.techBadge || node.subtitle || '';
+        const priorityMeta = getPriorityExportMeta(node.priorityTag);
+
+        const cleanNote = !node.noteCollapsed ? (node.note || '').trim() : '';
+        ctx.font = `500 10.5px "Plus Jakarta Sans", sans-serif`;
+        const noteLines = cleanNote
+          ? wrapCanvasTextLines(ctx, cleanNote, maxCardTextW, 4)
+          : [];
+        const maxNoteLineW =
+          noteLines.length > 0
+            ? Math.max(...noteLines.map((l) => ctx.measureText(l).width))
+            : 0;
+
+        const titleLineH = isRoot ? 22 : 18;
+        const titleBlockH = titleLines.length * titleLineH;
+        const subBlockH = subText || priorityMeta ? 18 : 0;
+        const noteBlockH = noteLines.length > 0 ? noteLines.length * 14 + 14 : 0;
+        const pillH = Math.max(34, 14 + titleBlockH + subBlockH + noteBlockH);
+        const pillW = Math.min(
+          maxCardTextW + 34,
+          Math.max(
+            106,
+            maxTitleLineW + 30,
+            subText.length * 6.5 + (priorityMeta ? 64 : 26),
+            maxNoteLineW + 30
+          )
+        );
+        const cardTopY = node.y - 20;
 
         if (img) {
           const ratio = node.sticker?.aspectRatio || 1;
@@ -320,16 +440,11 @@ async function renderHighResMapCanvas(
           ctx.drawImage(
             img,
             node.x - drawW / 2,
-            labelCenterY - pillH / 2 - drawH - 6,
+            cardTopY - drawH - 8,
             drawW,
             drawH
           );
         }
-
-        ctx.font = `${isRoot ? 800 : 700} ${isRoot ? 19 : 14.5}px "Plus Jakarta Sans", sans-serif`;
-        const titleMetrics = ctx.measureText(displayTitle);
-        const subText = node.techBadge || node.subtitle || '';
-        const pillW = Math.max(96, titleMetrics.width + 30, subText.length * 6.8 + 26);
 
         ctx.save();
         ctx.fillStyle = doc.darkMode ? '#1B2333' : '#FFFFFF';
@@ -339,28 +454,80 @@ async function renderHighResMapCanvas(
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 3;
         ctx.beginPath();
-        ctx.roundRect(node.x - pillW / 2, labelCenterY - pillH / 2, pillW, pillH, 12);
+        ctx.roundRect(node.x - pillW / 2, cardTopY, pillW, pillH, 13);
         ctx.fill();
         ctx.stroke();
         ctx.restore();
 
+        // Draw Title Lines
+        ctx.font = `${isRoot ? 800 : 700} ${titleFontSize}px "Plus Jakarta Sans", sans-serif`;
         ctx.fillStyle = doc.darkMode ? '#F8FAFC' : '#0F172A';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(
-          displayTitle,
-          node.x,
-          hasSubLine ? labelCenterY - 7 : labelCenterY + 1
-        );
+        let cursorY = cardTopY + 8 + titleLineH * 0.5;
+        for (const tl of titleLines) {
+          ctx.fillText(tl, node.x, cursorY);
+          cursorY += titleLineH;
+        }
 
-        if (subText) {
-          ctx.font = `700 10.5px "Plus Jakarta Sans", monospace`;
-          ctx.fillStyle = node.techBadge
-            ? '#0284C7'
-            : doc.darkMode
-            ? '#94A3B8'
-            : '#64748B';
-          ctx.fillText(subText, node.x, labelCenterY + 11);
+        // Draw Priority Pill & Tech Badge / Subtitle
+        if (subText || priorityMeta) {
+          const badgeY = cursorY + 2;
+          if (priorityMeta && !subText) {
+            ctx.save();
+            ctx.font = '800 9.5px "Plus Jakarta Sans", sans-serif';
+            const pw = ctx.measureText(priorityMeta.label).width + 12;
+            ctx.fillStyle = priorityMeta.bg;
+            ctx.beginPath();
+            ctx.roundRect(node.x - pw / 2, badgeY - 7, pw, 14, 5);
+            ctx.fill();
+            ctx.fillStyle = priorityMeta.fg;
+            ctx.fillText(priorityMeta.label, node.x, badgeY);
+            ctx.restore();
+          } else {
+            const combined = priorityMeta
+              ? `[${priorityMeta.label}] ${subText}`
+              : subText;
+            ctx.font = `700 10px "Plus Jakarta Sans", monospace`;
+            ctx.fillStyle = node.techBadge
+              ? '#0284C7'
+              : doc.darkMode
+              ? '#94A3B8'
+              : '#64748B';
+            ctx.fillText(
+              combined.length > 34 ? `${combined.slice(0, 32)}…` : combined,
+              node.x,
+              badgeY
+            );
+          }
+          cursorY += subBlockH;
+        }
+
+        // Draw Wrapped Node Note Box
+        if (noteLines.length > 0) {
+          const boxX = node.x - pillW / 2 + 8;
+          const boxY = cursorY - 2;
+          const boxW = pillW - 16;
+          const boxH = noteLines.length * 14 + 8;
+          ctx.save();
+          ctx.fillStyle = doc.darkMode ? '#111827' : '#FFFBEB';
+          ctx.strokeStyle = doc.darkMode ? 'rgba(148,163,184,0.22)' : 'rgba(217,119,6,0.25)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 7);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.font = `500 10.5px "Plus Jakarta Sans", sans-serif`;
+          ctx.fillStyle = doc.darkMode ? '#CBD5E1' : '#334155';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          let ny = boxY + 11;
+          for (const nl of noteLines) {
+            ctx.fillText(nl, boxX + 7, ny);
+            ny += 14;
+          }
+          ctx.restore();
         }
       });
 
@@ -394,12 +561,19 @@ function escapeXml(str: string): string {
 
 function buildVectorSvgBlob(doc: MindMapDocument): Blob {
   const meta = computeTreeMeta(doc.nodes, doc.rootNodeId);
-  const bounds = computeVisibleMapWorldBounds(doc.nodes, meta.hiddenNodeIds);
+  const bounds = computeVisibleMapWorldBounds(doc.nodes, meta.hiddenNodeIds, doc.rootNodeId);
   const pad = 95;
   const width = Math.round(bounds.maxX - bounds.minX + pad * 2);
   const height = Math.round(bounds.maxY - bounds.minY + pad * 2);
   const ox = -bounds.minX + pad;
   const oy = -bounds.minY + pad;
+
+  const isDark = Boolean(doc.darkMode);
+  const cardBg = isDark ? '#1B2333' : '#FFFFFF';
+  const titleFill = isDark ? '#F8FAFC' : '#0F172A';
+  const noteBg = isDark ? '#111827' : '#FFFBEB';
+  const noteStroke = isDark ? '#334155' : '#FDE68A';
+  const noteFill = isDark ? '#CBD5E1' : '#334155';
 
   const branchPaths: string[] = [];
   for (const node of Object.values(doc.nodes)) {
@@ -432,45 +606,80 @@ function buildVectorSvgBlob(doc: MindMapDocument): Blob {
     const isRoot = node.id === doc.rootNodeId;
     const nx = node.x + ox;
     const ny = node.y + oy;
-    const sSize = isRoot ? 140 : 92;
-    const labelY = ny;
-    const displayTitle = node.title || 'Yeni Konu';
+    const sSize = resolveExportStickerSize(node, isRoot);
+    const checkPrefix =
+      node.checked === true ? '☑ ' : node.checked === false ? '☐ ' : '';
+    const displayTitle = `${checkPrefix}${node.title || 'Yeni Konu'}`;
+    const titleLines = wrapSvgTextLines(displayTitle, isRoot ? 26 : 24, 2);
+    const priorityMeta = getPriorityExportMeta(node.priorityTag);
+    const subText = node.techBadge || node.subtitle || '';
+    const cleanNote = !node.noteCollapsed ? (node.note || '').trim() : '';
+    const noteLines = cleanNote ? wrapSvgTextLines(cleanNote, 32, 4) : [];
+
+    const titleLineH = isRoot ? 20 : 17;
+    const subBlockH = subText || priorityMeta ? 17 : 0;
+    const noteBlockH = noteLines.length > 0 ? noteLines.length * 14 + 14 : 0;
+    const pillH = Math.max(34, 14 + titleLines.length * titleLineH + subBlockH + noteBlockH);
+    const estW = Math.min(
+      250,
+      Math.max(
+        110,
+        Math.max(...titleLines.map((l) => l.length)) * (isRoot ? 9.5 : 8) + 30,
+        subText.length * 6.5 + 26,
+        noteLines.length > 0 ? Math.max(...noteLines.map((l) => l.length)) * 6.2 + 28 : 0
+      )
+    );
+    const cardTopY = ny - 20;
 
     if (node.sticker?.url) {
       nodeElements.push(
         `<image href="${escapeXml(node.sticker.url)}" x="${nx - sSize / 2}" y="${
-          labelY - 24 - sSize
-        }" width="${sSize}" height="${sSize}" />`
+          cardTopY - sSize - 8
+        }" width="${sSize}" height="${sSize}" preserveAspectRatio="xMidYMid meet" />`
       );
     }
 
-    const hasBadge = Boolean(node.techBadge);
-    const pillH = hasBadge ? 44 : 32;
-    const estW = Math.max(
-      104,
-      displayTitle.length * (isRoot ? 11 : 8.5) + 30,
-      (node.techBadge?.length ?? 0) * 7 + 26
-    );
     nodeElements.push(
-      `<rect x="${nx - estW / 2}" y="${labelY - pillH / 2}" width="${estW}" height="${pillH}" rx="11" fill="#FFFFFF" stroke="${node.branchColor}" stroke-width="${
+      `<rect x="${nx - estW / 2}" y="${cardTopY}" width="${estW}" height="${pillH}" rx="12" fill="${cardBg}" stroke="${node.branchColor}" stroke-width="${
         isRoot ? 3 : 2
       }" />`
     );
-    nodeElements.push(
-      `<text x="${nx}" y="${
-        hasBadge ? labelY - 3 : labelY + 5
-      }" text-anchor="middle" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="700" font-size="${
-        isRoot ? 16 : 13
-      }" fill="#0F172A">${escapeXml(displayTitle)}</text>`
-    );
-    if (node.techBadge) {
+
+    let cursorY = cardTopY + 8 + titleLineH * 0.7;
+    for (const tl of titleLines) {
       nodeElements.push(
-        `<text x="${nx}" y="${
-          labelY + 13
-        }" text-anchor="middle" font-family="monospace" font-weight="700" font-size="10.5" fill="#0284C7">${escapeXml(
-          node.techBadge
-        )}</text>`
+        `<text x="${nx}" y="${cursorY}" text-anchor="middle" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="700" font-size="${
+          isRoot ? 15.5 : 13
+        }" fill="${titleFill}">${escapeXml(tl)}</text>`
       );
+      cursorY += titleLineH;
+    }
+
+    if (subText || priorityMeta) {
+      const combined = priorityMeta && subText ? `[${priorityMeta.label}] ${subText}` : priorityMeta ? `[${priorityMeta.label}]` : subText;
+      nodeElements.push(
+        `<text x="${nx}" y="${cursorY + 2}" text-anchor="middle" font-family="monospace" font-weight="700" font-size="10" fill="${
+          node.techBadge ? '#0284C7' : priorityMeta ? priorityMeta.fg : '#64748B'
+        }">${escapeXml(combined.slice(0, 34))}</text>`
+      );
+      cursorY += subBlockH;
+    }
+
+    if (noteLines.length > 0) {
+      const bx = nx - estW / 2 + 8;
+      const by = cursorY - 2;
+      const bw = estW - 16;
+      const bh = noteLines.length * 14 + 8;
+      nodeElements.push(
+        `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="6" fill="${noteBg}" stroke="${noteStroke}" stroke-width="1" />`
+      );
+      let nY = by + 13;
+      for (const nl of noteLines) {
+        nodeElements.push(
+          `<text x="${bx + 6}" y="${nY}" text-anchor="start" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="10" fill="${noteFill}">${escapeXml(nl)}</text>`
+        );
+        nY += 14;
+      }
     }
   }
 
@@ -730,17 +939,20 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
         >
           <div>
             <h2 className="text-base font-extrabold">
-              Dışa Aktarma, Poster & Yedekleme
+              {t('Dışa Aktarma, Poster & Yedekleme', 'Export, Print Posters & Backup')}
             </h2>
             <p className="text-xs opacity-65">
-              300 DPI Filigransız A4/A3 PDF, Şeffaf PNG, Vektörel SVG ve .zihin Yedek
+              {t(
+                '300 DPI Filigransız A4/A3 PDF, Şeffaf PNG, Vektörel SVG ve .zihin Yedek',
+                '300 DPI Watermark-Free A4/A3 PDF, Transparent PNG, Vector SVG & .zihin Backup'
+              )}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-slate-500/10"
-            aria-label="Kapat"
+            aria-label={t('Kapat', 'Close')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -761,7 +973,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-sm font-extrabold">
-                  <span>300 DPI Baskı Poster PDF</span>
+                  <span>{t('300 DPI Baskı Poster PDF', '300 DPI Print Poster PDF')}</span>
                   {!isLifetimePro && (
                     <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-600 dark:text-amber-400">
                       <Crown className="h-2.5 w-2.5" />
@@ -770,7 +982,10 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                   )}
                 </div>
                 <div className="text-xs opacity-65">
-                  Filigransız A4/A3 duvar çalışma posteri (Parçalı güvenli render)
+                  {t(
+                    'Not kutuları ve görsellerle filigransız A4/A3 poster',
+                    'Watermark-free A4/A3 study poster including notes & visuals'
+                  )}
                 </div>
               </div>
             </div>
@@ -784,8 +999,8 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                   backgroundColor: 'var(--canvas-bg)',
                 }}
               >
-                <option value="a4">A4 Yatay</option>
-                <option value="a3">A3 Poster</option>
+                <option value="a4">{t('A4 Yatay', 'A4 Landscape')}</option>
+                <option value="a3">{t('A3 Poster', 'A3 Poster')}</option>
               </select>
               <button
                 type="button"
@@ -798,7 +1013,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                 ) : (
                   <Download className="h-4 w-4" />
                 )}
-                PDF İndir
+                {t('PDF İndir', 'Export PDF')}
               </button>
             </div>
           </div>
@@ -816,14 +1031,14 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
               }}
             >
               <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400">
-                ÜCRETSİZ
+                {t('ÜCRETSİZ', 'FREE')}
               </span>
               <FileImage className="h-5 w-5 text-amber-500" />
-              <div className="text-xs font-extrabold">Defter Zeminli PNG</div>
+              <div className="text-xs font-extrabold">{t('Defter Zeminli PNG', 'Paper Background PNG')}</div>
               <div className="text-[11px] opacity-65">
                 {isLifetimePro
-                  ? 'Filigransız sıcak kağıt poster görüntüsü'
-                  : 'Standart PNG (köşede zarif uygulama imzası)'}
+                  ? t('Filigransız sıcak kağıt poster görüntüsü', 'Watermark-free warm paper poster image')
+                  : t('Standart PNG (köşede zarif uygulama imzası)', 'Standard PNG with subtle corner signature')}
               </div>
             </button>
 
@@ -844,9 +1059,9 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                 </span>
               )}
               <FileImage className="h-5 w-5 text-emerald-500" />
-              <div className="text-xs font-extrabold">Şeffaf PNG (HiDPI)</div>
+              <div className="text-xs font-extrabold">{t('Şeffaf PNG (HiDPI)', 'Transparent PNG (HiDPI)')}</div>
               <div className="text-[11px] opacity-65">
-                GoodNotes, Notability ve sunumlara yapıştırmalık
+                {t('GoodNotes, Notability ve sunumlara yapıştırmalık', 'Ready to paste into GoodNotes, Notability & slides')}
               </div>
             </button>
 
@@ -867,9 +1082,9 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                 </span>
               )}
               <FileCode2 className="h-5 w-5 text-violet-500" />
-              <div className="text-xs font-extrabold">Vektörel SVG</div>
+              <div className="text-xs font-extrabold">{t('Vektörel SVG', 'Vector SVG')}</div>
               <div className="text-[11px] opacity-65">
-                Sonsuz ölçeklenebilir kübik Bezier & çapraz ok çıktısı
+                {t('Sonsuz ölçeklenebilir kübik Bezier & not çıktısı', 'Infinitely scalable cubic Bezier & notes output')}
               </div>
             </button>
           </div>
@@ -921,53 +1136,58 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
                 className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-extrabold transition hover:bg-slate-500/10"
                 style={{ borderColor: 'var(--hud-border)', backgroundColor: 'var(--canvas-bg)' }}
               >
-                <div>Anki Kartları</div>
+                <div>{t('Anki Kartları', 'Anki Deck')}</div>
                 <div className="text-[10px] font-semibold opacity-60">.csv • Flashcards</div>
               </button>
             </div>
           </div>
 
-          {/* Realtime Collaboration Link */}
-          <div
-            className="rounded-2xl border p-4"
-            style={{
-              backgroundColor: 'var(--hud-bg)',
-              borderColor: 'var(--hud-border)',
-            }}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-sky-600 dark:text-sky-400">
-                <Users className="h-4 w-4" />
-                Canlı Ortak Çalışma Odası ({collaborators.length} Katılımcı)
+          {/* Realtime Collaboration Link (only shown on real Web origins — never broken capacitor://localhost!) */}
+          {!Capacitor.isNativePlatform() && !shareUrl.startsWith('capacitor:') && (
+            <div
+              className="rounded-2xl border p-4"
+              style={{
+                backgroundColor: 'var(--hud-bg)',
+                borderColor: 'var(--hud-border)',
+              }}
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold text-sky-600 dark:text-sky-400">
+                  <Users className="h-4 w-4" />
+                  {t(
+                    `Canlı Ortak Çalışma Odası (${collaborators.length} Katılımcı)`,
+                    `Live Collaboration Room (${collaborators.length} Active)`
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareUrl}
+                  className="allow-text-input flex-1 truncate rounded-xl border bg-slate-500/5 px-3 py-2 text-xs font-medium outline-none"
+                  style={{ borderColor: 'var(--hud-border)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleCopyShareLink()}
+                  className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl bg-sky-500 px-3.5 py-2 text-xs font-extrabold text-white shadow-xs transition-transform active:scale-95"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      {t('Kopyalandı', 'Copied')}
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="h-3.5 w-3.5" />
+                      {t('Linki Kopyala', 'Copy Link')}
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                readOnly
-                value={shareUrl}
-                className="allow-text-input flex-1 truncate rounded-xl border bg-slate-500/5 px-3 py-2 text-xs font-medium outline-none"
-                style={{ borderColor: 'var(--hud-border)' }}
-              />
-              <button
-                type="button"
-                onClick={() => void handleCopyShareLink()}
-                className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl bg-sky-500 px-3.5 py-2 text-xs font-extrabold text-white shadow-xs transition-transform active:scale-95"
-              >
-                {copiedLink ? (
-                  <>
-                    <Check className="h-3.5 w-3.5" />
-                    Kopyalandı
-                  </>
-                ) : (
-                  <>
-                    <Link2 className="h-3.5 w-3.5" />
-                    Linki Kopyala
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Portable .zihin Backup Import / Export */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
@@ -984,7 +1204,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold opacity-80 hover:bg-slate-500/10 hover:opacity-100"
             >
               <Upload className="h-3.5 w-3.5" />
-              .zihin Yedek İçe Aktar
+              {t('.zihin Yedek İçe Aktar', 'Import .zihin Backup')}
             </button>
             <button
               type="button"
@@ -992,7 +1212,7 @@ export const ExportSheet: React.FC<ExportSheetProps> = ({
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold opacity-80 hover:bg-slate-500/10 hover:opacity-100"
             >
               <Download className="h-3.5 w-3.5" />
-              .zihin Yedek İndir
+              {t('.zihin Yedek İndir', 'Export .zihin Backup')}
             </button>
           </div>
         </div>
