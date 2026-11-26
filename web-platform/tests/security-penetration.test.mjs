@@ -481,11 +481,127 @@ async function main() {
       assert.equal(cancelRes.status, 200);
       assert.equal((await cancelRes.json()).billing.cancelAtPeriodEnd, true);
     });
+
+    await test('13. Free AI Proxy Security: oversized DoS (413), XSS output sanitization, 429 failover, SHA-256 cache & daily quota', async () => {
+      let provider1Calls = 0;
+      let provider2Calls = 0;
+      const aiSrv = createWebPlatformServer({
+        port: 0,
+        host: '127.0.0.1',
+        dbPath: ':memory:',
+        maxAiBurstHits: 20,
+        aiOptions: {
+          env: { AI_FREE_DAILY_LIMIT: '2', AI_PRO_DAILY_LIMIT: '10' },
+          providers: [
+            { id: 'cerebras-mock', name: 'Mock P1', model: 'm1', apiKey: 'k1' },
+            { id: 'groq-mock', name: 'Mock P2', model: 'm2', apiKey: 'k2' },
+          ],
+          invokeProvider: async (prov) => {
+            if (prov.id === 'cerebras-mock') {
+              provider1Calls++;
+              const err = new Error('Quota hit');
+              err.status = 429;
+              throw err;
+            }
+            provider2Calls++;
+            return '```markdown\nEğri Uydurma\n- Doğrusal Regresyon [y = a0 + a1*x]\n  Not: <script>alert("xss")</script>Hata kareleri minimize edilir.\n```';
+          },
+        },
+      });
+      const aiStarted = await aiSrv.start();
+      const aiUrl = aiStarted.url;
+      const aiOrigin = aiStarted.url;
+      try {
+        // A. Status endpoint never leaks API keys
+        const stRes = await fetch(`${aiUrl}/api/v1/ai/status`);
+        assert.equal(stRes.status, 200);
+        const stText = await stRes.text();
+        assert.ok(!stText.includes('k1') && !stText.includes('k2'));
+        const stJson = JSON.parse(stText);
+        assert.equal(stJson.available, true);
+        assert.equal(stJson.dailyLimit, 2);
+
+        // B. Oversized payload DoS rejected with 413
+        const dosRes = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({ text: 'A'.repeat(60_000), depth: 'compact' }),
+        });
+        assert.equal(dosRes.status, 413);
+
+        // C. Call 1: Provider 1 returns 429 -> seamlessly fails over to Provider 2, strips <script> & code fences!
+        const r1 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({
+            text: 'Doğrusal regresyon y = a0 + a1*x modeli ile en küçük kareler yöntemini kullanır.',
+            depth: 'compact',
+            lang: 'tr',
+          }),
+        });
+        assert.equal(r1.status, 200);
+        const j1 = await r1.json();
+        assert.equal(j1.ok, true);
+        assert.equal(j1.cached, false);
+        assert.equal(j1.provider, 'groq-mock');
+        assert.ok(!j1.outline.includes('<script>'));
+        assert.ok(!j1.outline.includes('```'));
+        assert.ok(j1.outline.includes('y = a0 + a1*x'));
+        assert.equal(provider1Calls, 1);
+        assert.equal(provider2Calls, 1);
+        assert.equal(j1.dailyRemaining, 1);
+
+        // D. Call 2 (identical text): served from SHA-256 cache -> 0 extra provider calls & 0 quota consumed!
+        const r2 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({
+            text: 'Doğrusal regresyon y = a0 + a1*x modeli ile en küçük kareler yöntemini kullanır.',
+            depth: 'compact',
+            lang: 'tr',
+          }),
+        });
+        assert.equal(r2.status, 200);
+        const j2 = await r2.json();
+        assert.equal(j2.cached, true);
+        assert.equal(provider2Calls, 1);
+        assert.equal(j2.dailyRemaining, 1);
+
+        // E. Call 3 (new text) uses final daily credit -> Call 4 hits daily fair-use cap (429 + fallbackAllowed: true)
+        const r3 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({
+            text: 'Polinom regresyon eğrisel veriler için y = a0 + a1*x + a2*x^2 modelini kullanır.',
+            depth: 'compact',
+            lang: 'tr',
+          }),
+        });
+        assert.equal(r3.status, 200);
+        assert.equal((await r3.json()).dailyRemaining, 0);
+
+        const r4 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({
+            text: 'Üçüncü farklı ders notu metni günlük ücretsiz AI kotasını test eder.',
+            depth: 'compact',
+            lang: 'tr',
+          }),
+        });
+        assert.equal(r4.status, 429);
+        const j4 = await r4.json();
+        assert.equal(j4.code, 'AI_DAILY_QUOTA_EXCEEDED');
+        assert.equal(j4.fallbackAllowed, true);
+      } finally {
+        await aiSrv.stop();
+      }
+    });
   } finally {
     await srv.stop();
   }
 
-  console.log(`\n[OWASP Security Suite] SONUÇ: ${passed}/12 güvenlik testi geçti.\n`);
+  console.log(`\n[OWASP Security Suite] SONUÇ: ${passed}/13 güvenlik testi geçti.\n`);
 }
 
 main().catch((err) => {

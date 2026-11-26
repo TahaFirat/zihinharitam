@@ -100,6 +100,9 @@ let currentCsrfToken: string | null = null;
 
 export function setApiCsrfToken(token: string | null): void {
   currentCsrfToken = token;
+  if (typeof window !== 'undefined') {
+    (window as unknown as { __ZH_CSRF_TOKEN__?: string | null }).__ZH_CSRF_TOKEN__ = token;
+  }
 }
 
 export function getApiCsrfToken(): string | null {

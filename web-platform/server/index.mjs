@@ -7,6 +7,7 @@ import { handleAuthRoute } from './authRoutes.mjs';
 import { handleMapRoute } from './mapRoutes.mjs';
 import { handleShareRoute } from './shareRoutes.mjs';
 import { handleBillingRoute } from './billingRoutes.mjs';
+import { handleAiRoute, loadOptionalEnvFile } from './aiRoutes.mjs';
 import {
   HttpError,
   applySecurityHeaders,
@@ -76,6 +77,9 @@ function serveStaticFile(res, filePath, cacheControl) {
 }
 
 export function createWebPlatformServer(options = {}) {
+  loadOptionalEnvFile(path.join(WEB_ROOT, '.env'));
+  loadOptionalEnvFile(path.resolve(WEB_ROOT, '..', '.env'));
+
   const port = Number(options.port ?? process.env.PORT ?? 4173);
   const host = options.host ?? process.env.HOST ?? '127.0.0.1';
   const dbPath = options.dbPath ?? path.join(DATA_DIR, 'zihinharitam-web.sqlite');
@@ -89,6 +93,7 @@ export function createWebPlatformServer(options = {}) {
     passwordChange: createRateLimiter({ windowMs: 15 * 60 * 1000, maxHits: 6 }),
     shareUnlock: createRateLimiter({ windowMs: 15 * 60 * 1000, maxHits: 12 }),
     billing: createRateLimiter({ windowMs: 15 * 60 * 1000, maxHits: 12 }),
+    aiBurst: createRateLimiter({ windowMs: 60 * 1000, maxHits: options.maxAiBurstHits ?? 8 }),
     apiGeneral: createRateLimiter({ windowMs: 60 * 1000, maxHits: options.maxApiHits ?? 240 }),
   };
 
@@ -96,6 +101,9 @@ export function createWebPlatformServer(options = {}) {
     try {
       const now = Date.now();
       vault.stmts.pruneExpiredSessions.run(now, now - 24 * 60 * 60 * 1000);
+      vault.stmts.pruneOldAiCache.run(now - 14 * 24 * 60 * 60 * 1000);
+      const oldDayKey = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      vault.stmts.pruneOldAiDailyUsage.run(oldDayKey);
     } catch {
       // Ignore transient cleanup error
     }
@@ -172,12 +180,13 @@ export function createWebPlatformServer(options = {}) {
           }
         }
 
-        const ctx = { vault, serverSecret, session, limiters };
+        const ctx = { vault, serverSecret, session, limiters, aiOptions: options.aiOptions };
 
         if (await handleAuthRoute(req, res, pathname, ctx)) return;
         if (await handleMapRoute(req, res, pathname, ctx)) return;
         if (await handleShareRoute(req, res, pathname, ctx)) return;
         if (await handleBillingRoute(req, res, pathname, ctx)) return;
+        if (await handleAiRoute(req, res, pathname, ctx)) return;
 
         throw new HttpError(404, 'API uç noktası bulunamadı.', 'NOT_FOUND');
       }

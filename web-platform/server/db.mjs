@@ -130,6 +130,26 @@ export function createVaultDb(dbPath) {
       redeemed_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS ai_outline_cache (
+      cache_key TEXT PRIMARY KEY,
+      depth TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      outline_text TEXT NOT NULL,
+      hits INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      last_hit_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_cache_last_hit ON ai_outline_cache(last_hit_at);
+
+    CREATE TABLE IF NOT EXISTS ai_daily_usage (
+      bucket_key TEXT NOT NULL,
+      day_key TEXT NOT NULL,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (bucket_key, day_key)
+    );
   `);
 
   const stmts = {
@@ -306,6 +326,42 @@ export function createVaultDb(dbPath) {
     ),
     insertUsedPromoCode: db.prepare(
       `INSERT INTO used_promo_codes (code_hash, user_id, redeemed_at) VALUES (?, ?, ?)`
+    ),
+
+    // AI Outline SHA-256 Deduplication Cache & Fair-Use Daily Quota
+    getAiCacheByKey: db.prepare(
+      `SELECT cache_key, depth, provider, outline_text, hits, created_at
+       FROM ai_outline_cache
+       WHERE cache_key = ? AND created_at >= ?
+       LIMIT 1`
+    ),
+    touchAiCacheHit: db.prepare(
+      `UPDATE ai_outline_cache SET hits = hits + 1, last_hit_at = ? WHERE cache_key = ?`
+    ),
+    upsertAiCache: db.prepare(
+      `INSERT INTO ai_outline_cache (cache_key, depth, provider, outline_text, hits, created_at, last_hit_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?)
+       ON CONFLICT(cache_key) DO UPDATE SET
+         provider = excluded.provider,
+         outline_text = excluded.outline_text,
+         hits = ai_outline_cache.hits + 1,
+         last_hit_at = excluded.last_hit_at`
+    ),
+    pruneOldAiCache: db.prepare(
+      `DELETE FROM ai_outline_cache WHERE last_hit_at < ?`
+    ),
+    getAiDailyUsage: db.prepare(
+      `SELECT used_count FROM ai_daily_usage WHERE bucket_key = ? AND day_key = ? LIMIT 1`
+    ),
+    incrementAiDailyUsage: db.prepare(
+      `INSERT INTO ai_daily_usage (bucket_key, day_key, used_count, updated_at)
+       VALUES (?, ?, 1, ?)
+       ON CONFLICT(bucket_key, day_key) DO UPDATE SET
+         used_count = ai_daily_usage.used_count + 1,
+         updated_at = excluded.updated_at`
+    ),
+    pruneOldAiDailyUsage: db.prepare(
+      `DELETE FROM ai_daily_usage WHERE day_key < ?`
     ),
   };
 

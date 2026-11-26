@@ -42,6 +42,13 @@ import {
 } from '../core/smartmap/DocumentImportExtractor';
 import { cleanIconLookupQuery } from '../core/smartmap/AcademicContentFilter';
 import {
+  fetchAiStatus,
+  getSavedAiModePreference,
+  requestAiStructuredOutline,
+  saveAiModePreference,
+  type AiStatusInfo,
+} from '../core/smartmap/AiMindMapClient';
+import {
   TopicContextIntelligence,
   type MapContextAnalysis,
 } from '../core/visuals/TopicContextIntelligence';
@@ -434,13 +441,23 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   onGenerateCompleteMap,
   onAddProactiveBranches,
 }) => {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const kb = useKeyboardInset();
   const [tab, setTab] = useState<'text_to_map' | 'proactive_branches'>(initialTab);
   const [inputMode, setInputMode] = useState<'outline' | 'converter' | 'document'>('outline');
   const [outlineText, setOutlineText] = useState('');
   const [rawLectureNote, setRawLectureNote] = useState('');
   const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('compact');
+  const [useAiMode, setUseAiMode] = useState<boolean>(() => getSavedAiModePreference());
+  const [aiStatus, setAiStatus] = useState<AiStatusInfo | null>(null);
+  const [isAiStructuring, setIsAiStructuring] = useState(false);
+  const [aiOutlineCache, setAiOutlineCache] = useState<{
+    key: string;
+    outline: string;
+    cached: boolean;
+    provider?: string;
+  } | null>(null);
+  const [aiStatusNote, setAiStatusNote] = useState<string | null>(null);
   const [converterPreviewMode, setConverterPreviewMode] = useState<'text' | 'tree'>('text');
   const [docResult, setDocResult] = useState<DocumentExtractionResult | null>(null);
   const [docImages, setDocImages] = useState<ExtractedDocumentImage[]>([]);
@@ -547,6 +564,14 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       setShowLivePreview(false);
       setConvertFeedback(null);
       setDictationError(null);
+      setAiStatusNote(null);
+      let cancelled = false;
+      void fetchAiStatus().then((st) => {
+        if (!cancelled) setAiStatus(st);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [isOpen, initialTab]);
 
@@ -623,6 +648,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     setDeptHint('genel');
     setInputMode('outline');
     setDictationError(null);
+    setAiOutlineCache(null);
+    setAiStatusNote(null);
   };
 
   const handleDocumentFileSelected = async (file: File | null | undefined) => {
@@ -657,15 +684,85 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     );
   };
 
-  const handleConvertLectureNote = (andCreateMap = false) => {
+  const toggleAiMode = (enabled: boolean) => {
+    void hapticLight();
+    setUseAiMode(enabled);
+    saveAiModePreference(enabled);
+    setAiStatusNote(null);
+  };
+
+  const resolveAiOrLocalOutline = async (
+    rawSource: string,
+    localFallbackOutline: string,
+    cacheTag: string
+  ): Promise<string> => {
+    if (!useAiMode || !aiStatus?.available) {
+      return localFallbackOutline;
+    }
+    const reqKey = `${cacheTag}|${analysisDepth}|${lang}|${rawSource.slice(0, 120)}|${rawSource.length}`;
+    if (aiOutlineCache && aiOutlineCache.key === reqKey) {
+      return aiOutlineCache.outline;
+    }
+    setIsAiStructuring(true);
+    setAiStatusNote(null);
+    try {
+      const res = await requestAiStructuredOutline(rawSource, {
+        depth: analysisDepth,
+        lang: lang === 'en' ? 'en' : 'tr',
+      });
+      if (typeof res.dailyRemaining === 'number') {
+        setAiStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                dailyRemaining: res.dailyRemaining!,
+                dailyLimit: res.dailyLimit ?? prev.dailyLimit,
+              }
+            : prev
+        );
+      }
+      if (res.usedAi && res.outline) {
+        setAiOutlineCache({
+          key: reqKey,
+          outline: res.outline,
+          cached: res.cached,
+          provider: res.provider,
+        });
+        setAiStatusNote(
+          res.cached
+            ? t('⚡ Ücretsiz AI önbelleğinden anında hazırlandı (0 kota)', '⚡ Served instantly from Free AI cache (0 quota)')
+            : t('✨ Ücretsiz AI ile ders kavramları ve formüller çıkarıldı', '✨ Concepts & formulas extracted with Free AI')
+        );
+        return res.outline;
+      }
+      if (res.fallbackReason === 'quota_exceeded') {
+        setAiStatusNote(
+          t('Günlük ücretsiz AI limiti doldu — yerel çevrimdışı motorla hazırlandı.', 'Daily free AI quota reached — built with on-device engine.')
+        );
+      }
+      return localFallbackOutline;
+    } finally {
+      setIsAiStructuring(false);
+    }
+  };
+
+  const handleConvertLectureNote = async (andCreateMap = false) => {
     const raw = rawLectureNote.trim();
     if (!raw) return;
     void hapticSuccess();
-    const res = convertLectureNoteToMindMapFormat(raw, { depth: analysisDepth });
-    setOutlineText(res.formattedOutline);
-    setConvertFeedback(res.stats);
-    if (andCreateMap && res.formattedOutline.trim()) {
-      void executeGenerateFromText(res.formattedOutline);
+    const localRes = convertLectureNoteToMindMapFormat(raw, { depth: analysisDepth });
+    const finalOutline = await resolveAiOrLocalOutline(raw, localRes.formattedOutline, 'conv');
+    const finalParsed = parseTextToMindMapOutline(finalOutline, { density: analysisDepth });
+    setOutlineText(finalOutline);
+    setConvertFeedback({
+      totalNodes: finalParsed.stats.totalNodes,
+      mainBranches: finalParsed.stats.mainBranches,
+      subBranches: finalParsed.stats.subBranches,
+      notedBranches: finalParsed.stats.notedBranches,
+      badgesCount: localRes.stats.badgesCount,
+    });
+    if (andCreateMap && finalOutline.trim()) {
+      void executeGenerateFromText(finalOutline);
     } else {
       setInputMode('outline');
       setShowLivePreview(true);
@@ -839,6 +936,69 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                   <span className="truncate">{t('PDF / Dosya', 'PDF / File')}</span>
                 </button>
               </div>
+
+              {/* Compact Free AI vs On-Device Engine Switcher (PDF & Lecture Note modes) */}
+              {(inputMode === 'document' || inputMode === 'converter') && (
+                <div
+                  data-testid="smartmap-ai-engine-bar"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-500/25 bg-indigo-500/6 px-3 py-2 text-[11px]"
+                >
+                  <div className="flex min-w-0 items-center gap-1.5 font-extrabold">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                    <span className="truncate">
+                      {useAiMode && aiStatus?.available
+                        ? t(
+                            `Ücretsiz AI Aktif (${aiStatus.dailyRemaining}/${aiStatus.dailyLimit} günlük hak)`,
+                            `Free AI Ready (${aiStatus.dailyRemaining}/${aiStatus.dailyLimit} left today)`
+                          )
+                        : useAiMode
+                        ? t(
+                            'Akıllı Hibrit Mod (AI + Yerel Formül Motoru)',
+                            'Smart Hybrid Mode (AI + On-Device Formula Engine)'
+                          )
+                        : t(
+                            'Sadece Cihaz İçi Mod (%100 Çevrimdışı)',
+                            'On-Device Only Mode (100% Offline)'
+                          )}
+                    </span>
+                  </div>
+                  <div className="inline-flex shrink-0 items-center gap-0.5 rounded-xl border border-indigo-500/25 bg-white/75 p-0.5 dark:bg-slate-900/70">
+                    <button
+                      type="button"
+                      data-testid="ai-mode-enabled-btn"
+                      onClick={() => toggleAiMode(true)}
+                      className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
+                        useAiMode
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      ✨ {t('Ücretsiz AI', 'Free AI')}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="ai-mode-offline-btn"
+                      onClick={() => toggleAiMode(false)}
+                      className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
+                        !useAiMode
+                          ? 'bg-slate-800 text-white shadow-2xs dark:bg-slate-200 dark:text-slate-900'
+                          : 'opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      🔒 {t('Cihaz İçi', 'On-Device')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {aiStatusNote && (
+                <div
+                  data-testid="smartmap-ai-status-note"
+                  className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-bold text-indigo-800 dark:text-indigo-200"
+                >
+                  {aiStatusNote}
+                </div>
+              )}
 
               {inputMode === 'document' ? (
                 <div className="space-y-3" data-testid="document-import-panel">
@@ -1061,15 +1221,31 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                         <button
                           type="button"
+                          disabled={isGenerating || isAiStructuring || !liveDocumentOutline?.formattedOutline}
                           onClick={() => {
-                            if (liveDocumentOutline?.formattedOutline) {
-                              setOutlineText(liveDocumentOutline.formattedOutline);
-                              setConvertFeedback(liveDocumentOutline.stats);
+                            void (async () => {
+                              if (!docResult?.extractedText || !liveDocumentOutline?.formattedOutline) return;
+                              const finalOutline = await resolveAiOrLocalOutline(
+                                docResult.extractedText,
+                                liveDocumentOutline.formattedOutline,
+                                `doc:${docResult.fileName}`
+                              );
+                              const finalParsed = parseTextToMindMapOutline(finalOutline, {
+                                density: analysisDepth,
+                              });
+                              setOutlineText(finalOutline);
+                              setConvertFeedback({
+                                totalNodes: finalParsed.stats.totalNodes,
+                                mainBranches: finalParsed.stats.mainBranches,
+                                subBranches: finalParsed.stats.subBranches,
+                                notedBranches: finalParsed.stats.notedBranches,
+                                badgesCount: liveDocumentOutline.stats.badgesCount,
+                              });
                               setInputMode('outline');
                               setShowLivePreview(true);
-                            }
+                            })();
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-200"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-200"
                         >
                           <ArrowRight className="h-4 w-4" />
                           <span>{t('Formatı Düzenle', 'Edit Outline')}</span>
@@ -1077,25 +1253,35 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                         <button
                           type="button"
                           data-testid="document-create-map-btn"
-                          disabled={isGenerating || !liveDocumentOutline?.formattedOutline}
+                          disabled={isGenerating || isAiStructuring || !liveDocumentOutline?.formattedOutline}
                           onClick={() => {
-                            if (liveDocumentOutline?.formattedOutline) {
-                              void executeGenerateFromText(
+                            void (async () => {
+                              if (!docResult?.extractedText || !liveDocumentOutline?.formattedOutline) return;
+                              const finalOutline = await resolveAiOrLocalOutline(
+                                docResult.extractedText,
                                 liveDocumentOutline.formattedOutline,
+                                `doc:${docResult.fileName}`
+                              );
+                              await executeGenerateFromText(
+                                finalOutline,
                                 useDocImages ? docImages.filter((i) => i.selected) : []
                               );
-                            }
+                            })();
                           }}
                           className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-50"
                         >
-                          {isGenerating ? (
+                          {isGenerating || isAiStructuring ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <Wand2 className="h-4 w-4" />
                           )}
                           <span>
-                            {isGenerating
+                            {isAiStructuring
+                              ? t('✨ AI ile Özetleniyor...', '✨ Summarizing with AI...')
+                              : isGenerating
                               ? t('Görsel Harita Hazırlanıyor...', 'Building Visual Map...')
+                              : useAiMode && aiStatus?.available
+                              ? t('✨ AI ile Görsel Harita Oluştur', '✨ Create Mind Map with AI')
                               : t('Belgeden Görsel Harita Oluştur', 'Create Mind Map from File')}
                           </span>
                         </button>
@@ -1368,8 +1554,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     <button
                       type="button"
                       data-testid="convert-lecture-note-btn"
-                      disabled={!rawLectureNote.trim() || isGenerating}
-                      onClick={() => handleConvertLectureNote(false)}
+                      disabled={!rawLectureNote.trim() || isGenerating || isAiStructuring}
+                      onClick={() => void handleConvertLectureNote(false)}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/12 px-4 py-2.5 text-xs font-extrabold text-violet-700 transition-transform hover:bg-violet-500/20 active:scale-95 disabled:opacity-45 dark:text-violet-200"
                     >
                       <ArrowRight className="h-4 w-4" />
@@ -1378,18 +1564,22 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     <button
                       type="button"
                       data-testid="convert-and-create-map-btn"
-                      disabled={!rawLectureNote.trim() || isGenerating}
-                      onClick={() => handleConvertLectureNote(true)}
+                      disabled={!rawLectureNote.trim() || isGenerating || isAiStructuring}
+                      onClick={() => void handleConvertLectureNote(true)}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-45"
                     >
-                      {isGenerating ? (
+                      {isGenerating || isAiStructuring ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Wand2 className="h-4 w-4" />
                       )}
                       <span>
-                        {isGenerating
+                        {isAiStructuring
+                          ? t('✨ AI ile Özetleniyor...', '✨ Summarizing with AI...')
+                          : isGenerating
                           ? t('Harita Oluşturuluyor...', 'Building Map...')
+                          : useAiMode && aiStatus?.available
+                          ? t('✨ AI ile Harita Oluştur', '✨ Generate with Free AI')
                           : t('Bu Yapıdan Harita Oluştur', 'Generate Mind Map')}
                       </span>
                     </button>

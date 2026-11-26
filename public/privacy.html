@@ -110,13 +110,14 @@
         <li><strong>Fotoğraf Arşivi (<code>NSPhotoLibraryUsageDescription</code>):</strong> Yalnızca seçtiğiniz bir şema görselini içe aktarmak veya dışa aktardığınız zihin haritası posterini cihazınıza kaydetmek için kullanılır. Arka plan temizleme ve kontur (die-cut) işlemleri %100 cihaz içinde (on-device WebAssembly/Canvas) gerçekleşir; fotoğraflarınız hiçbir dış sunucuya gönderilmez.</li>
       </ul>
 
-      <h2>4. İsteğe Bağlı Çevrimiçi Görsel Arama ve Cihaz İçi Çıkartma Stüdyosu</h2>
+      <h2>4. İsteğe Bağlı Çevrimiçi Görsel Arama, Yapay Zeka Özetleme ve Cihaz İçi Çıkartma Stüdyosu</h2>
       <p>
-        Uygulamanın 45.000+ ikonluk temel çıkartma motoru ve "Özel Çıkartma Stüdyosu" tamamen cihaz içinde (%100 çevrimdışı) çalışır. Kullanıcı çevrimiçiyken genişletilmiş arama yaptığında yalnızca şu salt-okunur sorgular iletilir:
+        Uygulamanın 45.000+ ikonluk temel çıkartma motoru, PDF/belge ayrıştırıcısı ve "Özel Çıkartma Stüdyosu" tamamen cihaz içinde (%100 çevrimdışı) çalışır. Kullanıcı çevrimiçiyken isteğe bağlı akıllı özellikleri açtığında yalnızca şu sınırlı veriler iletilir:
       </p>
       <ul>
         <li>Ticari lisanslı açık vektör kataloğuna (Iconify) ve nadir kavramların İngilizce karşılığı için halka açık sözlük/ansiklopedi uç noktalarına (Wikipedia TR, MyMemory) yalnızca aranan kısa kavram kelimesi iletilir.</li>
-        <li>Hiçbir kişisel veri, kullanıcı kimliği, fotoğraf, ders notu veya harita içeriği dış sunuculara gönderilmez.</li>
+        <li><strong>İsteğe Bağlı Yapay Zeka (AI) Ders Notu Özetleme:</strong> Kullanıcı "Metinden / PDF'den Harita" ekranında <em>"✨ Ücretsiz AI"</em> seçeneğini aktif tutarsa, kapak/kişisel bilgileri cihazda temizlenmiş ders metni yalnızca hiyerarşik zihin haritası taslağı üretmek amacıyla güvenli sunucu aracısı üzerinden yapay zeka servislerine iletilir. Kullanıcı dilediği an <em>"🔒 Sadece Cihazda"</em> modunu seçerek hiçbir ders metnini cihaz dışına göndermeden %100 çevrimdışı çalışabilir.</li>
+        <li>Hiçbir fotoğraf, kişisel kimlik bilgisi veya gizli hesap verisi harici yapay zeka sağlayıcılarına aktarılmaz.</li>
       </ul>
 
       <h2>5. Uygulama İçi Satın Alma (Apple StoreKit 2)</h2>
@@ -139,7 +140,7 @@
         <li><strong>No Account Required &amp; 100% On-Device Storage:</strong> No registration or sign-in is required. All mind maps, node notes, Apple Pencil sketches, and cropped notebook diagrams are stored exclusively on your device (local IndexedDB &amp; app storage). We do not collect or store personal user data on external servers.</li>
         <li><strong>Zero Tracking &amp; Zero Ads:</strong> We do not embed any third-party advertising SDKs, analytics trackers, or cross-app tracking technologies (<code>NSPrivacyTracking = false</code>; App Store Privacy Label: <em>Data Not Collected</em>).</li>
         <li><strong>Camera &amp; Photo Library:</strong> Accessed strictly when initiated by you to photograph or import study diagrams for local die-cut sticker cropping, or to save exported PDF/PNG posters. All image segmentation runs 100% locally on-device; your photos never leave your device.</li>
-        <li><strong>Optional Online Icon Enrichment:</strong> While the 45,000+ vector icon engine and custom die-cut sticker synthesizer run 100% locally on-device, if you search while online, only the non-personal concept keyword is sent as a read-only query to Iconify, Wikipedia, or MyMemory to find matching vector icons—never personal data, identifiers, photos, or mind map documents.</li>
+        <li><strong>Optional Online Icon &amp; AI Summarization:</strong> While the 45,000+ vector icon engine, document parser, and custom die-cut sticker synthesizer run 100% locally on-device, if you search icons while online, only the non-personal concept keyword is sent as a read-only query to Iconify, Wikipedia, or MyMemory. When you explicitly enable the optional <em>Free AI</em> mode in Text/PDF-to-Map, pre-cleaned lecture text (stripped of cover metadata locally on-device) is sent via our secure proxy solely to generate a structured mind-map outline; you can switch to <em>On-Device Only</em> at any time to keep 100% of note processing offline. Photos and personal identifiers are never sent to AI providers.</li>
         <li><strong>In-App Purchases (StoreKit 2):</strong> One-time Non-Consumable <em>Lifetime Pro</em> (<code>com.tahafirat.zihinharitam.lifetime_pro</code>) purchases and <em>Restore Purchases</em> are processed natively and exclusively by Apple StoreKit 2. We never receive or store financial or billing details.</li>
       </ul>
       <p>Developer &amp; Privacy Contact: <a href="mailto:tafifirat@gmail.com">tafifirat@gmail.com</a> (Taha Firat)</p>

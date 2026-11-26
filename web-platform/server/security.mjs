@@ -472,13 +472,17 @@ export function validateAndSanitizeMindMapDoc(raw) {
 }
 
 export function applySecurityHeaders(req, res, { isApi = false } = {}) {
+  const extraAiOrigin =
+    process.env.AI_WORKER_ORIGIN && /^https:\/\/[a-z0-9.-]+$/i.test(process.env.AI_WORKER_ORIGIN.trim())
+      ? ` ${process.env.AI_WORKER_ORIGIN.trim()}`
+      : '';
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'wasm-unsafe-eval' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://api.iconify.design",
-    "connect-src 'self' data: blob: https://api.iconify.design https://tr.wikipedia.org https://en.wikipedia.org https://api.mymemory.translated.net",
+    `connect-src 'self' data: blob: https://api.iconify.design https://tr.wikipedia.org https://en.wikipedia.org https://api.mymemory.translated.net https://*.workers.dev${extraAiOrigin}`,
     "worker-src 'self' blob:",
     "frame-src 'none'",
     "frame-ancestors 'none'",
