@@ -6,6 +6,8 @@ import type { LectureNoteDepth } from './LectureNoteStructurer';
 
 export interface AiStatusInfo {
   available: boolean;
+  requiresPro: boolean;
+  isPro: boolean;
   providerCount: number;
   dailyLimit: number;
   dailyUsed: number;
@@ -21,7 +23,7 @@ export interface AiOutlineResult {
   provider?: string;
   dailyRemaining?: number;
   dailyLimit?: number;
-  fallbackReason?: 'offline' | 'unconfigured' | 'quota_exceeded' | 'rate_limited' | 'error';
+  fallbackReason?: 'offline' | 'unconfigured' | 'pro_required' | 'quota_exceeded' | 'rate_limited' | 'error';
 }
 
 const PREF_STORAGE_KEY = 'zh_smartmap_ai_mode_v1';
@@ -99,18 +101,25 @@ export function preCleanTextForAi(rawText: string, maxChars = 13_500): string {
   return lines.join('\n').slice(0, maxChars).trim();
 }
 
-export async function fetchAiStatus(): Promise<AiStatusInfo> {
+export async function fetchAiStatus(clientIsPro = false): Promise<AiStatusInfo> {
   const baseUrl = resolveAiProxyBaseUrl();
   if (baseUrl === null || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
     return {
       available: false,
+      requiresPro: true,
+      isPro: clientIsPro,
       providerCount: 0,
-      dailyLimit: 5,
+      dailyLimit: 0,
       dailyUsed: 0,
       dailyRemaining: 0,
       cacheEnabled: false,
       endpointConfigured: baseUrl !== null,
     };
+  }
+
+  const headers: Record<string, string> = {};
+  if (baseUrl !== '' && clientIsPro) {
+    headers['X-Zihin-Pro'] = 'pro';
   }
 
   const ctrl = new AbortController();
@@ -119,13 +128,16 @@ export async function fetchAiStatus(): Promise<AiStatusInfo> {
     const res = await fetch(`${baseUrl}/api/v1/ai/status`, {
       method: 'GET',
       credentials: baseUrl === '' ? 'include' : 'omit',
+      headers,
       signal: ctrl.signal,
     });
     if (!res.ok) {
       return {
         available: false,
+        requiresPro: true,
+        isPro: clientIsPro,
         providerCount: 0,
-        dailyLimit: 5,
+        dailyLimit: 0,
         dailyUsed: 0,
         dailyRemaining: 0,
         cacheEnabled: false,
@@ -135,8 +147,10 @@ export async function fetchAiStatus(): Promise<AiStatusInfo> {
     const data = (await res.json()) as Partial<AiStatusInfo>;
     return {
       available: Boolean(data.available),
+      requiresPro: data.requiresPro !== false,
+      isPro: Boolean(data.isPro),
       providerCount: Number(data.providerCount || 0),
-      dailyLimit: Number(data.dailyLimit || 5),
+      dailyLimit: Number(data.dailyLimit || 0),
       dailyUsed: Number(data.dailyUsed || 0),
       dailyRemaining: Number(data.dailyRemaining || 0),
       cacheEnabled: Boolean(data.cacheEnabled),
@@ -145,8 +159,10 @@ export async function fetchAiStatus(): Promise<AiStatusInfo> {
   } catch {
     return {
       available: false,
+      requiresPro: true,
+      isPro: clientIsPro,
       providerCount: 0,
-      dailyLimit: 5,
+      dailyLimit: 0,
       dailyUsed: 0,
       dailyRemaining: 0,
       cacheEnabled: false,
@@ -158,8 +174,8 @@ export async function fetchAiStatus(): Promise<AiStatusInfo> {
 }
 
 /**
- * Requests a clean hierarchical mind-map outline from our Free Multi-Provider AI Proxy.
- * GUARANTEED NON-THROWING: on offline, unconfigured, 429 quota, or timeout, returns `{ usedAi: false }`
+ * Requests a clean hierarchical mind-map outline from our Pro-Only Free AI Proxy.
+ * GUARANTEED NON-THROWING: if not Pro, offline, unconfigured, 429 quota, or timeout, returns `{ usedAi: false }`
  * so the caller transparently falls back to our fast local offline engine!
  */
 export async function requestAiStructuredOutline(
@@ -167,8 +183,12 @@ export async function requestAiStructuredOutline(
   options?: {
     depth?: LectureNoteDepth;
     lang?: 'tr' | 'en';
+    isPro?: boolean;
   }
 ): Promise<AiOutlineResult> {
+  if (!options?.isPro) {
+    return { usedAi: false, outline: null, cached: false, fallbackReason: 'pro_required' };
+  }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return { usedAi: false, outline: null, cached: false, fallbackReason: 'offline' };
   }
@@ -189,6 +209,8 @@ export async function requestAiStructuredOutline(
   };
   if (baseUrl === '' && typeof window !== 'undefined' && window.__ZH_CSRF_TOKEN__) {
     headers['X-CSRF-Token'] = window.__ZH_CSRF_TOKEN__;
+  } else if (baseUrl !== '') {
+    headers['X-Zihin-Pro'] = 'pro';
   }
 
   const ctrl = new AbortController();
@@ -228,6 +250,9 @@ export async function requestAiStructuredOutline(
       };
     }
 
+    if (res.status === 403 || data.code === 'AI_PRO_REQUIRED') {
+      return { usedAi: false, outline: null, cached: false, fallbackReason: 'pro_required' };
+    }
     if (data.code === 'AI_NOT_CONFIGURED') {
       return { usedAi: false, outline: null, cached: false, fallbackReason: 'unconfigured' };
     }

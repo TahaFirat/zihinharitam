@@ -17,6 +17,7 @@ import {
   FileUp,
   Image as ImageIcon,
   AlertCircle,
+  Crown,
 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -24,6 +25,7 @@ import {
   type CrossLink,
   type MindMapDocument,
   type MindNode,
+  type PaywallTriggerReason,
   type ProactiveBranchSuggestion,
 } from '../types/mindmap';
 import { computeRadialAutoLayout } from '../core/canvas/RadialAutoLayout';
@@ -60,6 +62,7 @@ import {
 } from '../core/native/SpeechDictation';
 import { dismissNativeKeyboard, useKeyboardInset } from '../core/native/useKeyboardInset';
 import { useI18n } from '../core/i18n/i18n';
+import { useEntitlements } from '../core/monetization/EntitlementManager';
 
 interface SmartMapGeneratorModalProps {
   isOpen: boolean;
@@ -67,6 +70,7 @@ interface SmartMapGeneratorModalProps {
   activeNode: MindNode | null;
   mapContext: MapContextAnalysis;
   existingSiblingTitles: string[];
+  onTriggerPaywall?: (reason: PaywallTriggerReason) => void;
   onClose: () => void;
   onGenerateCompleteMap: (doc: MindMapDocument) => void;
   onAddProactiveBranches: (
@@ -437,11 +441,13 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   activeNode,
   mapContext,
   existingSiblingTitles,
+  onTriggerPaywall,
   onClose,
   onGenerateCompleteMap,
   onAddProactiveBranches,
 }) => {
   const { t, lang } = useI18n();
+  const { isLifetimePro } = useEntitlements();
   const kb = useKeyboardInset();
   const [tab, setTab] = useState<'text_to_map' | 'proactive_branches'>(initialTab);
   const [inputMode, setInputMode] = useState<'outline' | 'converter' | 'document'>('outline');
@@ -557,6 +563,9 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     });
   }, [docResult, analysisDepth]);
 
+  // STRICT PRO-ONLY AI GATE: Free users ALWAYS run 100% on-device local engine!
+  const effectiveUseAi = isLifetimePro && useAiMode;
+
   useEffect(() => {
     if (isOpen) {
       setTab(initialTab);
@@ -566,14 +575,14 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       setDictationError(null);
       setAiStatusNote(null);
       let cancelled = false;
-      void fetchAiStatus().then((st) => {
+      void fetchAiStatus(isLifetimePro).then((st) => {
         if (!cancelled) setAiStatus(st);
       });
       return () => {
         cancelled = true;
       };
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, isLifetimePro]);
 
   const targetTitle = activeNode?.title || mapContext.parentTitle || mapContext.label;
   // Combine title + branch note (`activeNode.note`) so proactive sub-branches understand the description inside the branch box!
@@ -686,6 +695,10 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
 
   const toggleAiMode = (enabled: boolean) => {
     void hapticLight();
+    if (enabled && !isLifetimePro) {
+      onTriggerPaywall?.('smart_map_ai');
+      return;
+    }
     setUseAiMode(enabled);
     saveAiModePreference(enabled);
     setAiStatusNote(null);
@@ -696,7 +709,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     localFallbackOutline: string,
     cacheTag: string
   ): Promise<string> => {
-    if (!useAiMode || !aiStatus?.available) {
+    if (!effectiveUseAi || !aiStatus?.available) {
       return localFallbackOutline;
     }
     const reqKey = `${cacheTag}|${analysisDepth}|${lang}|${rawSource.slice(0, 120)}|${rawSource.length}`;
@@ -709,6 +722,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       const res = await requestAiStructuredOutline(rawSource, {
         depth: analysisDepth,
         lang: lang === 'en' ? 'en' : 'tr',
+        isPro: isLifetimePro,
       });
       if (typeof res.dailyRemaining === 'number') {
         setAiStatus((prev) =>
@@ -730,14 +744,14 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
         });
         setAiStatusNote(
           res.cached
-            ? t('⚡ Ücretsiz AI önbelleğinden anında hazırlandı (0 kota)', '⚡ Served instantly from Free AI cache (0 quota)')
-            : t('✨ Ücretsiz AI ile ders kavramları ve formüller çıkarıldı', '✨ Concepts & formulas extracted with Free AI')
+            ? t('⚡ Pro AI önbelleğinden anında hazırlandı (0 kota)', '⚡ Served instantly from Pro AI cache (0 quota)')
+            : t('✨ Pro AI ile ders kavramları ve formüller çıkarıldı', '✨ Concepts & formulas extracted with Pro AI')
         );
         return res.outline;
       }
       if (res.fallbackReason === 'quota_exceeded') {
         setAiStatusNote(
-          t('Günlük ücretsiz AI limiti doldu — yerel çevrimdışı motorla hazırlandı.', 'Daily free AI quota reached — built with on-device engine.')
+          t('Günlük Pro AI limiti doldu — yerel çevrimdışı motorla hazırlandı.', 'Daily Pro AI quota reached — built with on-device engine.')
         );
       }
       return localFallbackOutline;
@@ -937,24 +951,33 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                 </button>
               </div>
 
-              {/* Compact Free AI vs On-Device Engine Switcher (PDF & Lecture Note modes) */}
+              {/* Pro-Only AI vs On-Device Engine Switcher (PDF & Lecture Note modes) */}
               {(inputMode === 'document' || inputMode === 'converter') && (
                 <div
                   data-testid="smartmap-ai-engine-bar"
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-500/25 bg-indigo-500/6 px-3 py-2 text-[11px]"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-indigo-500/6 via-violet-500/6 to-amber-500/8 px-3 py-2 text-[11px]"
                 >
                   <div className="flex min-w-0 items-center gap-1.5 font-extrabold">
-                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                    {isLifetimePro ? (
+                      <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                    ) : (
+                      <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    )}
                     <span className="truncate">
-                      {useAiMode && aiStatus?.available
+                      {!isLifetimePro
                         ? t(
-                            `Ücretsiz AI Aktif (${aiStatus.dailyRemaining}/${aiStatus.dailyLimit} günlük hak)`,
-                            `Free AI Ready (${aiStatus.dailyRemaining}/${aiStatus.dailyLimit} left today)`
+                            'Cihaz İçi Motor Aktif • Yapay Zeka (Pro)',
+                            'On-Device Engine Active • AI Summary (Pro)'
                           )
-                        : useAiMode
+                        : effectiveUseAi && aiStatus?.available
                         ? t(
-                            'Akıllı Hibrit Mod (AI + Yerel Formül Motoru)',
-                            'Smart Hybrid Mode (AI + On-Device Formula Engine)'
+                            `Pro AI Aktif (${aiStatus.dailyRemaining}/${aiStatus.dailyLimit} günlük hak)`,
+                            `Pro AI Ready (${aiStatus.dailyRemaining}/${aiStatus.dailyLimit} left today)`
+                          )
+                        : effectiveUseAi
+                        ? t(
+                            'Pro Hibrit Mod (AI + Yerel Formül Motoru)',
+                            'Pro Hybrid Mode (AI + On-Device Formula Engine)'
                           )
                         : t(
                             'Sadece Cihaz İçi Mod (%100 Çevrimdışı)',
@@ -967,20 +990,27 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       type="button"
                       data-testid="ai-mode-enabled-btn"
                       onClick={() => toggleAiMode(true)}
-                      className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
-                        useAiMode
-                          ? 'bg-indigo-600 text-white shadow-2xs'
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
+                        effectiveUseAi
+                          ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-2xs'
+                          : !isLifetimePro
+                          ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-300'
                           : 'opacity-70 hover:opacity-100'
                       }`}
                     >
-                      ✨ {t('Ücretsiz AI', 'Free AI')}
+                      <span>{isLifetimePro ? '✨' : '👑'} {t('AI', 'AI')}</span>
+                      {!isLifetimePro && (
+                        <span className="rounded bg-amber-500 px-1 py-0.2 text-[9px] font-black text-white">
+                          PRO
+                        </span>
+                      )}
                     </button>
                     <button
                       type="button"
                       data-testid="ai-mode-offline-btn"
                       onClick={() => toggleAiMode(false)}
                       className={`rounded-lg px-2 py-0.5 text-[10.5px] font-extrabold transition ${
-                        !useAiMode
+                        !effectiveUseAi
                           ? 'bg-slate-800 text-white shadow-2xs dark:bg-slate-200 dark:text-slate-900'
                           : 'opacity-70 hover:opacity-100'
                       }`}
@@ -1277,11 +1307,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                           )}
                           <span>
                             {isAiStructuring
-                              ? t('✨ AI ile Özetleniyor...', '✨ Summarizing with AI...')
+                              ? t('✨ Pro AI ile Özetleniyor...', '✨ Summarizing with Pro AI...')
                               : isGenerating
                               ? t('Görsel Harita Hazırlanıyor...', 'Building Visual Map...')
-                              : useAiMode && aiStatus?.available
-                              ? t('✨ AI ile Görsel Harita Oluştur', '✨ Create Mind Map with AI')
+                              : effectiveUseAi && aiStatus?.available
+                              ? t('✨ Pro AI ile Görsel Harita Oluştur', '✨ Create Mind Map with Pro AI')
                               : t('Belgeden Görsel Harita Oluştur', 'Create Mind Map from File')}
                           </span>
                         </button>
@@ -1575,11 +1605,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       )}
                       <span>
                         {isAiStructuring
-                          ? t('✨ AI ile Özetleniyor...', '✨ Summarizing with AI...')
+                          ? t('✨ Pro AI ile Özetleniyor...', '✨ Summarizing with Pro AI...')
                           : isGenerating
                           ? t('Harita Oluşturuluyor...', 'Building Map...')
-                          : useAiMode && aiStatus?.available
-                          ? t('✨ AI ile Harita Oluştur', '✨ Generate with Free AI')
+                          : effectiveUseAi && aiStatus?.available
+                          ? t('✨ Pro AI ile Harita Oluştur', '✨ Generate with Pro AI')
                           : t('Bu Yapıdan Harita Oluştur', 'Generate Mind Map')}
                       </span>
                     </button>

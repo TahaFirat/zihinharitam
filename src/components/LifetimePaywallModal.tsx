@@ -66,6 +66,12 @@ const TRIGGER_HEADERS: Record<
     subtitle:
       'Uzun ders özetlerini ve makale maddelerini saniyeler içinde renkli görsel zihin haritasına dönüştür.',
   },
+  smart_map_ai: {
+    badge: '👑 Pro Yapay Zeka Motoru',
+    title: 'Yapay Zeka ile PDF & Ders Notundan Anında Harita',
+    subtitle:
+      'Yapay zeka slaytlarındaki gereksiz bilgileri ayıklar; yalnızca ders kavramlarını ve formülleri tek tıkla kusursuz zihin haritasına çevirir.',
+  },
   ai_sticker_limit: {
     badge: 'Ücretsiz Deneme Tamamlandı',
     title: 'Sınırsız Özel Çıkartma Tasarım Stüdyosu',
@@ -139,15 +145,21 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
         badge:
           triggerReason === 'map_limit'
             ? '2 / 2 Free Maps Used'
+            : triggerReason === 'smart_map_ai'
+            ? '👑 Pro AI Mind Map Engine'
             : triggerReason === 'pro_export'
             ? 'Print-Quality Export'
             : 'MindSticker Pro Plans',
         title:
           triggerReason === 'map_limit'
             ? 'Upgrade to Create Unlimited Mind Maps & Flowcharts'
+            : triggerReason === 'smart_map_ai'
+            ? 'Instant AI Mind Maps from PDFs & Lecture Notes'
             : 'Unlock Full Visual Mind Mapping & Flowchart Power',
         subtitle:
-          'Your existing 2 maps always stay open. Choose flexible Monthly, 50% off Yearly, or one-time Lifetime Pro access.',
+          triggerReason === 'smart_map_ai'
+            ? 'Pro AI filters out cover slides and extracts core concepts & mathematical formulas into a clean visual map in seconds.'
+            : 'Your existing 2 maps always stay open. Choose flexible Monthly, 50% off Yearly, or one-time Lifetime Pro access.',
       }
     : TRIGGER_HEADERS[triggerReason] ?? TRIGGER_HEADERS.header_pill;
   const activePlan = plans[selectedTier] ?? plans.yearly;
@@ -335,7 +347,7 @@ export const LifetimePaywallModal: React.FC<LifetimePaywallModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-2.5 sm:p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 px-2.5 sm:p-4"
       style={{
         paddingTop: 'max(54px, calc(var(--safe-top) + 14px))',
         paddingBottom: 'max(28px, calc(var(--safe-bottom) + 18px))',

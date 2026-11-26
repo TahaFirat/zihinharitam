@@ -3170,6 +3170,7 @@ export const App: React.FC = () => {
         activeNode={targetModalNode ?? null}
         mapContext={mapContext}
         existingSiblingTitles={existingSiblingTitles}
+        onTriggerPaywall={(reason) => openPaywall(reason)}
         onClose={() => setSmartGenModal((s) => ({ ...s, open: false }))}
         onGenerateCompleteMap={(generatedDoc) => {
           void (async () => {

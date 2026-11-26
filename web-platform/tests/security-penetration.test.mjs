@@ -482,7 +482,7 @@ async function main() {
       assert.equal((await cancelRes.json()).billing.cancelAtPeriodEnd, true);
     });
 
-    await test('13. Free AI Proxy Security: oversized DoS (413), XSS output sanitization, 429 failover, SHA-256 cache & daily quota', async () => {
+    await test('13. Pro-Only AI Proxy Security: anon/free blocked (403), DoS (413), XSS stripped, 429 failover, SHA-256 cache & Pro quota', async () => {
       let provider1Calls = 0;
       let provider2Calls = 0;
       const aiSrv = createWebPlatformServer({
@@ -491,7 +491,7 @@ async function main() {
         dbPath: ':memory:',
         maxAiBurstHits: 20,
         aiOptions: {
-          env: { AI_FREE_DAILY_LIMIT: '2', AI_PRO_DAILY_LIMIT: '10' },
+          env: { AI_PRO_DAILY_LIMIT: '2' },
           providers: [
             { id: 'cerebras-mock', name: 'Mock P1', model: 'm1', apiKey: 'k1' },
             { id: 'groq-mock', name: 'Mock P2', model: 'm2', apiKey: 'k2' },
@@ -512,27 +512,100 @@ async function main() {
       const aiUrl = aiStarted.url;
       const aiOrigin = aiStarted.url;
       try {
-        // A. Status endpoint never leaks API keys
+        // A. Anonymous user: status says requiresPro=true, dailyLimit=0, never leaks API keys; POST blocked with 403!
         const stRes = await fetch(`${aiUrl}/api/v1/ai/status`);
         assert.equal(stRes.status, 200);
         const stText = await stRes.text();
         assert.ok(!stText.includes('k1') && !stText.includes('k2'));
         const stJson = JSON.parse(stText);
         assert.equal(stJson.available, true);
-        assert.equal(stJson.dailyLimit, 2);
+        assert.equal(stJson.requiresPro, true);
+        assert.equal(stJson.isPro, false);
+        assert.equal(stJson.dailyLimit, 0);
 
-        // B. Oversized payload DoS rejected with 413
-        const dosRes = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+        const anonAi = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({
+            text: 'Doğrusal regresyon y = a0 + a1*x modeli ile en küçük kareler yöntemini kullanır.',
+            depth: 'compact',
+          }),
+        });
+        assert.equal(anonAi.status, 403);
+        assert.equal((await anonAi.json()).code, 'AI_PRO_REQUIRED');
+
+        // B. Registered FREE user also blocked with 403 AI_PRO_REQUIRED (cannot bypass via direct API call!)
+        const regFree = await fetch(`${aiUrl}/api/v1/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          body: JSON.stringify({
+            displayName: 'Free Student',
+            email: 'freeai@example.com',
+            password: 'Kript0!2026#VaultKey',
+          }),
+        });
+        assert.equal(regFree.status, 201);
+        const freeCookie = extractCookie(regFree).pair;
+        const freeCsrf = (await regFree.json()).csrfToken;
+
+        const freeAiRes = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
+          body: JSON.stringify({
+            text: 'Doğrusal regresyon y = a0 + a1*x modeli ile en küçük kareler yöntemini kullanır.',
+            depth: 'compact',
+          }),
+        });
+        assert.equal(freeAiRes.status, 403);
+        assert.equal((await freeAiRes.json()).code, 'AI_PRO_REQUIRED');
+        assert.equal(provider1Calls, 0);
+
+        // C. Upgrade user to Pro via real checkout -> now AI is unlocked!
+        const buyPro = await fetch(`${aiUrl}/api/v1/billing/checkout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
+          body: JSON.stringify({
+            tier: 'monthly',
+            cardholderName: 'Free Student',
+            cardNumber: '4242 4242 4242 4242',
+            expiry: '12/29',
+            cvc: '424',
+          }),
+        });
+        assert.equal(buyPro.status, 200);
+
+        // D. Oversized payload DoS rejected with 413 even for Pro user
+        const dosRes = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
           body: JSON.stringify({ text: 'A'.repeat(60_000), depth: 'compact' }),
         });
         assert.equal(dosRes.status, 413);
 
-        // C. Call 1: Provider 1 returns 429 -> seamlessly fails over to Provider 2, strips <script> & code fences!
+        // E. Pro Call 1: Provider 1 returns 429 -> seamlessly fails over to Provider 2, strips <script> & code fences!
         const r1 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
           body: JSON.stringify({
             text: 'Doğrusal regresyon y = a0 + a1*x modeli ile en küçük kareler yöntemini kullanır.',
             depth: 'compact',
@@ -551,10 +624,15 @@ async function main() {
         assert.equal(provider2Calls, 1);
         assert.equal(j1.dailyRemaining, 1);
 
-        // D. Call 2 (identical text): served from SHA-256 cache -> 0 extra provider calls & 0 quota consumed!
+        // F. Pro Call 2 (identical text): served from SHA-256 cache -> 0 extra provider calls & 0 quota consumed!
         const r2 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
           body: JSON.stringify({
             text: 'Doğrusal regresyon y = a0 + a1*x modeli ile en küçük kareler yöntemini kullanır.',
             depth: 'compact',
@@ -567,10 +645,15 @@ async function main() {
         assert.equal(provider2Calls, 1);
         assert.equal(j2.dailyRemaining, 1);
 
-        // E. Call 3 (new text) uses final daily credit -> Call 4 hits daily fair-use cap (429 + fallbackAllowed: true)
+        // G. Pro Call 3 uses final daily credit -> Call 4 hits Pro daily fair-use cap (429 + fallbackAllowed: true)
         const r3 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
           body: JSON.stringify({
             text: 'Polinom regresyon eğrisel veriler için y = a0 + a1*x + a2*x^2 modelini kullanır.',
             depth: 'compact',
@@ -582,9 +665,14 @@ async function main() {
 
         const r4 = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Origin: aiOrigin },
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: aiOrigin,
+            Cookie: freeCookie,
+            'X-CSRF-Token': freeCsrf,
+          },
           body: JSON.stringify({
-            text: 'Üçüncü farklı ders notu metni günlük ücretsiz AI kotasını test eder.',
+            text: 'Üçüncü farklı ders notu metni günlük Pro AI kotasını test eder.',
             depth: 'compact',
             lang: 'tr',
           }),

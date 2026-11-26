@@ -351,8 +351,7 @@ async function defaultInvokeProvider(provider, systemPrompt, userPrompt) {
 }
 
 function resolveUserTierAndQuota(vault, session, ipHash, env = process.env) {
-  const freeDailyLimit = Math.max(1, Number(env.AI_FREE_DAILY_LIMIT || 5));
-  const proDailyLimit = Math.max(5, Number(env.AI_PRO_DAILY_LIMIT || 35));
+  const proDailyLimit = Math.max(1, Number(env.AI_PRO_DAILY_LIMIT || 35));
 
   let isPro = false;
   let bucketKey = `ip:${ipHash}`;
@@ -367,9 +366,9 @@ function resolveUserTierAndQuota(vault, session, ipHash, env = process.env) {
 
   const dayKey = getUtcDayKey();
   const row = vault.stmts.getAiDailyUsage.get(bucketKey, dayKey);
-  const dailyUsed = Number(row?.used_count || 0);
-  const dailyLimit = isPro ? proDailyLimit : freeDailyLimit;
-  const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
+  const dailyUsed = isPro ? Number(row?.used_count || 0) : 0;
+  const dailyLimit = isPro ? proDailyLimit : 0;
+  const dailyRemaining = isPro ? Math.max(0, dailyLimit - dailyUsed) : 0;
 
   return { isPro, bucketKey, dayKey, dailyLimit, dailyUsed, dailyRemaining };
 }
@@ -382,12 +381,13 @@ export async function handleAiRoute(req, res, pathname, ctx) {
   const invokeProvider = aiOptions?.invokeProvider ?? defaultInvokeProvider;
   const ipHash = hmacDigest(serverSecret, req._clientIp || '127.0.0.1');
 
-  // 1. Lightweight capability & remaining daily quota probe (never exposes keys!)
+  // 1. Lightweight capability & remaining daily Pro quota probe (never exposes keys!)
   if (pathname === '/api/v1/ai/status' && method === 'GET') {
     const quota = resolveUserTierAndQuota(vault, session, ipHash, env);
     sendJson(res, 200, {
       ok: true,
       available: providers.length > 0,
+      requiresPro: true,
       providerCount: providers.length,
       isPro: quota.isPro,
       dailyLimit: quota.dailyLimit,
@@ -398,14 +398,33 @@ export async function handleAiRoute(req, res, pathname, ctx) {
     return true;
   }
 
-  // 2. Multi-provider Free AI Lecture-Note / PDF -> Mind-Map Outline endpoint
+  // 2. Pro-Only Multi-Provider Free AI Lecture-Note / PDF -> Mind-Map Outline endpoint
   if (pathname === '/api/v1/ai/structure-note' && method === 'POST') {
-    // If logged in, verify CSRF token too (consistent with OWASP CSRF posture)
-    if (session) {
-      assertCsrfToken(req, session);
+    // STRICT SERVER-SIDE PRO ENTITLEMENT ENFORCEMENT (never trust frontend flags!)
+    if (!session?.user_id) {
+      sendJson(res, 403, {
+        error: 'Yapay zeka ile harita oluşturma yalnızca Pro üyeler içindir.',
+        code: 'AI_PRO_REQUIRED',
+        requiresPro: true,
+        fallbackAllowed: true,
+      });
+      return true;
     }
 
-    // Burst rate limit (6 requests/minute per IP hash)
+    assertCsrfToken(req, session);
+
+    const quota = resolveUserTierAndQuota(vault, session, ipHash, env);
+    if (!quota.isPro) {
+      sendJson(res, 403, {
+        error: 'Yapay zeka ile harita oluşturma yalnızca Pro üyeler içindir.',
+        code: 'AI_PRO_REQUIRED',
+        requiresPro: true,
+        fallbackAllowed: true,
+      });
+      return true;
+    }
+
+    // Burst rate limit (8 requests/minute per IP hash)
     const burst = limiters.aiBurst(ipHash);
     if (!burst.allowed) {
       sendJson(
@@ -435,11 +454,10 @@ export async function handleAiRoute(req, res, pathname, ctx) {
     const cacheKey = sha256Hex(`v1|${depth}|${lang}|${normalizedForHash}`);
     const now = Date.now();
 
-    // Step A: Content-Hash Cache Lookup (0 AI tokens spent! Does NOT consume user daily quota!)
+    // Step A: Content-Hash Cache Lookup (0 AI tokens spent! Does NOT consume Pro daily quota!)
     const cached = vault.stmts.getAiCacheByKey.get(cacheKey, now - CACHE_TTL_MS);
     if (cached && cached.outline_text) {
       vault.stmts.touchAiCacheHit.run(now, cacheKey);
-      const quota = resolveUserTierAndQuota(vault, session, ipHash, env);
       sendJson(res, 200, {
         ok: true,
         outline: cached.outline_text,
@@ -454,20 +472,17 @@ export async function handleAiRoute(req, res, pathname, ctx) {
     // Step B: If no free AI provider key is configured on this server yet, tell client cleanly to use local engine
     if (providers.length === 0) {
       sendJson(res, 503, {
-        error: 'Ücretsiz yapay zeka sağlayıcısı henüz yapılandırılmadı; yerel çevrimdışı motor kullanılacak.',
+        error: 'Yapay zeka sağlayıcısı henüz yapılandırılmadı; yerel çevrimdışı motor kullanılacak.',
         code: 'AI_NOT_CONFIGURED',
         fallbackAllowed: true,
       });
       return true;
     }
 
-    // Step C: Fair-use daily quota check (protects free-tier pool for 100+ daily students!)
-    const quota = resolveUserTierAndQuota(vault, session, ipHash, env);
+    // Step C: Fair-use daily Pro quota check (protects free-tier pool across all Pro subscribers!)
     if (quota.dailyRemaining <= 0) {
       sendJson(res, 429, {
-        error: quota.isPro
-          ? 'Günlük yapay zeka limitine ulaşıldı. Harita yerel çevrimdışı motorla oluşturulacak.'
-          : 'Günlük ücretsiz AI limitine (5/gün) ulaşıldı. Harita yerel motorla oluşturulacak.',
+        error: 'Günlük Pro yapay zeka limitine ulaşıldı. Harita yerel çevrimdışı motorla oluşturulacak.',
         code: 'AI_DAILY_QUOTA_EXCEEDED',
         dailyRemaining: 0,
         dailyLimit: quota.dailyLimit,

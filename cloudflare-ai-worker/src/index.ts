@@ -26,7 +26,8 @@ interface Env {
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
-  AI_FREE_DAILY_LIMIT?: string;
+  AI_PRO_DAILY_LIMIT?: string;
+  PRO_ACCESS_SECRET?: string;
   ALLOWED_ORIGINS?: string;
 }
 
@@ -58,7 +59,7 @@ function buildCorsHeaders(origin: string | null, allowedCsv: string): Record<str
   if (matchedOrigin) {
     headers['Access-Control-Allow-Origin'] = matchedOrigin;
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Requested-With';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Requested-With, X-Zihin-Pro';
     headers['Access-Control-Max-Age'] = '86400';
   }
   return headers;
@@ -179,11 +180,15 @@ export default {
       return new Response(null, { status: 204, headers: cors });
     }
 
-    const dailyLimit = Math.max(1, Number(env.AI_FREE_DAILY_LIMIT || 5));
+    const dailyLimit = Math.max(5, Number(env.AI_PRO_DAILY_LIMIT || 35));
     const clientIp = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
     const dayKey = new Date().toISOString().slice(0, 10);
     const ipDayKey = `${dayKey}:${await sha256Hex(clientIp)}`;
     const used = dailyHits.get(ipDayKey) || 0;
+    const proHeader = (request.headers.get('X-Zihin-Pro') || '').trim();
+    const isProAuthorized = env.PRO_ACCESS_SECRET
+      ? proHeader === env.PRO_ACCESS_SECRET.trim()
+      : proHeader === 'pro';
 
     if (url.pathname === '/api/v1/ai/status' && request.method === 'GET') {
       const count =
@@ -195,10 +200,12 @@ export default {
         {
           ok: true,
           available: count > 0,
+          requiresPro: true,
+          isPro: isProAuthorized,
           providerCount: count,
-          dailyLimit,
-          dailyUsed: used,
-          dailyRemaining: Math.max(0, dailyLimit - used),
+          dailyLimit: isProAuthorized ? dailyLimit : 0,
+          dailyUsed: isProAuthorized ? used : 0,
+          dailyRemaining: isProAuthorized ? Math.max(0, dailyLimit - used) : 0,
           cacheEnabled: true,
         },
         200,
@@ -207,6 +214,18 @@ export default {
     }
 
     if (url.pathname === '/api/v1/ai/structure-note' && request.method === 'POST') {
+      if (!isProAuthorized) {
+        return jsonResp(
+          {
+            error: 'Yapay zeka ile harita oluşturma yalnızca Pro üyeler içindir.',
+            code: 'AI_PRO_REQUIRED',
+            requiresPro: true,
+            fallbackAllowed: true,
+          },
+          403,
+          cors
+        );
+      }
       const lenHeader = Number(request.headers.get('Content-Length') || 0);
       if (lenHeader > MAX_BODY_BYTES) {
         return jsonResp({ error: 'İstek boyutu sınırı aşıldı.', code: 'PAYLOAD_TOO_LARGE', fallbackAllowed: true }, 413, cors);

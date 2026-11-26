@@ -121,6 +121,7 @@ export type PaywallTriggerReason =
   | 'pro_sticker'
   | 'note_crop_limit'
   | 'smart_map_limit'
+  | 'smart_map_ai'
   | 'ai_sticker_limit'
   | 'pro_export'
   | 'exam_mode'
