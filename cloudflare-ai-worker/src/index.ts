@@ -151,17 +151,18 @@ async function callOpenAiCompat(
 }
 
 async function callGemini(apiKey: string, systemPrompt: string, userPrompt: string): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(
-    apiKey
-  )}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
     signal: AbortSignal.timeout(11_000),
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.15, maxOutputTokens: 1200 },
+      generationConfig: { temperature: 0.15, maxOutputTokens: 1000 },
     }),
   });
   if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
@@ -313,23 +314,23 @@ export default {
       }
       if (env.GROQ_API_KEY) {
         attempts.push({
-          id: 'groq-70b',
+          id: 'groq-qwen',
           run: () =>
             callOpenAiCompat(
               'https://api.groq.com/openai/v1/chat/completions',
               env.GROQ_API_KEY!,
-              'llama-3.3-70b-versatile',
+              'qwen/qwen3.8-27b',
               systemPrompt,
               userPrompt
             ),
         });
         attempts.push({
-          id: 'groq-8b',
+          id: 'groq-fast',
           run: () =>
             callOpenAiCompat(
               'https://api.groq.com/openai/v1/chat/completions',
               env.GROQ_API_KEY!,
-              'llama-3.1-8b-instant',
+              'openai/gpt-oss-20b',
               systemPrompt,
               userPrompt
             ),

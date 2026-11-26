@@ -70,23 +70,24 @@ function getConfiguredProviders(env = process.env) {
   }
   if (env.GROQ_API_KEY && env.GROQ_API_KEY.trim()) {
     list.push({
-      id: 'groq-70b',
-      name: 'Groq Llama 3.3 70B',
-      model: (env.GROQ_MODEL_PRIMARY || 'llama-3.3-70b-versatile').trim(),
+      id: 'groq-qwen',
+      name: 'Groq Qwen 3.8 27B',
+      model: (env.GROQ_MODEL_PRIMARY || 'qwen/qwen3.8-27b').trim(),
       apiKey: env.GROQ_API_KEY.trim(),
     });
     list.push({
-      id: 'groq-8b',
-      name: 'Groq Llama 3.1 8B',
-      model: (env.GROQ_MODEL_FAST || 'llama-3.1-8b-instant').trim(),
+      id: 'groq-fast',
+      name: 'Groq GPT-OSS 20B',
+      model: (env.GROQ_MODEL_FAST || 'openai/gpt-oss-20b').trim(),
       apiKey: env.GROQ_API_KEY.trim(),
+      extraBody: { reasoning_effort: 'low' },
     });
   }
   if (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim()) {
     list.push({
       id: 'gemini',
       name: 'Google Gemini Flash-Lite',
-      model: (env.GEMINI_MODEL || 'gemini-2.5-flash-lite').trim(),
+      model: (env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim(),
       apiKey: env.GEMINI_API_KEY.trim(),
     });
   }
@@ -164,7 +165,8 @@ function sanitizeAiOutlineOutput(rawOutput) {
     .replace(/\r/g, '\n')
     .trim();
 
-  // Strip surrounding markdown code fences if a model accidentally emitted them
+  // Strip accidental reasoning `<think>...</think>` tags & markdown code fences
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   text = text.replace(/^```(?:text|markdown|md)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
   // Remove any unsafe HTML / script payloads
@@ -194,7 +196,15 @@ function sanitizeAiOutlineOutput(rawOutput) {
   return lines.slice(0, 90).join('\n').trim();
 }
 
-async function callOpenAiCompatibleProvider(endpointUrl, apiKey, model, systemPrompt, userPrompt, extraHeaders = {}) {
+async function callOpenAiCompatibleProvider(
+  endpointUrl,
+  apiKey,
+  model,
+  systemPrompt,
+  userPrompt,
+  extraHeaders = {},
+  extraBody = {}
+) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PROVIDER_TIMEOUT_MS);
   try {
@@ -209,11 +219,12 @@ async function callOpenAiCompatibleProvider(endpointUrl, apiKey, model, systemPr
       body: JSON.stringify({
         model,
         temperature: 0.15,
-        max_tokens: 1200,
+        max_tokens: 1100,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
+        ...extraBody,
       }),
     });
     if (!res.ok) {
@@ -236,19 +247,24 @@ async function callGeminiProvider(apiKey, model, systemPrompt, userPrompt) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PROVIDER_TIMEOUT_MS);
   try {
+    // Strictly target Google AI Studio Free Developer API (`generativelanguage.googleapis.com`)
+    // and pass key via header (`x-goog-api-key`) so it never appears in URLs or access logs.
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
-    )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    )}:generateContent`;
     const res = await fetch(url, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
           temperature: 0.15,
-          maxOutputTokens: 1200,
+          maxOutputTokens: 1000,
         },
       }),
     });
@@ -316,13 +332,15 @@ async function defaultInvokeProvider(provider, systemPrompt, userPrompt) {
       userPrompt
     );
   }
-  if (provider.id === 'groq-70b' || provider.id === 'groq-8b') {
+  if (provider.id === 'groq-qwen' || provider.id === 'groq-fast') {
     return callOpenAiCompatibleProvider(
       'https://api.groq.com/openai/v1/chat/completions',
       provider.apiKey,
       provider.model,
       systemPrompt,
-      userPrompt
+      userPrompt,
+      {},
+      provider.extraBody || {}
     );
   }
   if (provider.id === 'gemini') {
@@ -479,7 +497,22 @@ export async function handleAiRoute(req, res, pathname, ctx) {
       return true;
     }
 
-    // Step C: Fair-use daily Pro quota check (protects free-tier pool across all Pro subscribers!)
+    // Step C: Global hard daily circuit-breaker + per-user Pro daily quota
+    // Guarantees server NEVER exceeds free-tier ceilings and NEVER incurs surprise bills!
+    const globalDailyCap = Math.max(10, Number(env.AI_GLOBAL_DAILY_CAP || 250));
+    const globalRow = vault.stmts.getAiDailyUsage.get('global:all', quota.dayKey);
+    const globalUsed = Number(globalRow?.used_count || 0);
+    if (globalUsed >= globalDailyCap) {
+      sendJson(res, 429, {
+        error: 'Günlük genel ücretsiz AI kotasına ulaşıldı; harita yerel çevrimdışı motorla oluşturuldu.',
+        code: 'AI_DAILY_QUOTA_EXCEEDED',
+        dailyRemaining: 0,
+        dailyLimit: quota.dailyLimit,
+        fallbackAllowed: true,
+      });
+      return true;
+    }
+
     if (quota.dailyRemaining <= 0) {
       sendJson(res, 429, {
         error: 'Günlük Pro yapay zeka limitine ulaşıldı. Harita yerel çevrimdışı motorla oluşturulacak.',
@@ -524,9 +557,10 @@ export async function handleAiRoute(req, res, pathname, ctx) {
       return true;
     }
 
-    // Persist in SHA-256 shared cache & increment fair-use daily counter
+    // Persist in SHA-256 shared cache & increment both user + global hard-cap daily counters
     vault.stmts.upsertAiCache.run(cacheKey, depth, winnerProvider, winnerOutline, now, now);
     vault.stmts.incrementAiDailyUsage.run(quota.bucketKey, quota.dayKey, now);
+    vault.stmts.incrementAiDailyUsage.run('global:all', quota.dayKey, now);
 
     sendJson(res, 200, {
       ok: true,
