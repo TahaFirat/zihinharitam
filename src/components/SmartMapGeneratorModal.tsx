@@ -40,6 +40,7 @@ import {
   type DocumentExtractionResult,
   type ExtractedDocumentImage,
 } from '../core/smartmap/DocumentImportExtractor';
+import { cleanIconLookupQuery } from '../core/smartmap/AcademicContentFilter';
 import {
   TopicContextIntelligence,
   type MapContextAnalysis,
@@ -197,19 +198,20 @@ async function buildSmartMapFromOutlineText(
   const offlinePools = await Promise.all(
     orderedNodesForStickers.map(async (node) => {
       if (node.sticker) return { node, pool: [] as Awaited<ReturnType<typeof VisualSearchOrchestrator.searchOfflineWave>>['results'] };
+      const cleanTitleQuery = cleanIconLookupQuery(node.title);
       const noteSnippet = (node.note || '')
         .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
         .split(/\s+/)
         .filter((w) => w.length >= 3)
         .slice(0, 4)
         .join(' ');
-      const richQuery = [node.title, node.techBadge, noteSnippet]
+      const richQuery = [cleanTitleQuery, noteSnippet]
         .filter(Boolean)
         .join(' ');
 
       let pool = (
         await VisualSearchOrchestrator.searchOfflineWave(
-          node.title,
+          cleanTitleQuery,
           mapContext,
           node.branchColor,
           20
@@ -241,7 +243,7 @@ async function buildSmartMapFromOutlineText(
         await Promise.allSettled(
           weakEntries.map(async (entry) => {
             const liveFed = await VisualSearchOrchestrator.searchFederatedGallery(
-              entry.node.title,
+              cleanIconLookupQuery(entry.node.title),
               mapContext,
               entry.node.branchColor,
               liveCtrl.signal
@@ -282,23 +284,9 @@ async function buildSmartMapFromOutlineText(
     }
   }
 
-  // Compute non-overlapping Radial Auto-Layout + add 1 smart CrossLink if >= 5 nodes
+  // Compute non-overlapping Radial Auto-Layout (never fabricate arbitrary cross-links between unrelated branches)
   const laidOutNodes = computeRadialAutoLayout(nodes, rootId);
-  const level1Ids = Object.values(laidOutNodes)
-    .filter((n) => n.parentId === rootId)
-    .map((n) => n.id);
-
   const crossLinks: CrossLink[] = [];
-  if (level1Ids.length >= 2) {
-    crossLinks.push({
-      id: `cl_auto_${now}`,
-      fromNodeId: level1Ids[0],
-      toNodeId: level1Ids[1],
-      label: 'Doğrudan Etkileşim',
-      color: '#0EA5E9',
-      style: 'dashed_flow',
-    });
-  }
 
   return {
     id: `map_smart_${now}`,

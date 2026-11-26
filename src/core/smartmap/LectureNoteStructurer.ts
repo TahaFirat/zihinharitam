@@ -14,6 +14,14 @@
  *     during case folding, collapses dense field tables & step sequences in Balanced/Compact modes, and emits clean `Not:` lines.
  */
 
+import {
+  extractCompactFormula,
+  filterAndCleanAcademicLine,
+  isAcademicBoilerplateLine,
+  isFormulaExpression,
+  isWordProblemOrExampleFiller,
+} from './AcademicContentFilter';
+
 export type LectureNoteDepth = 'compact' | 'balanced' | 'detailed';
 
 export interface LectureNoteConversionOptions {
@@ -66,7 +74,7 @@ const VERBOSE_FILLER_LEAD_RE =
   /^(?:bu\s+(?:protokol(?:ün|ü)?|katman(?:ın|da|ı)?|işlem(?:de|i)?|süreç(?:te|i)?|sistem(?:de|i)?|model(?:de|i)?|yapı(?:da|yı)?|bölüm(?:de|ü)?|paket(?:in|i)?|alan(?:ın|ı)?|numara|adresleme|çerçeve|yöntem|teknik|kavram|mekanizma|durum)\s*(?:tarafından\s+|,\s*|\s+(?=esas\s+olarak|genel\s+olarak|temel\s+olarak))|bu\s+katmanın\s+|genel\s+olarak\s+|temel\s+olarak\s+|esas\s+olarak\s+|kısaca\s+|özetle\s+|yani\s+)/iu;
 
 const TURKISH_FINITE_VERB_RE =
-  /(?<![\p{L}\p{N}])(?:oluşur|sağlar|kullanılır|içerir|tanımlar|belirtir|yapar|eder|verir|gösterir|bulunur|gerçekleşir|alınır|gönderilir|iletilir|bölünür|alır|kurar|yönetir|çözer|kapsar|başlar|biter|duyulmaz|edilmez|yoktur|değildir|gelir|denir|bilinir|çalışır|taşı(?:r|nır)|ekler|onaylar|döner|yayar|yayınlar|iletir|görülebilir|sağlanır|gerçekleştirir|uygular|belirler|önler)(?![\p{L}\p{N}])/iu;
+  /(?<![\p{L}\p{N}])(?:oluşur|sağlar|kullanılır|içerir|tanımlar|belirtir|yapar|eder|verir|gösterir|bulunur|gerçekleşir|alınır|gönderilir|iletilir|bölünür|alır|kurar|yönetir|çözer|kapsar|başlar|biter|duyulmaz|edilmez|yoktur|değildir|gelir|denir|bilinir|çalışır|taşı(?:r|nır)|ekler|onaylar|döner|yayar|yayınlar|iletir|görülebilir|sağlanır|gerçekleştirir|uygular|belirler|önler|edilir|verilir|verilmiştir|ölçülür|hesaplanır|yazılır|indirgenir|modelidir|formülüdür|denklemidir|yöntemidir|ifade\s+edilir|amaçlar|yakalar|artar|azalır)(?![\p{L}\p{N}])/iu;
 
 const STEP_LINE_RE = /^(?:(\d+)\s*[.)]?\s*(?:adım|aşama|evre|step))\s*[:\-–—]?\s*(.+)$/iu;
 
@@ -109,6 +117,10 @@ function lowercaseLeadSafe(s: string): string {
 function capitalizeLeadSafe(s: string): string {
   const t = s.trim();
   if (!t) return '';
+  // Preserve leading lowercase math variables/functions (`y = a * e^(b*x)`, `f(x) = ...`, `ln(y) = ...`)
+  if (/^(?:[a-z](?:\s*[=≈(]|_[a-z0-9])|(?:ln|log|exp|sin|cos|tan)\s*\()/.test(t)) {
+    return t;
+  }
   const firstToken = t.split(/[\s,.;:()'-]+/)[0] || '';
   const bare = firstToken.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü0-9/]/g, '');
   if (ACRONYM_SET.has(bare.toUpperCase()) && bare.length >= 2) {
@@ -177,7 +189,12 @@ function cleanTypography(s: string): string {
     .replace(/\s+([.,;!?])/g, '$1')
     .replace(/,([A-Za-zÇĞİÖŞÜçğıöşü])/g, ', $1')
     .replace(/([a-zçğıöşü])\.([A-ZÇĞİÖŞÜ])/g, '$1. $2')
-    .replace(/([A-Za-zÇĞİÖŞÜçğıöşü0-9])\(/g, '$1 (')
+    // Space before `(` for Turkish/English prose (`TCP(İletim)` -> `TCP (İletim)`) while keeping math calls (`ln(y)`, `f(x)`, `e^(b*x)`, `O(n)`) tight!
+    .replace(/(?<![\^])([A-Za-zÇĞİÖŞÜçğıöşü0-9]{2,})\(/g, (m, word: string) =>
+      /^(?:ln|log|log10|exp|sin|cos|tan|cot|sqrt|abs|lim|det|min|max|sum|var|cov|std)$/i.test(word)
+        ? m
+        : `${word} (`
+    )
     .replace(/\(\s+/g, '(')
     .replace(/\s+\)/g, ')')
     .replace(/(?<![\p{L}\p{N}])yada(?![\p{L}\p{N}])/giu, 'ya da')
@@ -198,7 +215,7 @@ function distillSentence(raw: string, maxChars = 155): string {
   let s = cleanTypography(raw)
     .replace(/^[-*•–—]\s*/, '')
     .replace(VERBOSE_FILLER_LEAD_RE, '')
-    .replace(/\.+$/, '')
+    .replace(/[:.;\s]+$/, '')
     .trim();
   if (!s) return '';
   s = capitalizeLeadSafe(s);
@@ -215,7 +232,7 @@ function distillSentence(raw: string, maxChars = 155): string {
 
 function distillMultiSentence(sentences: string[], maxChars = 205): string {
   const cleanSents = sentences
-    .map((s) => cleanTypography(s).replace(/\.+$/, '').trim())
+    .map((s) => cleanTypography(s).replace(/[:.;\s]+$/, '').trim())
     .filter((s) => s.length >= 5 && !FIGURE_CAPTION_RE.test(s));
   if (cleanSents.length === 0) return '';
 
@@ -457,11 +474,18 @@ function extractBadgeAndPriority(text: string): {
   }
 
   if (!badge) {
+    const formulaBadge = extractCompactFormula(s, 38);
+    if (formulaBadge) {
+      badge = formulaBadge;
+    }
+  }
+
+  if (!badge) {
     const qm = s.match(QUANT_BADGE_RE);
     if (qm) badge = qm[1].replace(/\s+/g, ' ').trim();
   }
 
-  return { cleaned: cleanTypography(s), badge, priority };
+  return { cleaned: isFormulaExpression(s) ? s : cleanTypography(s), badge, priority };
 }
 
 interface RawParsedLine {
@@ -471,6 +495,7 @@ interface RawParsedLine {
   isBullet: boolean;
   isNumbered: boolean;
   isHeadingMd: boolean;
+  isFormula: boolean;
   mdDepth: number;
   content: string;
   precededByBlank: boolean;
@@ -507,9 +532,21 @@ function preprocessLines(rawInput: string): RawParsedLine[] {
     const nMatch = !hMatch && !bMatch ? trimmed.match(/^(\d+(?:\.\d+)*)[.)]\s+(.+)$/) : null;
 
     const rawBody = hMatch ? hMatch[2] : bMatch ? bMatch[1] : nMatch ? nMatch[2] : trimmed;
-    const isGluedTable = GLUED_TABLE_HEADER_RE.test(rawBody);
-    const content = isGluedTable ? rawBody.trim() : cleanTypography(rawBody);
-    if (!content || FIGURE_CAPTION_RE.test(content)) {
+    const isFormula = isFormulaExpression(rawBody);
+
+    // Strip non-educational cover-slide / administrative / table-dump boilerplate lines!
+    if (!isFormula && isAcademicBoilerplateLine(rawBody)) {
+      continue;
+    }
+
+    const sanitizedBody = isFormula ? rawBody.trim() : filterAndCleanAcademicLine(rawBody);
+    if (!sanitizedBody) {
+      continue;
+    }
+
+    const isGluedTable = GLUED_TABLE_HEADER_RE.test(sanitizedBody);
+    const content = isFormula || isGluedTable ? sanitizedBody : cleanTypography(sanitizedBody);
+    if (!content || (!isFormula && FIGURE_CAPTION_RE.test(content))) {
       continue;
     }
 
@@ -519,8 +556,9 @@ function preprocessLines(rawInput: string): RawParsedLine[] {
       indent,
       isBullet: Boolean(bMatch),
       isNumbered: Boolean(nMatch),
-      isHeadingMd: Boolean(hMatch),
-      mdDepth: hMatch ? hMatch[1].length : 0,
+      isHeadingMd: Boolean(hMatch) && !isFormula,
+      isFormula,
+      mdDepth: hMatch && !isFormula ? hMatch[1].length : 0,
       content,
       precededByBlank: sawBlank,
     });
@@ -531,6 +569,8 @@ function preprocessLines(rawInput: string): RawParsedLine[] {
 }
 
 function isStandaloneShortHeading(line: RawParsedLine): boolean {
+  if (line.isFormula) return false;
+  if (isWordProblemOrExampleFiller(line.content)) return false;
   if (line.isHeadingMd) return true;
   if (line.isBullet) return false;
   if (line.isNumbered) {
@@ -544,8 +584,9 @@ function isStandaloneShortHeading(line: RawParsedLine): boolean {
   const colonIdx = c.search(/(?<!\d):(?!\d|\/\/)/);
   if (colonIdx > 1 && c.slice(colonIdx + 1).trim().length >= 5) return false;
   const withoutParens = c.replace(/\([^)]*\)/g, '').replace(/:\s*$/, '').trim();
-  if (withoutParens.includes(',') || withoutParens.split(/\s+/).length > 8) return false;
-  if (TURKISH_FINITE_VERB_RE.test(withoutParens.split(/\s+/).slice(-1)[0] || '')) {
+  if (withoutParens.includes(',') || withoutParens.split(/\s+/).length > 7) return false;
+  // Reject full Turkish declarative sentences ending with a verb (e.g. `... minimize edilir:`, `... düz doğru modelidir:`)
+  if (TURKISH_FINITE_VERB_RE.test(withoutParens)) {
     return false;
   }
   return true;
@@ -640,6 +681,7 @@ function classifyHeadingLevels(
     }
   }
 
+  const hasExplicitMdL1 = standaloneIdxs.some((idx) => lines[idx].isHeadingMd && lines[idx].mdDepth <= 2);
   let hasSeenL1 = false;
   let hasSeenL2InCurrentL1 = false;
 
@@ -654,6 +696,14 @@ function classifyHeadingLevels(
       } else if (lvl === 2) {
         hasSeenL2InCurrentL1 = true;
       }
+      continue;
+    }
+
+    // When explicit `##` slide/section headings already exist (PDF/PPTX/DOCX),
+    // never let plain colon sub-headers (`Eğim ve Kesim Noktası Formülleri:`) steal Level-1 main branch slots!
+    if (hasExplicitMdL1 && hasSeenL1 && !line.isNumbered) {
+      levels.set(idx, L3_SUBHEADING_SUFFIX_RE.test(line.content) && hasSeenL2InCurrentL1 ? 3 : 2);
+      if (levels.get(idx) === 2) hasSeenL2InCurrentL1 = true;
       continue;
     }
 
@@ -712,6 +762,8 @@ function classifyHeadingLevels(
 }
 
 function splitKeyAndValue(text: string): { key: string; val: string } | null {
+  // NEVER split mathematical/scientific equations (`y = a0 + a1x`, `Y = AX + B`) at `=`!
+  if (isFormulaExpression(text)) return null;
   const colonIdx = text.search(/(?<!\d):(?!\d|\/\/)/);
   if (colonIdx >= 2 && colonIdx <= 54) {
     const key = text.slice(0, colonIdx).trim();
@@ -730,7 +782,7 @@ function splitKeyAndValue(text: string): { key: string; val: string } | null {
       return { key, val };
     }
   }
-  const dashMatch = text.match(/^(.{2,48}?)\s+(?:—|–|->|=>|=)\s+(.{5,})$/);
+  const dashMatch = text.match(/^(.{2,48}?)\s+(?:—|–|->|=>)\s+(.{5,})$/);
   if (dashMatch && dashMatch[1].split(/\s+/).length <= 5) {
     return { key: dashMatch[1].trim(), val: dashMatch[2].trim() };
   }
@@ -948,7 +1000,11 @@ function refineTreeNode(node: StructuredOutlineNode, depth: LectureNoteDepth, le
   }
 
   if (node.notes.length > 1) {
-    node.notes = [distillMultiSentence(node.notes, 170)];
+    // Keep ALL distinct `Formül:` notes intact alongside concise prose notes!
+    const formulaNotes = node.notes.filter((n) => /^Formül:/i.test(n.trim()));
+    const proseNotes = node.notes.filter((n) => !/^Formül:/i.test(n.trim()));
+    const mergedProse = proseNotes.length > 0 ? [distillMultiSentence(proseNotes, 170)] : [];
+    node.notes = [...formulaNotes.slice(0, 3), ...mergedProse].filter(Boolean);
   }
 }
 
@@ -987,12 +1043,16 @@ function serializeTreeToPhoto6Outline(
       emitNode(child, Math.min(4, indentSpaces + 2));
     }
 
-    // Emit contextual `Not:` takeaway cleanly at L1/L2 level
+    // Emit contextual `Not:` / `Formül:` takeaways cleanly at L1/L2 level
     for (const note of node.notes) {
-      const cleanNote = distillSentence(note, 175);
-      if (cleanNote) {
-        const notePad = ' '.repeat(Math.min(4, indentSpaces + 2));
-        lines.push(`${notePad}Not: ${cleanNote}.`);
+      const notePad = ' '.repeat(Math.min(4, indentSpaces + 2));
+      if (/^Formül:/i.test(note.trim())) {
+        lines.push(`${notePad}${note.trim()}`);
+      } else {
+        const cleanNote = distillSentence(note, 175);
+        if (cleanNote) {
+          lines.push(`${notePad}Not: ${cleanNote}.`);
+        }
       }
     }
   };
@@ -1126,6 +1186,29 @@ export function structureRawLectureNoteToOutline(
       continue;
     }
 
+    // 3b. First-Class Mathematical / Scientific Formula Preservation!
+    //     Preserves equations (`y = a0 + a1x`, `Y = AX + B`, `S_r = ∑(y_i - a0 - a1x_i)^2`) verbatim
+    //     as crisp formula badges and/or `Formül:` takeaways so ZERO formulas are mangled or dropped!
+    if (line.isFormula) {
+      const container = currentContainer();
+      const formulaText = line.content.trim();
+      if (!container.badge && formulaText.length <= 42) {
+        container.badge = formulaText;
+      }
+      const alreadyHasFormula =
+        container.badge === formulaText ||
+        (container.desc && container.desc.includes(formulaText)) ||
+        container.notes.some((n) => n.includes(formulaText));
+      if (!alreadyHasFormula) {
+        if (!container.desc && container.children.length === 0 && container.kind !== 'overview') {
+          container.desc = `Formül: ${formulaText}`;
+        } else {
+          container.notes.push(`Formül: ${formulaText}`);
+        }
+      }
+      continue;
+    }
+
     // 4. Numbered Step Line (`1. Adım: SYN (...)`)
     const stepMatch = line.content.match(STEP_LINE_RE);
     if (stepMatch) {
@@ -1195,20 +1278,24 @@ export function structureRawLectureNoteToOutline(
       continue;
     }
 
-    // 7. Explicit `Key: Value` structured definition (`HTTP/HTTPS: ...`, `Header(Başlık): ...`, `Donanım Adresleme: ...`)
+    // 7. Explicit `Key: Value` structured definition (`HTTP/HTTPS: ...`, `Header(Başlık): ...`, `Doğrusal Model: y = a0 + a1x`)
     const { cleaned, badge, priority } = extractBadgeAndPriority(line.content);
     const kv = splitKeyAndValue(cleaned);
     if (kv) {
       const keyClean = smartTitleCaseTr(kv.key);
-      const valSents = splitSentencesSafe(kv.val);
-      const distilledVal = distillMultiSentence(valSents, depth === 'compact' ? 145 : 195);
+      const valIsFormula = isFormulaExpression(kv.val);
+      const valSents = valIsFormula ? [kv.val.trim()] : splitSentencesSafe(kv.val);
+      const distilledVal = valIsFormula
+        ? `Formül: ${kv.val.trim()}`
+        : distillMultiSentence(valSents, depth === 'compact' ? 145 : 195);
+      const resolvedBadge = badge ?? (valIsFormula && kv.val.trim().length <= 42 ? kv.val.trim() : undefined);
 
       // Non-bullet `Header(Başlık): ...` or `Data(Veri): ...` inside an L3 Format block becomes a field-group container
       if (!line.isBullet && activeL3) {
         const subBlock: StructuredOutlineNode = {
           title: keyClean,
           desc: distilledVal,
-          badge,
+          badge: resolvedBadge,
           priority,
           notes: [],
           children: [],
@@ -1229,7 +1316,7 @@ export function structureRawLectureNoteToOutline(
       const kvNode: StructuredOutlineNode = {
         title: keyClean,
         desc: distilledVal,
-        badge,
+        badge: resolvedBadge,
         priority,
         notes: [],
         children: [],
@@ -1238,6 +1325,15 @@ export function structureRawLectureNoteToOutline(
       targetParent.children.push(kvNode);
       if (line.indent < 2 && !activeL3) {
         activeKeyNode = kvNode;
+      }
+      continue;
+    }
+
+    // 7b. Word-problem / exercise narration (`Bir deneysel çalışma sırasında...`, `Aşağıdaki tabloda verilen...`)
+    //     Keep it from creating junk top-level/sub-branch concept cards when we already have real topics!
+    if (isWordProblemOrExampleFiller(cleaned)) {
+      if (activeL1 && activeL1.notes.length < 2) {
+        activeL1.notes.push(`Örnek: ${distillSentence(cleaned, 130)}`);
       }
       continue;
     }

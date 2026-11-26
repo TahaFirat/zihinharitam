@@ -1,6 +1,13 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { MindNode, StickerAsset } from '../../types/mindmap';
+import {
+  classifySlidePage,
+  filterAndCleanAcademicLine,
+  isAcademicBoilerplateLine,
+  isFormulaExpression,
+  stripCourseCodePrefix,
+} from './AcademicContentFilter';
 
 export interface ExtractedDocumentImage {
   id: string;
@@ -154,30 +161,59 @@ interface RawCandidateImage {
   nearbyText: string;
 }
 
+function hammingDistance64(a: string, b: string): number {
+  if (!a || !b || a.length !== b.length) return 64;
+  let dist = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) dist++;
+  }
+  return dist;
+}
+
 function filterRepeatedLogosAndCap(
   candidates: RawCandidateImage[],
   pageCount: number
 ): ExtractedDocumentImage[] {
-  const hashPages = new Map<string, Set<number>>();
+  // Cluster perceptually near-identical images (Hamming distance <= 4) across pages
+  // so repeated university logos / slide headers / footers are reliably eliminated!
+  const clusters: Array<{ repHash: string; pages: Set<number> }> = [];
+  const candidateClusterIdx: number[] = [];
+
   for (const c of candidates) {
-    if (!c.aHash) continue;
-    const set = hashPages.get(c.aHash) ?? new Set<number>();
-    set.add(c.pageIndex);
-    hashPages.set(c.aHash, set);
+    if (!c.aHash) {
+      candidateClusterIdx.push(-1);
+      continue;
+    }
+    let matchedIdx = -1;
+    for (let i = 0; i < clusters.length; i++) {
+      if (hammingDistance64(clusters[i].repHash, c.aHash) <= 4) {
+        matchedIdx = i;
+        break;
+      }
+    }
+    if (matchedIdx >= 0) {
+      clusters[matchedIdx].pages.add(c.pageIndex);
+      candidateClusterIdx.push(matchedIdx);
+    } else {
+      clusters.push({ repHash: c.aHash, pages: new Set([c.pageIndex]) });
+      candidateClusterIdx.push(clusters.length - 1);
+    }
   }
 
-  const seenHashes = new Set<string>();
+  const seenClusterIds = new Set<number>();
   const kept: ExtractedDocumentImage[] = [];
 
-  for (const c of candidates) {
-    // If the exact same image appears on 3+ pages (or >= 60% of pages when >= 3 pages), it is a logo/watermark
-    if (c.aHash) {
-      const pageHits = hashPages.get(c.aHash)?.size ?? 0;
-      if (pageCount >= 3 && (pageHits >= 3 || pageHits / pageCount >= 0.6)) {
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const c = candidates[idx];
+    const clusterIdx = candidateClusterIdx[idx];
+    if (clusterIdx >= 0) {
+      const pageHits = clusters[clusterIdx].pages.size;
+      // In multi-slide decks (>= 3 pages), ANY graphic repeated across >= 2 slides is a template logo/watermark!
+      if (pageCount >= 3 && pageHits >= 2) {
         continue;
       }
-      if (seenHashes.has(c.aHash)) continue;
-      seenHashes.add(c.aHash);
+      if (seenClusterIds.has(clusterIdx)) continue;
+      seenClusterIds.add(clusterIdx);
     }
 
     kept.push({
@@ -377,9 +413,17 @@ async function extractPdfDocument(
     fontSize: number;
     y: number;
   }
-  const pagesLines: Array<{ pageIndex: number; lines: PageLine[] }> = [];
+  const pagesLines: Array<{
+    pageIndex: number;
+    lines: PageLine[];
+    isCoverSlide: boolean;
+    isNonContentSlide: boolean;
+    inferredTopicTitle?: string;
+    inferredCourseTitle?: string;
+  }> = [];
   const allFontSizes: number[] = [];
   const rawImageCandidates: RawCandidateImage[] = [];
+  let lastContentHeading = '';
 
   for (let p = 1; p <= pagesToRead; p++) {
     onProgress?.(
@@ -388,7 +432,8 @@ async function extractPdfDocument(
     );
     const page = await pdfDoc.getPage(p);
 
-    // 1. Reconstruct lines with font size metadata so real PDF headings stand out automatically
+    // 1. Reconstruct lines sorted in true top-to-bottom, left-to-right visual reading order
+    //    (prevents PowerPoint PDF z-order scrambling where footers/instructor names appear before titles!)
     const textContent = await page.getTextContent();
     const rawItems = (textContent.items || []) as Array<{
       str?: string;
@@ -396,40 +441,90 @@ async function extractPdfDocument(
       hasEOL?: boolean;
     }>;
 
-    const lineBuckets: Array<{ y: number; parts: string[]; maxFont: number }> = [];
+    const lineBuckets: Array<{
+      y: number;
+      chunks: Array<{ x: number; str: string }>;
+      maxFont: number;
+    }> = [];
     for (const item of rawItems) {
       const str = (item.str || '').replace(/\s+/g, ' ');
       if (!str.trim()) continue;
       const tr = item.transform || [12, 0, 0, 12, 0, 0];
       const fontSize = Math.round(Math.hypot(tr[0] || 0, tr[1] || 0) * 10) / 10 || 11;
+      const x = Number(tr[4] || 0);
       const y = Math.round((tr[5] || 0) / 3) * 3;
       if (str.trim().length >= 4) allFontSizes.push(fontSize);
 
-      const prev = lineBuckets[lineBuckets.length - 1];
-      if (prev && Math.abs(prev.y - y) <= 5) {
-        prev.parts.push(str);
-        if (fontSize > prev.maxFont) prev.maxFont = fontSize;
+      const existing = lineBuckets.find((b) => Math.abs(b.y - y) <= 5);
+      if (existing) {
+        existing.chunks.push({ x, str });
+        if (fontSize > existing.maxFont) existing.maxFont = fontSize;
       } else {
-        lineBuckets.push({ y, parts: [str], maxFont: fontSize });
+        lineBuckets.push({ y, chunks: [{ x, str }], maxFont: fontSize });
       }
     }
 
+    // PDF Y coordinates grow upward -> sort descending for top-to-bottom visual reading order
+    lineBuckets.sort((a, b) => b.y - a.y);
+
     const lines: PageLine[] = lineBuckets
-      .map((b) => ({
-        text: b.parts.join(' ').replace(/\s+/g, ' ').trim(),
-        fontSize: b.maxFont,
-        y: b.y,
-      }))
+      .map((b) => {
+        b.chunks.sort((c1, c2) => c1.x - c2.x);
+        return {
+          text: b.chunks
+            .map((c) => c.str)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
+          fontSize: b.maxFont,
+          y: b.y,
+        };
+      })
       .filter((l) => l.text.length > 0);
 
-    pagesLines.push({ pageIndex: p, lines });
+    const pageClass = classifySlidePage(
+      lines.map((l) => l.text),
+      p,
+      pagesToRead
+    );
 
-    const pageFullText = lines.map((l) => l.text).join(' ');
-    const pageTopHeading =
-      lines.find((l) => l.text.length >= 3 && l.text.length <= 75)?.text ||
+    pagesLines.push({
+      pageIndex: p,
+      lines,
+      isCoverSlide: pageClass.isCoverSlide,
+      isNonContentSlide: pageClass.isNonContentSlide,
+      inferredTopicTitle: pageClass.inferredTopicTitle,
+      inferredCourseTitle: pageClass.inferredCourseTitle,
+    });
+
+    // Skip ALL images on Cover Slides (university logos/emblems), Thank-You slides, TOC & References slides!
+    if (pageClass.isNonContentSlide) {
+      page.cleanup();
+      continue;
+    }
+
+    const cleanedContentLines = lines
+      .map((l) => filterAndCleanAcademicLine(l.text))
+      .filter((t) => t.length > 0);
+
+    const pageCleanHeading =
+      cleanedContentLines.find(
+        (t) =>
+          t.length >= 3 &&
+          t.length <= 75 &&
+          !isFormulaExpression(t) &&
+          !/[.!?]$/.test(t)
+      ) ||
+      lastContentHeading ||
       `Sayfa ${p}`;
 
-    // 2. Scan embedded images on this page via getOperatorList()
+    if (pageCleanHeading && !/^Sayfa\s+\d+$/i.test(pageCleanHeading)) {
+      lastContentHeading = pageCleanHeading;
+    }
+
+    const pageCleanBody = cleanedContentLines.join(' ');
+
+    // 2. Scan embedded images on real educational content pages via getOperatorList()
     try {
       const opList = await page.getOperatorList();
       const seenNamesOnPage = new Set<string>();
@@ -479,8 +574,8 @@ async function extractPdfDocument(
           height: compressed.height,
           aspectRatio: compressed.aspectRatio,
           aHash: analysis.aHash,
-          nearbyHeading: pageTopHeading,
-          nearbyText: pageFullText.slice(0, 600),
+          nearbyHeading: pageCleanHeading,
+          nearbyText: pageCleanBody.slice(0, 650),
         });
       }
     } catch {
@@ -490,27 +585,101 @@ async function extractPdfDocument(
     page.cleanup();
   }
 
-  // Compute median body font size across PDF so headings are tagged cleanly with `## `
-  const sortedFonts = [...allFontSizes].sort((a, b) => a - b);
+  // Detect recurring slide headers/footers repeated across >= 3 pages (stripping trailing page numbers like `2 / 7`!)
+  const normalizeForRunningLine = (txt: string) =>
+    txt
+      .replace(/İ/g, 'i')
+      .replace(/I/g, 'ı')
+      .toLocaleLowerCase('tr-TR')
+      .replace(/i\u0307/g, 'i')
+      .replace(/\s+\d{1,3}(?:\s*\/\s*\d{1,3})?\s*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const linePageCounts = new Map<string, Set<number>>();
+  for (const pg of pagesLines) {
+    if (pg.isNonContentSlide) continue;
+    for (const l of pg.lines) {
+      const key = normalizeForRunningLine(l.text);
+      if (key.length < 3 || key.length > 90 || isFormulaExpression(l.text)) continue;
+      const set = linePageCounts.get(key) ?? new Set<number>();
+      set.add(pg.pageIndex);
+      linePageCounts.set(key, set);
+    }
+  }
+  const repeatedRunningLines = new Set<string>();
+  const contentPageCount = pagesLines.filter((pg) => !pg.isNonContentSlide).length;
+  if (contentPageCount >= 3) {
+    for (const [normKey, pSet] of linePageCounts.entries()) {
+      if (pSet.size >= 3 && pSet.size / contentPageCount >= 0.45) {
+        repeatedRunningLines.add(normKey);
+      }
+    }
+  }
+
+  // Compute median body font size across content pages so headings are tagged cleanly with `## `
+  const contentFonts: number[] = [];
+  for (const pg of pagesLines) {
+    if (pg.isNonContentSlide) continue;
+    for (const l of pg.lines) {
+      if (l.text.length >= 4) contentFonts.push(l.fontSize);
+    }
+  }
+  const sortedFonts = (contentFonts.length > 0 ? contentFonts : allFontSizes).sort((a, b) => a - b);
   const medianFont = sortedFonts.length > 0 ? sortedFonts[Math.floor(sortedFonts.length * 0.5)] : 11;
   const headingThreshold = medianFont * 1.18;
 
+  // Infer cleanest lecture title from Cover Slide (preferring topic title like `Eğri Uydurma` over `BZ 204`)
+  const coverPage = pagesLines.find((pg) => pg.isCoverSlide);
+  const inferredTitle =
+    coverPage?.inferredTopicTitle ||
+    coverPage?.inferredCourseTitle ||
+    stripCourseCodePrefix(stripFileExtension(file.name)) ||
+    'PDF Ders Notu';
+
   const formattedPages: string[] = [];
-  let totalTextChars = 0;
+  let totalRawTextChars = 0;
 
   for (const pg of pagesLines) {
+    for (const line of pg.lines) {
+      totalRawTextChars += line.text.length;
+    }
+    if (pg.isNonContentSlide) continue;
+
     const outLines: string[] = [];
     for (const line of pg.lines) {
-      totalTextChars += line.text.length;
-      if (
+      const normKey = normalizeForRunningLine(line.text);
+      if (repeatedRunningLines.has(normKey)) continue;
+
+      const cleaned = filterAndCleanAcademicLine(line.text);
+      if (!cleaned) continue;
+
+      const isFormula = isFormulaExpression(cleaned);
+      const isHeadingLine =
+        !isFormula &&
         line.fontSize >= headingThreshold &&
-        line.text.length >= 3 &&
-        line.text.length <= 82 &&
-        !/[.!?]$/.test(line.text)
-      ) {
-        outLines.push(`## ${line.text}`);
+        cleaned.length >= 3 &&
+        cleaned.length <= 82 &&
+        !/[.!?]$/.test(cleaned);
+
+      if (isHeadingLine) {
+        outLines.push(`## ${cleaned}`);
       } else {
-        outLines.push(line.text);
+        // Rejoin wrapped PDF body continuation line (e.g. line 1 ends mid-clause, line 2 starts lowercase `edilir.` / `doğrusal forma indirgenir.`)
+        const prevIdx = outLines.length - 1;
+        const prev = prevIdx >= 0 ? outLines[prevIdx] : '';
+        if (
+          prev &&
+          !prev.startsWith('## ') &&
+          !isFormula &&
+          !isFormulaExpression(prev) &&
+          !/[.!?:]$/.test(prev) &&
+          /^[a-zçğıöşü]/.test(cleaned)
+        ) {
+          outLines[prevIdx] = `${prev} ${cleaned}`;
+        } else {
+          outLines.push(cleaned);
+        }
       }
     }
     if (outLines.length > 0) {
@@ -518,19 +687,26 @@ async function extractPdfDocument(
     }
   }
 
-  const isScannedLikely = totalTextChars < 80;
+  const isScannedLikely = totalRawTextChars < 80;
   let extractedText = formattedPages.join('\n\n').trim();
-  const baseTitle = stripFileExtension(file.name) || 'PDF Ders Notu';
   if (!extractedText) {
-    extractedText = `${baseTitle}\n- Ana Konular\n- Önemli Kavramlar\n- Özet Notlar`;
+    extractedText = `${inferredTitle}\n- Ana Konular\n- Önemli Kavramlar\n- Temel Formüller`;
     warnings.push(
       'Bu PDF metin katmanı içermeyen taranmış görsel olabilir. İçindeki görseller çıkarıldı; dilerseniz ana başlıkları metin kutusundan düzenleyebilirsiniz.'
     );
-  } else if (!extractedText.startsWith('#') && extractedText.split('\n')[0].length > 72) {
-    extractedText = `${baseTitle}\n\n${extractedText}`;
+  } else {
+    // Always lead with the clean inferred lecture topic title (not an admin cover line!)
+    const firstLinePlain = extractedText.split('\n')[0].replace(/^#{1,5}\s+/, '').trim();
+    const sameAsFirst =
+      firstLinePlain.toLocaleLowerCase('tr-TR') === inferredTitle.toLocaleLowerCase('tr-TR');
+    if (coverPage && !sameAsFirst) {
+      extractedText = `${inferredTitle}\n\n${extractedText}`;
+    } else if (!extractedText.startsWith('#') && firstLinePlain.length > 72) {
+      extractedText = `${inferredTitle}\n\n${extractedText}`;
+    }
   }
 
-  const images = filterRepeatedLogosAndCap(rawImageCandidates, pagesToRead);
+  const images = filterRepeatedLogosAndCap(rawImageCandidates, Math.max(1, contentPageCount));
   await loadingTask.destroy();
   onProgress?.('PDF analizi tamamlandı', 100);
 
@@ -607,7 +783,10 @@ async function extractDocxDocument(
     }
     const line = texts.join('').replace(/\s+/g, ' ').trim();
     if (!line) continue;
-    paragraphs.push(isHeading && line.length <= 85 ? `## ${line}` : line);
+    const cleaned = filterAndCleanAcademicLine(line);
+    if (!cleaned) continue;
+    const isFormula = isFormulaExpression(cleaned);
+    paragraphs.push(isHeading && !isFormula && cleaned.length <= 85 ? `## ${cleaned}` : cleaned);
   }
 
   onProgress?.('Word içindeki görseller taranıyor...', 65);
@@ -672,6 +851,9 @@ async function extractPptxDocument(
 
   const slideBlocks: string[] = [];
   const rawCandidates: RawCandidateImage[] = [];
+  let pptCoverTitle: string | undefined;
+  let lastPptHeading = '';
+  let pptContentSlides = 0;
 
   for (let idx = 0; idx < slidesToRead.length; idx++) {
     const slideNum = idx + 1;
@@ -694,11 +876,32 @@ async function extractPptxDocument(
       if (line) paras.push(line);
     }
 
-    const slideHeading = paras[0] || `Slayt ${slideNum}`;
-    if (paras.length > 0) {
-      const lines = [`## ${slideHeading}`, ...paras.slice(1).map((p) => `- ${p}`)];
-      slideBlocks.push(lines.join('\n'));
+    const slideClass = classifySlidePage(paras, slideNum, slidesToRead.length);
+    if (slideClass.isCoverSlide && !pptCoverTitle) {
+      pptCoverTitle = slideClass.inferredTopicTitle || slideClass.inferredCourseTitle;
     }
+    if (slideClass.isNonContentSlide) {
+      continue;
+    }
+
+    const cleanedParas = paras
+      .map((p) => filterAndCleanAcademicLine(p))
+      .filter((p) => p.length > 0);
+    if (cleanedParas.length === 0) continue;
+
+    pptContentSlides++;
+    const firstIsFormula = isFormulaExpression(cleanedParas[0]);
+    const slideHeading =
+      (!firstIsFormula && cleanedParas[0].length <= 82 ? cleanedParas[0] : lastPptHeading) ||
+      `Slayt ${slideNum}`;
+    if (!firstIsFormula && cleanedParas[0].length <= 82) {
+      lastPptHeading = cleanedParas[0];
+    }
+
+    const lines = firstIsFormula
+      ? cleanedParas.map((p) => `- ${p}`)
+      : [`## ${cleanedParas[0]}`, ...cleanedParas.slice(1).map((p) => `- ${p}`)];
+    slideBlocks.push(lines.join('\n'));
 
     // Parse slide relationships to map slide images directly to this exact slide number!
     const slideFileName = slidesToRead[idx].split('/').pop() || '';
@@ -719,15 +922,16 @@ async function extractPptxDocument(
           mime,
           slideNum,
           slideHeading,
-          paras.join(' ').slice(0, 500)
+          cleanedParas.join(' ').slice(0, 600)
         );
         if (cand) rawCandidates.push(cand);
       }
     }
   }
 
-  const images = filterRepeatedLogosAndCap(rawCandidates, slidesToRead.length);
-  const deckTitle = stripFileExtension(file.name) || 'Sunum Haritası';
+  const images = filterRepeatedLogosAndCap(rawCandidates, Math.max(1, pptContentSlides));
+  const deckTitle =
+    pptCoverTitle || stripCourseCodePrefix(stripFileExtension(file.name)) || 'Sunum Haritası';
   const extractedText = `${deckTitle}\n\n${slideBlocks.join('\n\n')}`.trim();
   onProgress?.('Sunum analizi tamamlandı', 100);
 
@@ -824,12 +1028,20 @@ export function attachDocumentImagesToBestBranches(
     node: MindNode;
     image: ExtractedDocumentImage;
     score: number;
+    headingHits: number;
+    bodyHits: number;
+    orderAffinity: number;
   }
   const pairs: MatchPair[] = [];
 
   candidateNodes.forEach((node, nodeIdx) => {
+    if (isAcademicBoilerplateLine(node.title)) return;
     const nodeTokens = new Set(normalizeTokens(`${node.title} ${node.note || ''} ${node.techBadge || ''}`));
     const nodeRelPos = nodeIdx / Math.max(1, totalNodes - 1);
+    const nodeHasFormula =
+      isFormulaExpression(node.title) ||
+      isFormulaExpression(node.techBadge || '') ||
+      /formül|denklem|regresyon|model|grafik|eğri/iu.test(`${node.title} ${node.note || ''}`);
 
     for (const img of activeImages) {
       const headingTokens = normalizeTokens(img.nearbyHeading);
@@ -847,9 +1059,18 @@ export function attachDocumentImagesToBestBranches(
       const imgRelPos = (img.pageIndex - 1) / Math.max(1, maxPage - 1);
       const orderAffinity = Math.max(0, 1 - Math.abs(nodeRelPos - imgRelPos));
       const isMainBranchBonus = node.parentId === rootId ? 0.35 : 0;
+      const formulaAffinity =
+        nodeHasFormula && /[=∑∫^]|formül|denklem|grafik|eğri|regresyon/iu.test(`${img.nearbyHeading} ${img.nearbyText}`)
+          ? 0.45
+          : 0;
 
-      const score = headingHits * 3.0 + Math.min(4, bodyHits) * 0.95 + orderAffinity * 0.85 + isMainBranchBonus;
-      pairs.push({ node, image: img, score });
+      const score =
+        headingHits * 3.2 +
+        Math.min(5, bodyHits) * 1.05 +
+        orderAffinity * 0.75 +
+        isMainBranchBonus +
+        formulaAffinity;
+      pairs.push({ node, image: img, score, headingHits, bodyHits, orderAffinity });
     }
   });
 
@@ -865,8 +1086,12 @@ export function attachDocumentImagesToBestBranches(
   for (const pair of pairs) {
     if (attachedCount >= maxPhotoBranches) break;
     if (usedNodeIds.has(pair.node.id) || usedImageIds.has(pair.image.id)) continue;
-    // Always attach if there is semantic match OR strong page-order alignment
-    if (pair.score < 0.75) continue;
+    // STRICT SEMANTIC GATE: NEVER slap a PDF image onto an unrelated branch with zero keyword overlap!
+    const hasRealSemanticMatch =
+      pair.headingHits >= 1 ||
+      pair.bodyHits >= 2 ||
+      (pair.bodyHits >= 1 && pair.orderAffinity >= 0.45);
+    if (!hasRealSemanticMatch || pair.score < 1.55) continue;
 
     const sticker: StickerAsset = {
       id: `docphoto_${pair.image.id}`,

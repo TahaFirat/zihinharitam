@@ -3,6 +3,14 @@ import {
   type NodePriorityTag,
 } from '../../types/mindmap';
 import {
+  extractCompactFormula,
+  filterAndCleanAcademicLine,
+  isAcademicBoilerplateLine,
+  isFormulaExpression,
+  isWordProblemOrExampleFiller,
+  scoreEducationalBranchValue,
+} from './AcademicContentFilter';
+import {
   structureRawLectureNoteToOutline,
   type LectureNoteConversionOptions,
   type LectureNoteDepth,
@@ -126,10 +134,11 @@ export function splitTitleAndInlineNote(rawText: string): {
     const left = stripMd(text.slice(0, colonIdx).trim());
     const right = stripMd(text.slice(colonIdx + 1).trim());
     if (left.length >= 2 && right.length >= 4) {
+      const formulaBadge = !techBadge ? extractCompactFormula(right, 40) : null;
       return {
         title: left,
         note: right,
-        techBadge,
+        techBadge: techBadge || formulaBadge || undefined,
         checked,
         priorityTag,
         linkUrl,
@@ -137,8 +146,19 @@ export function splitTitleAndInlineNote(rawText: string): {
     }
   }
 
-  // 6. Split `"Başlık — Açıklama"` / `"Başlık – Açıklama"` / `"Başlık - Açıklama"` / `"Başlık = Açıklama"` / `"Başlık | Açıklama"`
-  const dashMatch = text.match(/^(.{2,64}?)\s+(?:—|–|->|=>|=|\||-(?=\s))\s+(.{6,})$/);
+  // 5b. Protect standalone mathematical/scientific equations (`y = a0 + a1x`, `Y = AX + B`) from being split at `=`!
+  if (isFormulaExpression(text)) {
+    return {
+      title: stripMd(text),
+      techBadge,
+      checked,
+      priorityTag,
+      linkUrl,
+    };
+  }
+
+  // 6. Split `"Başlık — Açıklama"` / `"Başlık – Açıklama"` / `"Başlık - Açıklama"` / `"Başlık | Açıklama"`
+  const dashMatch = text.match(/^(.{2,64}?)\s+(?:—|–|->|=>|\||-(?=\s))\s+(.{6,})$/);
   if (dashMatch) {
     const left = stripMd(dashMatch[1].trim());
     const right = stripMd(dashMatch[2].trim());
@@ -558,7 +578,9 @@ function jaccardWordOverlap(a: string, b: string): number {
   for (const w of sa) {
     if (sb.has(w)) hits++;
   }
-  return hits / Math.min(sa.size, sb.size);
+  // True Jaccard union similarity so `Doğrusal Regresyon` and `Polinom Regresyon` NEVER merge on one shared noun!
+  const union = new Set([...sa, ...sb]).size;
+  return hits / Math.max(1, union);
 }
 
 function summarizeNodeForFolding(node: ParsedOutlineNode): string {
@@ -622,6 +644,19 @@ export function compactParsedOutline(
     }
   };
 
+  // 0. Drop any administrative / cover-slide boilerplate nodes that slipped in (universities, faculties, instructor names, bare week numbers)
+  const pruneBoilerplate = (items: TreeItem[]): TreeItem[] =>
+    items
+      .filter((it) => !isAcademicBoilerplateLine(it.node.title))
+      .map((it) => ({
+        ...it,
+        children: pruneBoilerplate(it.children),
+      }));
+  const cleanedMains = pruneBoilerplate(rootItem.children);
+  if (cleanedMains.length > 0) {
+    rootItem.children = cleanedMains;
+  }
+
   // 1. Fold anything deeper than `budget.maxDepth` cleanly into its ancestor's `note`
   const enforceDepth = (item: TreeItem, depth: number) => {
     item.node.level = depth;
@@ -643,11 +678,14 @@ export function compactParsedOutline(
     const mergedMains: TreeItem[] = [];
     for (const main of rootItem.children) {
       const similar = mergedMains.find(
-        (prev) => jaccardWordOverlap(prev.node.title, main.node.title) >= 0.48
+        (prev) => jaccardWordOverlap(prev.node.title, main.node.title) >= 0.62
       );
       if (similar) {
         if (main.node.note) {
           similar.node.note = appendNote(similar.node.note, `${main.node.title}: ${main.node.note}`);
+        }
+        if (!similar.node.techBadge && main.node.techBadge) {
+          similar.node.techBadge = main.node.techBadge;
         }
         similar.children.push(...main.children);
       } else {
@@ -657,57 +695,79 @@ export function compactParsedOutline(
     rootItem.children = mergedMains;
   }
 
-  // 3. Cap main branches to `budget.maxMain`: fold overflow sections into a crisp final bucket or last main branch
+  // 3. Cap main branches to `budget.maxMain` by EDUCATIONAL VALUE (formulas + real concepts ALWAYS win over filler!)
+  //    NO MORE generic `"Diğer Önemli Konular"` garbage bucket — keep the TOP real lecture topics in document order!
   if (rootItem.children.length > budget.maxMain) {
-    const keepDirect = rootItem.children.slice(0, budget.maxMain - 1);
-    const overflow = rootItem.children.slice(budget.maxMain - 1);
-    if (overflow.length === 1) {
-      keepDirect.push(overflow[0]);
-    } else {
-      const summaryMain: TreeItem = {
-        node: {
-          id: `gen_summary_bucket`,
-          parentId: rootItem.node.id,
-          level: 1,
-          title: 'Diğer Önemli Konular',
-          branchColor: BRANCH_PALETTE[(budget.maxMain - 1) % BRANCH_PALETTE.length],
-        },
-        children: [],
-      };
-      // Promote up to `budget.maxSubPerMain` top overflow headings as clean L2 children, fold the rest into notes
-      for (let i = 0; i < overflow.length; i++) {
-        const ov = overflow[i];
-        if (summaryMain.children.length < budget.maxSubPerMain) {
-          const promoted: TreeItem = {
-            node: {
-              ...ov.node,
-              parentId: summaryMain.node.id,
-              level: 2,
-              branchColor: summaryMain.node.branchColor,
-            },
-            children: [],
-          };
-          for (const ch of ov.children) {
-            foldSubtreeIntoNote(promoted.node, ch);
-          }
-          summaryMain.children.push(promoted);
-        } else {
-          foldSubtreeIntoNote(summaryMain.node, ov);
+    const scoredMains = rootItem.children.map((m, origIdx) => ({
+      item: m,
+      origIdx,
+      score: scoreEducationalBranchValue({
+        title: m.node.title,
+        note: m.node.note,
+        techBadge: m.node.techBadge,
+        priorityTag: m.node.priorityTag,
+        childSummaries: m.children.map((ch) => ({
+          title: ch.node.title,
+          note: ch.node.note,
+          techBadge: ch.node.techBadge,
+        })),
+      }),
+    }));
+
+    const keptIndices = new Set(
+      [...scoredMains]
+        .sort((a, b) => b.score - a.score || a.origIdx - b.origIdx)
+        .slice(0, budget.maxMain)
+        .map((x) => x.origIdx)
+    );
+
+    const keptMains: TreeItem[] = [];
+    const overflowMains: TreeItem[] = [];
+    for (const entry of scoredMains) {
+      if (keptIndices.has(entry.origIdx)) {
+        keptMains.push(entry.item);
+      } else {
+        overflowMains.push(entry.item);
+      }
+    }
+
+    // Fold any valuable overflow formulas/concepts cleanly into the semantically closest kept branch's note
+    for (const ov of overflowMains) {
+      if (
+        isWordProblemOrExampleFiller(ov.node.title) &&
+        !extractCompactFormula(`${ov.node.title} ${ov.node.note || ''} ${ov.node.techBadge || ''}`)
+      ) {
+        continue;
+      }
+      let bestTarget = keptMains[keptMains.length - 1];
+      let bestSim = -1;
+      for (const km of keptMains) {
+        const sim = jaccardWordOverlap(km.node.title, `${ov.node.title} ${ov.node.note || ''}`);
+        if (sim > bestSim) {
+          bestSim = sim;
+          bestTarget = km;
         }
       }
-      keepDirect.push(summaryMain);
+      if (bestTarget) {
+        foldSubtreeIntoNote(bestTarget.node, ov);
+      }
     }
-    rootItem.children = keepDirect;
+
+    rootItem.children = keptMains;
   }
 
-  // 4. Cap sub-branches per main branch (prioritizing exam/important/noted branches) and fold extras into parent note
+  // 4. Cap sub-branches per main branch (prioritizing formulas, exam/important tags, and rich concepts)
   const scoreChildImportance = (c: TreeItem): number => {
     let s = 0;
-    if (c.node.priorityTag === 'exam') s += 4;
-    if (c.node.priorityTag === 'important') s += 3;
-    if (c.node.techBadge) s += 1.5;
+    const combined = `${c.node.title} ${c.node.techBadge || ''} ${c.node.note || ''}`;
+    if (isFormulaExpression(c.node.title) || isFormulaExpression(c.node.techBadge || '')) s += 10;
+    else if (extractCompactFormula(combined)) s += 7;
+    if (c.node.priorityTag === 'exam') s += 5;
+    if (c.node.priorityTag === 'important') s += 3.5;
+    if (c.node.techBadge) s += 2;
     if (c.node.note && c.node.note.length >= 12) s += 1.2;
     if (c.children.length > 0) s += 1;
+    if (isWordProblemOrExampleFiller(c.node.title)) s -= 6;
     return s;
   };
 
@@ -743,6 +803,7 @@ export function compactParsedOutline(
   }
 
   // 5. Enforce global `budget.maxTotal` cap by folding lowest-priority leaf nodes from largest main branches
+  //    (NEVER pop a formula node before low-value prose nodes!)
   const countAll = (item: TreeItem): number =>
     1 + item.children.reduce((acc, ch) => acc + countAll(ch), 0);
 
@@ -751,7 +812,16 @@ export function compactParsedOutline(
       .filter((m) => m.children.length > 0)
       .sort((a, b) => b.children.length - a.children.length)[0];
     if (!fattestMain) break;
-    const dropped = fattestMain.children.pop();
+    let lowestIdx = fattestMain.children.length - 1;
+    let lowestScore = Infinity;
+    for (let ci = 0; ci < fattestMain.children.length; ci++) {
+      const sc = scoreChildImportance(fattestMain.children[ci]);
+      if (sc <= lowestScore) {
+        lowestScore = sc;
+        lowestIdx = ci;
+      }
+    }
+    const [dropped] = fattestMain.children.splice(lowestIdx, 1);
     if (dropped) {
       foldSubtreeIntoNote(fattestMain.node, dropped);
     }
@@ -821,7 +891,11 @@ export function serializeParsedOutlineToText(parsed: ParsedOutlineResult): strin
             .replace(/^(?:not|notlar|note|notes)\s*[:\-–—]\s*/i, '')
             .trim();
           if (cleanNl) {
-            lines.push(`${pad}  Not: ${cleanNl}`);
+            if (/^Formül:/i.test(cleanNl)) {
+              lines.push(`${pad}  ${cleanNl}`);
+            } else {
+              lines.push(`${pad}  Not: ${cleanNl}`);
+            }
           }
         }
       }
@@ -853,7 +927,34 @@ export function parseTextToMindMapOutline(
     );
   }
 
-  const rawLines = rawInput.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const rawLines = rawInput
+    .split(/\r?\n/)
+    .map((l) => {
+      const indentPrefix = l.match(/^\s*/)?.[0] ?? '';
+      const trimmed = l.trim();
+      if (!trimmed) return '';
+      if (/^(?:not|notlar|formül|formul|açıklama|aciklama|örnek|ornek|tanım|tanim|ipucu|note|notes|formula)\s*[:\-–—]/iu.test(trimmed)) {
+        return l;
+      }
+      const cleaned = filterAndCleanAcademicLine(trimmed);
+      return cleaned ? `${indentPrefix}${cleaned}` : '';
+    })
+    .filter((l) => l.trim().length > 0);
+  if (rawLines.length === 0) {
+    return buildStatsResult(
+      'root',
+      [
+        {
+          id: 'root',
+          parentId: null,
+          level: 0,
+          title: 'Akademik Zihin Haritası',
+          branchColor: BRANCH_PALETTE[0],
+        },
+      ],
+      true
+    );
+  }
   const classified = rawLines.map(classifyLine);
 
   // Detect whether input is structured (headings, bullets, numbered lists, note lines, or indentation)
@@ -1100,9 +1201,15 @@ function cleanPdfAndRawText(raw: string): string {
     // Strip markdown bold/italic noise
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
-    // Remove standalone page-number lines
+    // Remove standalone page-number lines & academic cover-slide boilerplate
     .split('\n')
-    .filter((line) => !PAGE_NOISE_LINE_RE.test(line.trim()))
+    .map((line) => {
+      const t = line.trim();
+      if (!t) return '';
+      if (PAGE_NOISE_LINE_RE.test(t)) return '';
+      if (isFormulaExpression(t)) return line;
+      return filterAndCleanAcademicLine(line);
+    })
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
