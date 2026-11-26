@@ -1,4 +1,4 @@
-• NEW PDF, Word (.docx) & PowerPoint (.pptx) to Mind Map: Analyzes lecture PDFs, slides, and documents 100% on-device offline and turns them into crisp visual mind maps.
-• Smart Document Photo Matching: Extracts diagrams and figures from PDFs/slides (filtering out repeated logos) and places them directly on the matching branches, paired with 45,500+ commercially licensed icons.
-• Compact Low-Branch Summary Engine: Automatically keeps mind maps clean and lag-free (default 5 main branches) while folding extra details losslessly into branch notes.
-• Lecture Note Converter & Canvas Polish: Automatic input reset after creation, smoother zero-render dragging, and faster multilingual search.
+• NEW PDF, Word (.docx) & PowerPoint (.pptx) to Mind Map: Analyzes lecture PDFs and slides 100% offline on-device and attaches real figures/diagrams directly to matching branches.
+• Compact Low-Branch Summary Engine: Keeps mind maps clean and lag-free (default 5 main branches) while folding extra details losslessly into branch notes.
+• Auto-Quiz, Daily Study Streak & Exam Countdown: Generate instant offline quizzes from any map, mark missed branches for review, and track due SM-2 flashcards right on the Home screen.
+• Drag-to-Reparent Branches, In-Map Find (Ctrl+F), Rich Notes in PNG/PDF/SVG Exports & Full English/Turkish UI.

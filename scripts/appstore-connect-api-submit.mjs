@@ -461,6 +461,40 @@ async function ensureVersionAndLocalizations(client, appId, baseUrl) {
     version = created.data;
     console.log(`  -> Yeni App Store sürümü oluşturuldu: ${TARGET_VERSION} (id=${version.id})`);
   } else {
+    if (SUBMIT_FOR_REVIEW && version.attributes?.appStoreState === 'WAITING_FOR_REVIEW') {
+      try {
+        const preSubs = await client.request(
+          'GET',
+          `/v1/apps/${appId}/reviewSubmissions?filter[platform]=IOS`
+        );
+        const waitingSub = (preSubs?.data || []).find(
+          (s) => s.attributes?.state === 'WAITING_FOR_REVIEW'
+        );
+        if (waitingSub) {
+          console.log(
+            `  -> Güncel sürümü yüklemek için mevcut WAITING_FOR_REVIEW gönderimi geri çekiliyor (${waitingSub.id})...`
+          );
+          await client.request('PATCH', `/v1/reviewSubmissions/${waitingSub.id}`, {
+            data: {
+              type: 'reviewSubmissions',
+              id: waitingSub.id,
+              attributes: { canceled: true },
+            },
+          });
+          for (let w = 0; w < 15; w += 1) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const vChk = await client.request('GET', `/v1/appStoreVersions/${version.id}`);
+            const st = vChk?.data?.attributes?.appStoreState;
+            if (st && st !== 'WAITING_FOR_REVIEW') {
+              console.log(`  -> Sürüm düzenlemeye açıldı: ${st}`);
+              break;
+            }
+          }
+        }
+      } catch (cancelErr) {
+        console.log(`  -> Önceki inceleme geri çekme bilgisi: ${cancelErr.message}`);
+      }
+    }
     await client.request('PATCH', `/v1/appStoreVersions/${version.id}`, {
       data: {
         type: 'appStoreVersions',

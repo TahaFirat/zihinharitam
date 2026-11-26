@@ -1,4 +1,4 @@
-• YENİ PDF, Word (.docx) ve PowerPoint (.pptx) → Görsel Zihin Haritası: Ders slaytlarını ve PDF notlarını %100 cihaz içinde çevrimdışı analiz edip anında haritaya dönüştürür.
-• Akıllı Belge Görseli Eşleştirme: PDF ve slaytlardaki gerçek diyagram ve fotoğrafları otomatik çıkarıp ilgili kavram dallarına yerleştirir; diğer dalları 45.500+ telifsiz ikonla zenginleştirir.
-• Az Dal · Sıfır Kasma Özet Motoru: Uzun metin ve belgeleri varsayılan olarak en fazla 5 ana dalda temizce özetler, detayları kayıpsız şekilde dal açıklamalarına (Not) ekler.
-• Ders Notunu Formata Çevir & Performans: Giriş kutusu otomatik sıfırlama, daha akıcı tuval sürükleme ve geliştirilmiş Türkçe-İngilizce arama.
+• YENİ PDF, Word (.docx) & PowerPoint (.pptx) → Görsel Zihin Haritası: Ders notlarını ve slaytları %100 cihaz içinde çevrimdışı özetler, gerçek diyagram ve fotoğrafları ilgili dallara yerleştirir.
+• Az Dal · Sıfır Kasma Motoru: Uzun belgeleri varsayılan 5 ana dalda sadeleştirir, tüm detayları kayıpsız olarak dal notlarına ekler.
+• Otomatik Mini Test (Quiz), Çalışma Serisi & Sınav Geri Sayımı: Haritandan 4 şıklı test üret, yanlışları [TEKRAR] işaretle, SM-2 Flashcard tekrarını ve günlük serini ana ekrandan takip et.
+• Sürükle-Bırak Dal Taşıma, Haritada Bul (Ctrl+F), Notlu PNG/PDF/SVG Çıktı & Tam Çift Dil (TR/EN) desteği.

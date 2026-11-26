@@ -1,4 +1,3 @@
-v1.1.2 (b36) — PDF/DOCX/PPTX to Mind Map, Embedded Photos & Compact Engine:
-• NEW Offline PDF, Word (.docx), PowerPoint (.pptx) & TXT import into visual mind maps
-• Smart Embedded Photo Extraction: Extracts textbook/slide diagrams directly onto matching branches (filtering repeated logos)
-• Lag-Free Compact Mode: Keeps maps concise (default 5 main branches) while preserving all details inside branch notes
+• NEW Offline PDF, Word (.docx) & PowerPoint (.pptx) to Mind Map with smart embedded figure & diagram attachment.
+• Compact low-branch engine, drag-to-reparent branches, in-map Find (Ctrl+F), and rich notes in PNG/PDF/SVG exports.
+• Auto-Quiz mode, improved SM-2 Flashcards, daily study streak, exam countdown & full English UI.
