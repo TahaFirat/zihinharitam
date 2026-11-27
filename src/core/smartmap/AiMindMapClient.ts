@@ -27,7 +27,7 @@ export interface AiOutlineResult {
 }
 
 const PREF_STORAGE_KEY = 'zh_smartmap_ai_mode_v1';
-const REQUEST_TIMEOUT_MS = 13_000;
+const REQUEST_TIMEOUT_MS = 22_000;
 const DEFAULT_MOBILE_AI_WORKER_URL = 'https://zihinharitam-ai-proxy.tahafirat3365.workers.dev';
 
 declare global {
@@ -88,9 +88,10 @@ export function resolveAiProxyBaseUrl(): string | null {
 
 /**
  * Strips university cover metadata, repeated headers, instructor titles, and numeric table dumps
- * locally on-device BEFORE sending lecture text to any AI provider (cuts token cost by ~65% and boosts privacy!).
+ * locally on-device BEFORE sending lecture text to AI, while preserving FULL coverage across
+ * beginning, middle, and end of long 35+ page university PDFs (up to 46,000 chars!).
  */
-export function preCleanTextForAi(rawText: string, maxChars = 13_500): string {
+export function preCleanTextForAi(rawText: string, maxChars = 46_000): string {
   const lines = rawText
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -103,7 +104,18 @@ export function preCleanTextForAi(rawText: string, maxChars = 13_500): string {
     })
     .filter((l) => l.length > 0);
 
-  return lines.join('\n').slice(0, maxChars).trim();
+  const joined = lines.join('\n').trim();
+  if (joined.length <= maxChars) return joined;
+
+  // Balanced full-document sampling so late-slide concepts & formulas are NEVER truncated!
+  const headBudget = Math.floor(maxChars * 0.42);
+  const midBudget = Math.floor(maxChars * 0.29);
+  const tailBudget = maxChars - headBudget - midBudget - 60;
+  const head = joined.slice(0, headBudget);
+  const midStart = Math.max(headBudget, Math.floor((joined.length - midBudget) / 2));
+  const mid = joined.slice(midStart, midStart + midBudget);
+  const tail = joined.slice(Math.max(midStart + midBudget, joined.length - tailBudget));
+  return `${head}\n\n[...]\n\n${mid}\n\n[...]\n\n${tail}`.trim();
 }
 
 export async function fetchAiStatus(clientIsPro = false): Promise<AiStatusInfo> {

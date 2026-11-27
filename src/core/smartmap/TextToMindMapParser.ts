@@ -549,8 +549,8 @@ const DENSITY_BUDGETS: Record<
   MindMapDensity,
   { maxMain: number; maxSubPerMain: number; maxDepth: number; maxTotal: number }
 > = {
-  compact: { maxMain: 5, maxSubPerMain: 3, maxDepth: 2, maxTotal: 18 },
-  balanced: { maxMain: 7, maxSubPerMain: 4, maxDepth: 2, maxTotal: 28 },
+  compact: { maxMain: 6, maxSubPerMain: 3, maxDepth: 2, maxTotal: 22 },
+  balanced: { maxMain: 7, maxSubPerMain: 4, maxDepth: 2, maxTotal: 30 },
   detailed: { maxMain: 10, maxSubPerMain: 6, maxDepth: 3, maxTotal: 48 },
 };
 
@@ -839,8 +839,8 @@ export function compactParsedOutline(
       it.node.parentId = parentId;
       it.node.level = level;
       it.node.branchColor = color;
-      if (it.node.note && it.node.note.length > 650) {
-        it.node.note = `${it.node.note.slice(0, 646).trim()}...`;
+      if (it.node.note && it.node.note.length > 1100) {
+        it.node.note = `${it.node.note.slice(0, 1096).trim()}...`;
       }
       flat.push(it.node);
       for (const ch of it.children) {

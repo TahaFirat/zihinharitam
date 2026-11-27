@@ -504,7 +504,28 @@ async function main() {
               throw err;
             }
             provider2Calls++;
-            return '```markdown\nEğri Uydurma\n- Doğrusal Regresyon [y = a0 + a1*x]\n  Not: <script>alert("xss")</script>Hata kareleri minimize edilir.\n```';
+            return JSON.stringify({
+              centralTopic: 'Eğri Uydurma',
+              overview: 'En küçük kareler yöntemi ile veriye en yakın model bulunur.',
+              branches: [
+                {
+                  title: 'Doğrusal Regresyon',
+                  formulaBadge: 'y = a0 + a1*x',
+                  summary: '<script>alert("xss")</script>Hata kareleri toplamı minimize edilir.',
+                  priority: 'exam',
+                  formulas: ['y = a0 + a1*x', 'Sr = Σ(yi - a0 - a1*xi)^2'],
+                  keyPoints: ['Normal denklemler çözülerek a0 ve a1 bulunur.'],
+                  children: [
+                    {
+                      title: 'Determinasyon Katsayısı',
+                      formulaBadge: 'R^2 = (St - Sr) / St',
+                      summary: 'Modelin veriyi açıklama oranını ölçer.',
+                      formulas: ['R^2 = (St - Sr) / St'],
+                    },
+                  ],
+                },
+              ],
+            });
           },
         },
       });
@@ -584,7 +605,7 @@ async function main() {
         });
         assert.equal(buyPro.status, 200);
 
-        // D. Oversized payload DoS rejected with 413 even for Pro user
+        // D. Oversized payload DoS rejected with 413 even for Pro user (> 128 KB cap)
         const dosRes = await fetch(`${aiUrl}/api/v1/ai/structure-note`, {
           method: 'POST',
           headers: {
@@ -593,7 +614,7 @@ async function main() {
             Cookie: freeCookie,
             'X-CSRF-Token': freeCsrf,
           },
-          body: JSON.stringify({ text: 'A'.repeat(60_000), depth: 'compact' }),
+          body: JSON.stringify({ text: 'A'.repeat(150_000), depth: 'compact' }),
         });
         assert.equal(dosRes.status, 413);
 

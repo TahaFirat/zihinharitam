@@ -453,7 +453,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
   const [inputMode, setInputMode] = useState<'outline' | 'converter' | 'document'>('outline');
   const [outlineText, setOutlineText] = useState('');
   const [rawLectureNote, setRawLectureNote] = useState('');
-  const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('compact');
+  const [analysisDepth, setAnalysisDepth] = useState<LectureNoteDepth>('balanced');
   const [useAiMode, setUseAiMode] = useState<boolean>(() => getSavedAiModePreference());
   const [aiStatus, setAiStatus] = useState<AiStatusInfo | null>(null);
   const [isAiStructuring, setIsAiStructuring] = useState(false);
@@ -709,7 +709,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     localFallbackOutline: string,
     cacheTag: string
   ): Promise<string> => {
-    if (!effectiveUseAi || !aiStatus?.available) {
+    // Attempt Pro AI whenever user is Pro & AI mode is enabled (never skip just because initial status ping hasn't resolved yet!)
+    if (!effectiveUseAi || (aiStatus !== null && !aiStatus.available)) {
       return localFallbackOutline;
     }
     const reqKey = `${cacheTag}|${analysisDepth}|${lang}|${rawSource.slice(0, 120)}|${rawSource.length}`;
@@ -729,10 +730,21 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
           prev
             ? {
                 ...prev,
+                available: true,
                 dailyRemaining: res.dailyRemaining!,
                 dailyLimit: res.dailyLimit ?? prev.dailyLimit,
               }
-            : prev
+            : {
+                available: true,
+                requiresPro: true,
+                isPro: isLifetimePro,
+                providerCount: 1,
+                dailyLimit: res.dailyLimit ?? 25,
+                dailyUsed: Math.max(0, (res.dailyLimit ?? 25) - res.dailyRemaining!),
+                dailyRemaining: res.dailyRemaining!,
+                cacheEnabled: true,
+                endpointConfigured: true,
+              }
         );
       }
       if (res.usedAi && res.outline) {
@@ -742,22 +754,53 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
           cached: res.cached,
           provider: res.provider,
         });
+        const providerBadge =
+          res.provider === 'gemini'
+            ? 'Gemini AI'
+            : res.provider?.startsWith('groq')
+            ? 'Groq Qwen AI'
+            : 'Pro AI';
         setAiStatusNote(
           res.cached
-            ? t('⚡ Pro AI önbelleğinden anında hazırlandı (0 kota)', '⚡ Served instantly from Pro AI cache (0 quota)')
-            : t('✨ Pro AI ile ders kavramları ve formüller çıkarıldı', '✨ Concepts & formulas extracted with Pro AI')
+            ? t(
+                `⚡ ${providerBadge} önbelleğinden anında hazırlandı (0 kota)`,
+                `⚡ Served instantly from ${providerBadge} cache (0 quota)`
+              )
+            : t(
+                `✨ ${providerBadge} ile tüm ders kavramları ve formüller çıkarıldı`,
+                `✨ Full lecture concepts & formulas extracted with ${providerBadge}`
+              )
         );
         return res.outline;
       }
       if (res.fallbackReason === 'quota_exceeded') {
         setAiStatusNote(
-          t('Günlük Pro AI limiti doldu — yerel çevrimdışı motorla hazırlandı.', 'Daily Pro AI quota reached — built with on-device engine.')
+          t(
+            'Günlük Pro AI limiti doldu — yerel çevrimdışı motorla hazırlandı.',
+            'Daily Pro AI quota reached — built with on-device engine.'
+          )
+        );
+      } else if (res.fallbackReason === 'pro_required') {
+        setAiStatusNote(
+          t(
+            'Sunucu Pro oturumu doğrulanamadı — hesabınızla giriş yaptığınızdan emin olun (yerel motor kullanıldı).',
+            'Pro session not verified on server — ensure you are signed in (used on-device engine).'
+          )
         );
       }
       return localFallbackOutline;
     } finally {
       setIsAiStructuring(false);
     }
+  };
+
+  const handlePreviewWithAi = async (rawSource: string, localFallbackOutline: string, cacheTag: string) => {
+    if (!isLifetimePro) {
+      onTriggerPaywall?.('smart_map_ai');
+      return;
+    }
+    void hapticLight();
+    await resolveAiOrLocalOutline(rawSource, localFallbackOutline, cacheTag);
   };
 
   const handleConvertLectureNote = async (andCreateMap = false) => {
@@ -1224,29 +1267,65 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                         </div>
                       )}
 
-                      {/* Compact Branch Preview */}
-                      {liveDocumentOutline && liveDocumentOutline.formattedOutline && (
-                        <div className="space-y-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/6 p-3">
-                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
-                            <span className="rounded-lg bg-emerald-500/18 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
-                              ⚡ {liveDocumentOutline.stats.totalNodes} {t('Dal (Akıcı Özet)', 'Nodes (Compact)')}
-                            </span>
-                            <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
-                              🌿 {liveDocumentOutline.stats.mainBranches} {t('Ana Dal', 'Main')}
-                            </span>
-                            <span className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
-                              📝 {liveDocumentOutline.stats.notedBranches} {t('Detaylı Not', 'Notes')}
-                            </span>
+                      {/* Live AI or Compact Branch Preview */}
+                      {liveDocumentOutline && liveDocumentOutline.formattedOutline && (() => {
+                        const docReqKey = `doc:${docResult.fileName}|${analysisDepth}|${lang}|${docResult.extractedText.slice(0, 120)}|${docResult.extractedText.length}`;
+                        const activeDocOutlineText =
+                          effectiveUseAi && aiOutlineCache?.key === docReqKey
+                            ? aiOutlineCache.outline
+                            : liveDocumentOutline.formattedOutline;
+                        const activeDocParsed = parseTextToMindMapOutline(activeDocOutlineText, {
+                          density: analysisDepth,
+                        });
+                        const isShowingAiDoc = effectiveUseAi && aiOutlineCache?.key === docReqKey;
+                        return (
+                          <div className="space-y-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/6 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] font-extrabold">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="rounded-lg bg-emerald-500/18 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
+                                  {isShowingAiDoc ? '✨ ' : '⚡ '}
+                                  {activeDocParsed.stats.totalNodes} {t('Dal', 'Nodes')}
+                                </span>
+                                <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
+                                  🌿 {activeDocParsed.stats.mainBranches} {t('Ana Dal', 'Main')}
+                                </span>
+                                <span className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
+                                  📝 {activeDocParsed.stats.notedBranches} {t('Not & Formül', 'Notes & Formulas')}
+                                </span>
+                              </div>
+                              {effectiveUseAi && (
+                                <button
+                                  type="button"
+                                  data-testid="doc-ai-preview-btn"
+                                  disabled={isAiStructuring}
+                                  onClick={() =>
+                                    void handlePreviewWithAi(
+                                      docResult.extractedText,
+                                      liveDocumentOutline.formattedOutline,
+                                      `doc:${docResult.fileName}`
+                                    )
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10.5px] font-extrabold text-white shadow-2xs transition hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                  {isAiStructuring ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                  <span>{isShowingAiDoc ? t('AI Hazır ✓', 'AI Ready ✓') : t('AI ile Önizle', 'Preview with AI')}</span>
+                                </button>
+                              )}
+                            </div>
+                            <pre
+                              data-testid="document-outline-preview"
+                              className="max-h-52 overflow-y-auto rounded-xl border bg-white/85 p-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/65"
+                              style={{ borderColor: 'var(--hud-border)' }}
+                            >
+                              {activeDocOutlineText}
+                            </pre>
                           </div>
-                          <pre
-                            data-testid="document-outline-preview"
-                            className="max-h-44 overflow-y-auto rounded-xl border bg-white/85 p-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/65"
-                            style={{ borderColor: 'var(--hud-border)' }}
-                          >
-                            {liveDocumentOutline.formattedOutline}
-                          </pre>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                         <button
@@ -1444,8 +1523,18 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     />
                   </div>
 
-                  {/* Live Photo-6 Formatted Structure Output Box! */}
-                  {liveConvertedPreview && liveConvertedPreview.formattedOutline && (
+                  {/* Live AI / Local Formatted Structure Output Box! */}
+                  {liveConvertedPreview && liveConvertedPreview.formattedOutline && (() => {
+                    const convReqKey = `conv|${analysisDepth}|${lang}|${rawLectureNote.trim().slice(0, 120)}|${rawLectureNote.trim().length}`;
+                    const isShowingAiConv = effectiveUseAi && aiOutlineCache?.key === convReqKey;
+                    const activeConvOutline = isShowingAiConv
+                      ? aiOutlineCache!.outline
+                      : liveConvertedPreview.formattedOutline;
+                    const activeConvTree = isShowingAiConv
+                      ? parseTextToMindMapOutline(activeConvOutline, { density: analysisDepth })
+                      : liveConvertedTree;
+                    const activeStats = activeConvTree?.stats ?? liveConvertedPreview.stats;
+                    return (
                     <div
                       data-testid="lecture-note-live-output"
                       className="space-y-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/6 p-3"
@@ -1453,21 +1542,43 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
                           <span className="rounded-lg bg-emerald-500/18 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">
-                            ✓ Harita Yapısına Dönüştürüldü
+                            {isShowingAiConv ? '✨ Pro AI Özeti Hazır' : '✓ Harita Yapısına Dönüştürüldü'}
                           </span>
                           <span className="rounded-lg bg-sky-500/15 px-2 py-0.5 text-sky-700 dark:text-sky-300">
-                            {liveConvertedPreview.stats.mainBranches} Ana Dal
+                            {activeStats.mainBranches} Ana Dal
                           </span>
                           <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">
-                            {liveConvertedPreview.stats.subBranches} Alt Kavram
+                            {activeStats.subBranches} Alt Kavram
                           </span>
-                          {liveConvertedPreview.stats.notedBranches > 0 && (
+                          {activeStats.notedBranches > 0 && (
                             <span className="rounded-lg bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
-                              📝 {liveConvertedPreview.stats.notedBranches} Açıklama
+                              📝 {activeStats.notedBranches} Not &amp; Formül
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5">
+                          {effectiveUseAi && (
+                            <button
+                              type="button"
+                              data-testid="conv-ai-preview-btn"
+                              disabled={isAiStructuring || !rawLectureNote.trim()}
+                              onClick={() =>
+                                void handlePreviewWithAi(
+                                  rawLectureNote.trim(),
+                                  liveConvertedPreview.formattedOutline,
+                                  'conv'
+                                )
+                              }
+                              className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-2.5 py-1 text-[10.5px] font-extrabold text-white shadow-2xs transition hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                              {isAiStructuring ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-3 w-3" />
+                              )}
+                              <span>{isShowingAiConv ? t('AI Hazır ✓', 'AI Ready ✓') : t('AI ile Önizle', 'Preview with AI')}</span>
+                            </button>
+                          )}
                           <div className="inline-flex items-center rounded-xl border border-slate-500/20 bg-white/70 p-0.5 dark:bg-slate-900/70">
                             <button
                               type="button"
@@ -1505,7 +1616,7 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                             data-testid="lecture-note-copy-btn"
                             onClick={() => {
                               void hapticLight();
-                              void navigator.clipboard?.writeText(liveConvertedPreview.formattedOutline);
+                              void navigator.clipboard?.writeText(activeConvOutline);
                               setCopiedConverted(true);
                               window.setTimeout(() => setCopiedConverted(false), 1800);
                             }}
@@ -1525,13 +1636,13 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                           </button>
                         </div>
                       </div>
-                      {converterPreviewMode === 'tree' && liveConvertedTree ? (
+                      {converterPreviewMode === 'tree' && activeConvTree ? (
                         <div
                           data-testid="lecture-note-tree-preview"
                           className="max-h-52 space-y-1.5 overflow-y-auto rounded-xl border bg-white/85 p-2.5 text-xs dark:bg-slate-950/70"
                           style={{ borderColor: 'var(--hud-border)' }}
                         >
-                          {liveConvertedTree.nodes.slice(0, 48).map((n) => (
+                          {activeConvTree.nodes.slice(0, 48).map((n) => (
                             <div
                               key={n.id}
                               style={{
@@ -1574,11 +1685,12 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                           className="max-h-52 overflow-y-auto rounded-xl border bg-white/80 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap dark:bg-slate-950/65"
                           style={{ borderColor: 'var(--hud-border)' }}
                         >
-                          {liveConvertedPreview.formattedOutline}
+                          {activeConvOutline}
                         </pre>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                     <button
