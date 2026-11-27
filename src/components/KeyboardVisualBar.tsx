@@ -91,6 +91,14 @@ interface KeyboardVisualBarProps {
   ) => void;
   onUpdateTechBadge: (nodeId: string, techBadge: string) => void;
   onChangeStickerSize: (nodeId: string, size: StickerSizePreset) => void;
+  onResizeNodeVisual?: (
+    nodeId: string,
+    patch: {
+      stickerWidthPx?: number | null;
+      fontScale?: number | null;
+      handwritingWidthPx?: number | null;
+    }
+  ) => void;
   onChangeNodeStyle: (nodeId: string, style: NodeVisualStyle) => void;
   onRemoveSticker: (nodeId: string) => void;
   onChangeBranchColor: (nodeId: string, color: string) => void;
@@ -146,6 +154,7 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   onApplyProactiveSuggestion,
   onUpdateTechBadge,
   onChangeStickerSize,
+  onResizeNodeVisual,
   onChangeNodeStyle,
   onRemoveSticker,
   onChangeBranchColor,
@@ -1467,9 +1476,9 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
         {/* TAB 3: BIG S/M/L/XL SIZE + CARD/ORGANIC + COLOR SWATCHES + REMOVE ICON */}
         {dockTab === 'style' && (
           <div className="flex flex-wrap items-center justify-between gap-2.5 py-0.5">
-            {/* BIG S/M/L/XL Size Buttons */}
+            {/* BIG S/M/L/XL Size Buttons + Continuous Free Icon & Text/Handwriting Size Sliders */}
             <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">
-              <span className="px-2 text-xs font-extrabold opacity-70">Boyut:</span>
+              <span className="px-2 text-xs font-extrabold opacity-70">İkon:</span>
               {SIZE_PRESETS.map((sz) => (
                 <button
                   key={sz.id}
@@ -1478,8 +1487,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   title={sz.hint}
                   onPointerDown={(e) => e.preventDefault()}
                   onClick={() => handlePickStickerSize(sz.id)}
-                  className={`min-h-[42px] min-w-[42px] rounded-xl text-sm font-black transition active:scale-95 ${
-                    effectiveStickerSize === sz.id
+                  className={`min-h-[40px] min-w-[38px] rounded-xl text-sm font-black transition active:scale-95 ${
+                    !activeNode.stickerWidthPx && effectiveStickerSize === sz.id
                       ? 'bg-sky-500 text-white shadow-xs'
                       : 'opacity-80 hover:bg-slate-500/10 hover:opacity-100'
                   }`}
@@ -1487,7 +1496,112 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
                   {sz.label}
                 </button>
               ))}
+              {onResizeNodeVisual && activeNode.sticker && (
+                <div className="flex items-center gap-1.5 border-l border-slate-500/20 pr-1.5 pl-2">
+                  <input
+                    type="range"
+                    data-testid="style-sticker-size-slider"
+                    min={28}
+                    max={440}
+                    step={4}
+                    value={
+                      activeNode.stickerWidthPx ??
+                      (effectiveStickerSize === 'sm'
+                        ? 50
+                        : effectiveStickerSize === 'lg'
+                        ? 126
+                        : effectiveStickerSize === 'xl'
+                        ? 170
+                        : 86)
+                    }
+                    onChange={(e) =>
+                      onResizeNodeVisual(activeNode.id, {
+                        stickerWidthPx: Number(e.target.value),
+                      })
+                    }
+                    className="w-20 accent-violet-600"
+                    title="İkonu serbestçe büyüt/küçült"
+                  />
+                  <span className="w-10 text-right font-mono text-[10.5px] font-black opacity-80">
+                    {activeNode.stickerWidthPx ??
+                      (effectiveStickerSize === 'sm'
+                        ? 50
+                        : effectiveStickerSize === 'lg'
+                        ? 126
+                        : effectiveStickerSize === 'xl'
+                        ? 170
+                        : 86)}
+                    px
+                  </span>
+                </div>
+              )}
             </div>
+
+            {onResizeNodeVisual && (
+              <div className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-500/10 px-2.5 py-1.5">
+                <span className="text-xs font-extrabold opacity-75">
+                  {activeNode.handwriting?.strokes?.length ? 'El Yazısı:' : 'Yazı:'}
+                </span>
+                {activeNode.handwriting?.strokes?.length ? (
+                  <>
+                    <input
+                      type="range"
+                      data-testid="style-handwriting-size-slider"
+                      min={64}
+                      max={680}
+                      step={8}
+                      value={activeNode.handwriting.renderWidthPx ?? 200}
+                      onChange={(e) =>
+                        onResizeNodeVisual(activeNode.id, {
+                          handwritingWidthPx: Number(e.target.value),
+                        })
+                      }
+                      className="w-24 accent-sky-500"
+                    />
+                    <span className="w-11 text-right font-mono text-[10.5px] font-black opacity-80">
+                      {activeNode.handwriting.renderWidthPx ?? 200}px
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="range"
+                      data-testid="style-font-size-slider"
+                      min={65}
+                      max={260}
+                      step={5}
+                      value={Math.round((activeNode.fontScale ?? 1) * 100)}
+                      onChange={(e) =>
+                        onResizeNodeVisual(activeNode.id, {
+                          fontScale: Number(e.target.value) / 100,
+                        })
+                      }
+                      className="w-24 accent-sky-500"
+                    />
+                    <span className="w-10 text-right font-mono text-[10.5px] font-black opacity-80">
+                      %{Math.round((activeNode.fontScale ?? 1) * 100)}
+                    </span>
+                  </>
+                )}
+                {(activeNode.fontScale || activeNode.handwriting?.renderWidthPx) && (
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() =>
+                      onResizeNodeVisual(
+                        activeNode.id,
+                        activeNode.handwriting?.strokes?.length
+                          ? { handwritingWidthPx: null }
+                          : { fontScale: null }
+                      )
+                    }
+                    className="rounded-lg bg-slate-500/15 px-1.5 py-0.5 text-[10px] font-extrabold hover:bg-slate-500/25"
+                  >
+                    100%
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Card vs Organic vs Boxless Handwritten Concept Style */}
             <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">

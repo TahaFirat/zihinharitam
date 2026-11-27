@@ -9,12 +9,13 @@ export const ADAPTIVE_INK_DARK = '#F8FAFC';
 /**
  * Resolves stroke ink color cleanly across Light & Dark themes:
  * adaptive default ink auto-inverts so handwriting NEVER disappears in Dark Mode,
- * while user-chosen colored inks (branch color, blue, red, emerald, etc.) remain faithful!
+ * while user-chosen colored inks & highlighters remain faithful!
  */
 export function resolveHandwritingStrokeColor(
   stroke: HandwrittenConceptStroke,
   darkMode: boolean
 ): string {
+  if (stroke.tool === 'highlighter') return stroke.color;
   const isDefaultInk =
     stroke.adaptive === true ||
     stroke.color.toLowerCase() === ADAPTIVE_INK_LIGHT.toLowerCase() ||
@@ -26,13 +27,35 @@ export function resolveHandwritingStrokeColor(
   return stroke.color;
 }
 
+export function resolveHandwritingStrokeOpacity(stroke: HandwrittenConceptStroke): number {
+  if (typeof stroke.opacity === 'number' && Number.isFinite(stroke.opacity)) {
+    return Math.max(0.1, Math.min(1, stroke.opacity));
+  }
+  return stroke.tool === 'highlighter' ? 0.34 : 1;
+}
+
 /**
- * Decimates dense 120Hz/240Hz pointer samples so saved JSON is compact (<4 KB per concept)
- * while preserving razor-sharp handwritten letter curves!
+ * Orders strokes so translucent highlighters ALWAYS paint cleanly BEHIND crisp pen ink!
+ */
+export function sortHandwritingStrokesForPaint(
+  strokes: HandwrittenConceptStroke[]
+): HandwrittenConceptStroke[] {
+  const hi: HandwrittenConceptStroke[] = [];
+  const ink: HandwrittenConceptStroke[] = [];
+  for (const s of strokes) {
+    if (s.tool === 'highlighter') hi.push(s);
+    else ink.push(s);
+  }
+  return [...hi, ...ink];
+}
+
+/**
+ * Decimates dense 120Hz/240Hz pointer samples so saved JSON is compact (<5 KB per concept)
+ * while preserving razor-sharp handwritten letter curves (even tiny Turkish accents & math subscripts!).
  */
 export function simplifyHandwritingPoints(
   points: Array<[number, number, number]>,
-  minDistance = 2.0
+  minDistance = 1.6
 ): Array<[number, number, number]> {
   if (points.length <= 2) {
     return points.map(([x, y, p]) => [
@@ -100,11 +123,15 @@ export function buildHandwritingStrokePath(
 
 /**
  * Computes tightly cropped vector bounding box & metadata for a set of handwritten strokes.
- * Returns `null` if there are no visible strokes.
+ * Preserves multi-line proportions naturally (NEVER squashes 4 lines into 1 cramped line!).
  */
 export function buildHandwrittenConceptAsset(
   rawStrokes: HandwrittenConceptStroke[],
-  heightPx = 64
+  options?: {
+    sizeScale?: number;
+    renderWidthPx?: number;
+    paperGuide?: 'lined' | 'grid' | 'dots' | 'blank';
+  }
 ): HandwrittenConceptAsset | null {
   const validStrokes = rawStrokes
     .filter((s) => Array.isArray(s.points) && s.points.length > 0)
@@ -118,10 +145,10 @@ export function buildHandwrittenConceptAsset(
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  let maxW = 4;
+  let maxW = 2.4;
 
   for (const st of validStrokes) {
-    maxW = Math.max(maxW, st.width || 4);
+    maxW = Math.max(maxW, st.width || 2.4);
     for (const [x, y] of st.points) {
       if (x < minX) minX = x;
       if (y < minY) minY = y;
@@ -130,9 +157,9 @@ export function buildHandwrittenConceptAsset(
     }
   }
 
-  const pad = Math.max(10, maxW * 1.6);
+  const pad = Math.max(8, maxW * 1.6);
   const rawW = Math.max(36, maxX - minX + pad * 2);
-  const rawH = Math.max(28, maxY - minY + pad * 2);
+  const rawH = Math.max(26, maxY - minY + pad * 2);
   const cx = (minX + maxX) * 0.5;
   const cy = (minY + maxY) * 0.5;
 
@@ -146,38 +173,69 @@ export function buildHandwrittenConceptAsset(
   return {
     strokes: validStrokes,
     viewBox,
-    aspectRatio: Math.max(0.5, Math.min(7.5, viewBox.w / Math.max(1, viewBox.h))),
-    heightPx: Math.max(38, Math.min(110, Math.round(heightPx))),
+    aspectRatio: Math.max(0.25, Math.min(8.5, viewBox.w / Math.max(1, viewBox.h))),
+    sizeScale: options?.sizeScale ?? 1.0,
+    renderWidthPx: options?.renderWidthPx,
+    paperGuide: options?.paperGuide ?? 'lined',
     updatedAt: Date.now(),
   };
 }
 
 /**
- * Computes responsive world-pixel render dimensions (`renderW`, `renderH`) for a handwritten concept
- * so short 1-letter symbols AND wide multi-word handwritten headings both look crisp & balanced!
+ * Computes crisp, natural world-pixel dimensions (`renderW`, `renderH`) for a handwritten concept:
+ *  - Honors exact user drag-resize width (`asset.renderWidthPx`, 64..680px) when resized by hand!
+ *  - Otherwise scales proportionally to the real pad ink bounds so BOTH 1-word titles AND 5-line
+ *    handwritten notes keep consistent, readable, fine-pen letter proportions!
  */
 export function resolveHandwritingRenderBox(
   asset: HandwrittenConceptAsset,
   isRoot: boolean
 ): { renderW: number; renderH: number } {
-  const baseH = asset.heightPx ?? (isRoot ? 78 : 60);
-  const targetH = isRoot ? Math.max(baseH, 68) : baseH;
-  const aspect = Math.max(0.55, Math.min(6.5, asset.aspectRatio || asset.viewBox.w / Math.max(1, asset.viewBox.h)));
+  const vbW = Math.max(1, asset.viewBox?.w || 160);
+  const vbH = Math.max(1, asset.viewBox?.h || 60);
+  const aspect = Math.max(0.25, Math.min(8.5, vbW / vbH));
 
-  const maxW = isRoot ? 330 : 285;
-  const minW = isRoot ? 96 : 74;
+  // 1. User manually dragged the corner resize handle -> honor exact width proportionally!
+  if (typeof asset.renderWidthPx === 'number' && Number.isFinite(asset.renderWidthPx)) {
+    const renderW = Math.round(Math.max(56, Math.min(680, asset.renderWidthPx)));
+    const renderH = Math.round(Math.max(28, Math.min(760, renderW / aspect)));
+    return { renderW, renderH };
+  }
 
-  let renderW = Math.round(targetH * aspect);
-  let renderH = Math.round(targetH);
+  // 2. Natural proportional scaling from pad space (~0.52 world px per pad px, gently scaled for root / S-M-L)
+  const sizeScale =
+    typeof asset.sizeScale === 'number' && Number.isFinite(asset.sizeScale)
+      ? asset.sizeScale
+      : typeof asset.heightPx === 'number'
+      ? Math.max(0.7, Math.min(1.5, asset.heightPx / 64))
+      : 1.0;
+
+  const naturalScale = (isRoot ? 0.62 : 0.52) * sizeScale;
+  let renderW = Math.round(vbW * naturalScale);
+  let renderH = Math.round(vbH * naturalScale);
+
+  const minW = isRoot ? 90 : 68;
+  const maxW = isRoot ? 460 : 390;
+  const maxH = 520;
 
   if (renderW > maxW) {
     renderW = maxW;
-    renderH = Math.max(34, Math.round(renderW / aspect));
-  } else if (renderW < minW) {
+    renderH = Math.round(renderW / aspect);
+  }
+  if (renderH > maxH) {
+    renderH = maxH;
+    renderW = Math.round(renderH * aspect);
+  }
+  if (renderW < minW && renderH < 44) {
+    const boost = minW / Math.max(1, renderW);
     renderW = minW;
+    renderH = Math.round(renderH * boost);
   }
 
-  return { renderW, renderH };
+  return {
+    renderW: Math.max(48, renderW),
+    renderH: Math.max(28, renderH),
+  };
 }
 
 /**
@@ -189,7 +247,7 @@ export function hitTestHandwritingStroke(
   py: number,
   tolerance = 14
 ): boolean {
-  const r = Math.max(tolerance, (stroke.width || 4) * 1.6);
+  const r = Math.max(tolerance, (stroke.width || 2.4) * 1.8);
   const r2 = r * r;
   const pts = stroke.points;
   for (let i = 0; i < pts.length; i++) {
@@ -197,7 +255,6 @@ export function hitTestHandwritingStroke(
     const dy = pts[i][1] - py;
     if (dx * dx + dy * dy <= r2) return true;
     if (i > 0) {
-      // Check segment midpoint too so fast pen swipes are never missed by the eraser
       const mx = (pts[i - 1][0] + pts[i][0]) * 0.5 - px;
       const my = (pts[i - 1][1] + pts[i][1]) * 0.5 - py;
       if (mx * mx + my * my <= r2) return true;
@@ -233,17 +290,18 @@ export function drawHandwritingToCanvas2D(
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  for (const st of asset.strokes) {
+  for (const st of sortHandwritingStrokesForPaint(asset.strokes)) {
     if (!st.points || st.points.length === 0) continue;
     const col = resolveHandwritingStrokeColor(st, darkMode);
+    ctx.globalAlpha = resolveHandwritingStrokeOpacity(st);
     ctx.strokeStyle = col;
     ctx.fillStyle = col;
-    ctx.lineWidth = st.width || 5;
+    ctx.lineWidth = st.width || 2.4;
 
     if (st.points.length === 1) {
       const [x, y] = st.points[0];
       ctx.beginPath();
-      ctx.arc(x, y, (st.width || 5) * 0.5, 0, Math.PI * 2);
+      ctx.arc(x, y, (st.width || 2.4) * 0.5, 0, Math.PI * 2);
       ctx.fill();
       continue;
     }
@@ -283,12 +341,13 @@ export function buildHandwritingExportSvgGroup(
   const ox = centerX - drawnW * 0.5 - vb.x * scale;
   const oy = topY + (renderH - drawnH) * 0.5 - vb.y * scale;
 
-  const paths = asset.strokes
+  const paths = sortHandwritingStrokesForPaint(asset.strokes)
     .filter((st) => st.points && st.points.length > 0)
     .map((st) => {
       const d = buildHandwritingStrokePath(st.points);
       const col = resolveHandwritingStrokeColor(st, darkMode);
-      return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${st.width || 5}" stroke-linecap="round" stroke-linejoin="round" />`;
+      const op = resolveHandwritingStrokeOpacity(st);
+      return `<path d="${d}" fill="none" stroke="${col}" stroke-opacity="${op}" stroke-width="${st.width || 2.4}" stroke-linecap="round" stroke-linejoin="round" />`;
     })
     .join('');
 

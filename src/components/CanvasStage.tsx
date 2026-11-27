@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Flame,
   PenTool,
+  Maximize2,
 } from 'lucide-react';
 import type {
   AcademicDepartment,
@@ -49,6 +50,8 @@ import {
   buildHandwritingStrokePath,
   resolveHandwritingRenderBox,
   resolveHandwritingStrokeColor,
+  resolveHandwritingStrokeOpacity,
+  sortHandwritingStrokesForPaint,
 } from '../core/canvas/HandwritingSvgRenderer';
 import {
   buildInkSvgPath,
@@ -125,6 +128,14 @@ interface CanvasStageProps {
   onStartCrossLink?: (fromNodeId: string) => void;
   onOpenStickerGallery?: (nodeId: string) => void;
   onOpenHandwritingEditor?: (nodeId: string) => void;
+  onResizeNodeVisual?: (
+    nodeId: string,
+    patch: {
+      stickerWidthPx?: number | null;
+      fontScale?: number | null;
+      handwritingWidthPx?: number | null;
+    }
+  ) => void;
   onCommitBatchNodePositions: (updates: Record<string, { x: number; y: number }>) => void;
   onReparentNode?: (nodeId: string, newParentId: string) => void;
   searchMatchIds?: Set<string>;
@@ -254,9 +265,16 @@ const PRIORITY_BADGE_META: Record<
  */
 function resolveStickerSizePixels(
   size: StickerSizePreset | undefined,
-  isRoot: boolean
+  isRoot: boolean,
+  customWidthPx?: number
 ): { px: number; preset: StickerSizePreset } {
   const effective: StickerSizePreset = size ?? 'md';
+  if (typeof customWidthPx === 'number' && Number.isFinite(customWidthPx)) {
+    return {
+      px: Math.round(Math.max(28, Math.min(440, customWidthPx))),
+      preset: effective,
+    };
+  }
   if (isRoot) {
     switch (effective) {
       case 'sm':
@@ -380,6 +398,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   onStartCrossLink,
   onOpenStickerGallery,
   onOpenHandwritingEditor,
+  onResizeNodeVisual,
   onCommitBatchNodePositions,
   onReparentNode,
   searchMatchIds,
@@ -502,6 +521,21 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   const { t } = useI18n();
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [dropTargetNodeId, setDropTargetNodeId] = useState<string | null>(null);
+  const [liveResize, setLiveResize] = useState<{
+    nodeId: string;
+    kind: 'sticker' | 'text' | 'handwriting';
+    value: number;
+  } | null>(null);
+  const resizeGestureRef = useRef<{
+    pointerId: number;
+    nodeId: string;
+    kind: 'sticker' | 'text' | 'handwriting';
+    startClientX: number;
+    startClientY: number;
+    startValue: number;
+    currentValue: number;
+    moved: boolean;
+  } | null>(null);
   const dropTargetNodeIdRef = useRef<string | null>(null);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({
     w: typeof window !== 'undefined' ? window.innerWidth : 1200,
@@ -2922,13 +2956,34 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
               node.handwriting.strokes.length > 0
           );
           const isOrganic = !hasHandwriting && effectiveStyle === 'organic' && !isRoot;
+          const activeLiveResize =
+            liveResize && liveResize.nodeId === node.id ? liveResize : null;
+          const effectiveStickerWidthPx =
+            activeLiveResize?.kind === 'sticker'
+              ? activeLiveResize.value
+              : node.stickerWidthPx;
+          const effectiveFontScale =
+            activeLiveResize?.kind === 'text'
+              ? activeLiveResize.value
+              : typeof node.fontScale === 'number' && Number.isFinite(node.fontScale)
+              ? Math.max(0.65, Math.min(2.6, node.fontScale))
+              : 1;
           const handwritingBox = hasHandwriting
-            ? resolveHandwritingRenderBox(node.handwriting!, isRoot)
+            ? resolveHandwritingRenderBox(
+                activeLiveResize?.kind === 'handwriting'
+                  ? { ...node.handwriting!, renderWidthPx: activeLiveResize.value }
+                  : node.handwriting!,
+                isRoot
+              )
             : null;
 
           const showSecondaryMeta =
             !isEditing && (!isSemanticFarZoom || isRoot || isSelected);
-          const stickerSizing = resolveStickerSizePixels(node.stickerSize, isRoot);
+          const stickerSizing = resolveStickerSizePixels(
+            node.stickerSize,
+            isRoot,
+            effectiveStickerWidthPx
+          );
           const priorityMeta = node.priorityTag
             ? PRIORITY_BADGE_META[node.priorityTag]
             : null;
@@ -3071,7 +3126,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                 </div>
               )}
 
-              {/* DIE-CUT VISUAL STICKER (Stable `node.sticker.id` key -> ZERO blink or remount on selection / Organic toggle!) */}
+              {/* DIE-CUT VISUAL STICKER (Stable `node.sticker.id` key + Direct Corner Drag-to-Resize Handle!) */}
               {node.sticker && !hideVisualInExam && (
                 <div
                   key={node.sticker.id}
@@ -3081,9 +3136,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     width: `${stickerSizing.px}px`,
                     height: `${stickerSizing.px}px`,
                     transition:
-                      'width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+                      activeLiveResize?.kind === 'sticker'
+                        ? 'none'
+                        : 'width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1)',
                   }}
-                  className="animate-sticker-pop absolute bottom-full left-1/2 mb-1.5 flex -translate-x-1/2 items-center justify-center"
+                  className={`animate-sticker-pop absolute bottom-full left-1/2 mb-1.5 flex -translate-x-1/2 items-center justify-center rounded-2xl ${
+                    isSelected && !drawingMode && examMode === 'off'
+                      ? 'ring-1 ring-violet-500/45 ring-dashed'
+                      : ''
+                  }`}
                 >
                   <img
                     src={node.sticker.url}
@@ -3101,6 +3162,77 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     }}
                     className="die-cut-shadow pointer-events-none h-full w-full object-contain"
                   />
+
+                  {/* Direct Freehand Corner Resize Handle for Icon/Sticker (28px - 440px) */}
+                  {isSelected && !drawingMode && examMode === 'off' && onResizeNodeVisual && (
+                    <button
+                      type="button"
+                      data-testid="sticker-resize-handle"
+                      title={t(
+                        'İkonu sürükleyip büyüt/küçült (Çift dokun: sıfırla)',
+                        'Drag to resize icon (Double-tap: reset)'
+                      )}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        resizeGestureRef.current = {
+                          pointerId: e.pointerId,
+                          nodeId: node.id,
+                          kind: 'sticker',
+                          startClientX: e.clientX,
+                          startClientY: e.clientY,
+                          startValue: stickerSizing.px,
+                          currentValue: stickerSizing.px,
+                          moved: false,
+                        };
+                      }}
+                      onPointerMove={(e) => {
+                        const rg = resizeGestureRef.current;
+                        if (!rg || rg.pointerId !== e.pointerId || rg.kind !== 'sticker') return;
+                        e.stopPropagation();
+                        const vpScale = Math.max(0.2, viewportRef.current.getTransform().scale);
+                        const dx = (e.clientX - rg.startClientX) / vpScale;
+                        const dy = (rg.startClientY - e.clientY) / vpScale; // Dragging up-right enlarges sticker cleanly
+                        const delta = Math.abs(dx) > Math.abs(dy) ? dx * 1.45 : dy * 1.45;
+                        if (Math.hypot(dx, dy) > 3) rg.moved = true;
+                        const nextPx = Math.round(
+                          Math.max(28, Math.min(440, rg.startValue + delta))
+                        );
+                        rg.currentValue = nextPx;
+                        setLiveResize({ nodeId: node.id, kind: 'sticker', value: nextPx });
+                      }}
+                      onPointerUp={(e) => {
+                        const rg = resizeGestureRef.current;
+                        if (!rg || rg.pointerId !== e.pointerId) return;
+                        e.stopPropagation();
+                        resizeGestureRef.current = null;
+                        setLiveResize(null);
+                        if (rg.moved) {
+                          void hapticLight();
+                          onResizeNodeVisual(node.id, { stickerWidthPx: rg.currentValue });
+                        }
+                      }}
+                      onPointerCancel={() => {
+                        resizeGestureRef.current = null;
+                        setLiveResize(null);
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        void hapticLight();
+                        onResizeNodeVisual(node.id, { stickerWidthPx: null });
+                      }}
+                      className="hit-slop-44 absolute -top-2.5 -right-2.5 z-30 flex h-6.5 w-6.5 cursor-nesw-resize items-center justify-center rounded-full border-2 border-white bg-violet-600 text-white shadow-md transition hover:scale-115 active:scale-95"
+                    >
+                      <Maximize2 className="h-3 w-3 stroke-[2.8]" />
+                    </button>
+                  )}
+
+                  {activeLiveResize?.kind === 'sticker' && (
+                    <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-2 py-0.5 font-mono text-[10px] font-black whitespace-nowrap text-white shadow-md">
+                      {activeLiveResize.value}px
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -3132,6 +3264,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                   data-priority-tag={node.priorityTag ?? undefined}
                   style={{
                     background: cardBackground,
+                    maxWidth: hasHandwriting
+                      ? undefined
+                      : `${Math.round(
+                          (isRoot ? 330 : isMainBranch ? 320 : 308) *
+                            Math.max(1, Math.min(2.2, effectiveFontScale))
+                        )}px`,
                     borderColor: isDropTarget
                       ? '#10B981'
                       : isActiveSearchMatch
@@ -3238,12 +3376,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                               : 'drop-shadow(0 1px 2px rgba(255,255,255,0.92))',
                           }}
                         >
-                          {node.handwriting.strokes.map((st, sIdx) => (
+                          {sortHandwritingStrokesForPaint(node.handwriting.strokes).map((st, sIdx) => (
                             <path
                               key={sIdx}
                               d={buildHandwritingStrokePath(st.points)}
                               fill="none"
                               stroke={resolveHandwritingStrokeColor(st, darkMode)}
+                              strokeOpacity={resolveHandwritingStrokeOpacity(st)}
                               strokeWidth={st.width}
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -3329,12 +3468,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       <div
                         className={`node-title-balanced leading-snug ${
                           isOrganic
-                            ? 'text-[14px] font-black tracking-tight sm:text-[15px]'
-                            : isRoot
-                            ? 'text-base font-extrabold sm:text-lg'
-                            : 'text-[13.5px] font-extrabold sm:text-sm'
+                            ? 'font-black tracking-tight'
+                            : 'font-extrabold'
                         } ${isTaskDone ? 'line-through opacity-65' : ''}`}
                         style={{
+                          fontSize: `${Math.round(
+                            (isRoot ? 17 : isOrganic ? 15 : 14) * effectiveFontScale * 10
+                          ) / 10}px`,
                           color: 'var(--node-text)',
                           textShadow:
                             isOrganic && !priorityMeta
@@ -3431,8 +3571,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       className="mt-1.5 w-full min-w-[200px] max-w-[280px] rounded-xl border px-3 py-2 text-left sm:min-w-[240px]"
                     >
                       <p
-                        style={{ color: 'var(--node-subtext)' }}
-                        className={`text-[11.5px] leading-relaxed font-medium break-words whitespace-pre-wrap ${
+                        style={{
+                          color: 'var(--node-subtext)',
+                          fontSize: `${
+                            Math.round(
+                              11.5 * Math.max(0.85, Math.min(1.85, effectiveFontScale * 0.96)) * 10
+                            ) / 10
+                          }px`,
+                        }}
+                        className={`leading-relaxed font-medium break-words whitespace-pre-wrap ${
                           node.noteCollapsed ? 'line-clamp-2' : ''
                         }`}
                       >
@@ -3522,6 +3669,115 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       >
                         <Trash2 className="h-3.5 w-3.5 stroke-[2.5]" />
                       </button>
+                    )}
+
+                  {/* DIRECT FREEHAND CORNER RESIZE HANDLE FOR TEXT & HANDWRITTEN CONCEPT */}
+                  {isSelected &&
+                    !isEditing &&
+                    !drawingMode &&
+                    !linkingFromNodeId &&
+                    examMode === 'off' &&
+                    onResizeNodeVisual && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid="node-resize-handle"
+                          title={t(
+                            hasHandwriting
+                              ? 'El yazısını sürükleyip büyüt/küçült (Çift dokun: sıfırla)'
+                              : 'Yazı boyutunu sürükleyip büyüt/küçült (Çift dokun: %100)',
+                            hasHandwriting
+                              ? 'Drag to resize handwriting (Double-tap: reset)'
+                              : 'Drag to resize text (Double-tap: 100%)'
+                          )}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            const kind = hasHandwriting ? 'handwriting' : 'text';
+                            const startVal = hasHandwriting
+                              ? handwritingBox?.renderW ?? 180
+                              : effectiveFontScale;
+                            resizeGestureRef.current = {
+                              pointerId: e.pointerId,
+                              nodeId: node.id,
+                              kind,
+                              startClientX: e.clientX,
+                              startClientY: e.clientY,
+                              startValue: startVal,
+                              currentValue: startVal,
+                              moved: false,
+                            };
+                          }}
+                          onPointerMove={(e) => {
+                            const rg = resizeGestureRef.current;
+                            if (!rg || rg.pointerId !== e.pointerId) return;
+                            e.stopPropagation();
+                            const vpScale = Math.max(0.2, viewportRef.current.getTransform().scale);
+                            const dx = (e.clientX - rg.startClientX) / vpScale;
+                            const dy = (e.clientY - rg.startClientY) / vpScale;
+                            const delta = (dx + dy) * 0.78;
+                            if (Math.hypot(dx, dy) > 3) rg.moved = true;
+
+                            if (rg.kind === 'handwriting') {
+                              const nextW = Math.round(
+                                Math.max(64, Math.min(680, rg.startValue + delta * 1.45))
+                              );
+                              rg.currentValue = nextW;
+                              setLiveResize({ nodeId: node.id, kind: 'handwriting', value: nextW });
+                            } else if (rg.kind === 'text') {
+                              let nextScale =
+                                Math.round(
+                                  Math.max(0.65, Math.min(2.6, rg.startValue + delta / 150)) * 20
+                                ) / 20;
+                              // Gentle magnetic snap at 100%
+                              if (Math.abs(nextScale - 1.0) <= 0.03) nextScale = 1.0;
+                              rg.currentValue = nextScale;
+                              setLiveResize({ nodeId: node.id, kind: 'text', value: nextScale });
+                            }
+                          }}
+                          onPointerUp={(e) => {
+                            const rg = resizeGestureRef.current;
+                            if (!rg || rg.pointerId !== e.pointerId) return;
+                            e.stopPropagation();
+                            resizeGestureRef.current = null;
+                            setLiveResize(null);
+                            if (rg.moved) {
+                              void hapticLight();
+                              if (rg.kind === 'handwriting') {
+                                onResizeNodeVisual(node.id, { handwritingWidthPx: rg.currentValue });
+                              } else if (rg.kind === 'text') {
+                                onResizeNodeVisual(node.id, { fontScale: rg.currentValue });
+                              }
+                            }
+                          }}
+                          onPointerCancel={() => {
+                            resizeGestureRef.current = null;
+                            setLiveResize(null);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            void hapticLight();
+                            if (hasHandwriting) {
+                              onResizeNodeVisual(node.id, { handwritingWidthPx: null });
+                            } else {
+                              onResizeNodeVisual(node.id, { fontScale: null });
+                            }
+                          }}
+                          className="hit-slop-44 absolute -right-2.5 -bottom-2.5 z-30 flex h-6.5 w-6.5 cursor-nwse-resize items-center justify-center rounded-full border-2 border-white bg-sky-500 text-white shadow-md transition hover:scale-115 active:scale-95"
+                        >
+                          <Maximize2 className="h-3 w-3 rotate-90 stroke-[2.8]" />
+                        </button>
+
+                        {(activeLiveResize?.kind === 'text' ||
+                          activeLiveResize?.kind === 'handwriting') && (
+                          <span className="pointer-events-none absolute -right-2 -bottom-9 z-40 rounded-full bg-sky-600 px-2 py-0.5 font-mono text-[10px] font-black whitespace-nowrap text-white shadow-md">
+                            {activeLiveResize.kind === 'text'
+                              ? `${Math.round(activeLiveResize.value * 100)}%`
+                              : `${activeLiveResize.value}px`}
+                          </span>
+                        )}
+                      </>
                     )}
 
                   {liftingNodeId === node.id && (

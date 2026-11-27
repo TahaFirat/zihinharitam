@@ -100,9 +100,10 @@ const INK_COLORS = [
 ];
 
 const WIDTH_PRESETS: Array<{ value: number; dotSize: number; label: string }> = [
-  { value: 2.5, dotSize: 6, label: 'İnce' },
-  { value: 4.5, dotSize: 10, label: 'Orta' },
-  { value: 8.5, dotSize: 14, label: 'Kalın' },
+  { value: 1.4, dotSize: 4, label: 'Çok İnce' },
+  { value: 2.4, dotSize: 6, label: 'İnce' },
+  { value: 4.2, dotSize: 10, label: 'Orta' },
+  { value: 7.5, dotSize: 14, label: 'Kalın' },
 ];
 
 const PAPER_LABELS: Record<PaperStyleType, string> = {

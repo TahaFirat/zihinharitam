@@ -201,6 +201,9 @@ function loadExportImage(url: string): Promise<HTMLImageElement | null> {
 }
 
 function resolveExportStickerSize(node: MindNode, isRoot: boolean): number {
+  if (typeof node.stickerWidthPx === 'number' && Number.isFinite(node.stickerWidthPx)) {
+    return Math.round(Math.max(28, Math.min(440, node.stickerWidthPx)));
+  }
   const preset = node.stickerSize;
   if (preset === 'sm') return isRoot ? 82 : 56;
   if (preset === 'lg') return isRoot ? 168 : 132;
@@ -433,9 +436,13 @@ async function renderHighResMapCanvas(
           return;
         }
 
-        const titleFontSize = isRoot ? 18 : 14;
+        const fScale =
+          typeof node.fontScale === 'number' && Number.isFinite(node.fontScale)
+            ? Math.max(0.65, Math.min(2.6, node.fontScale))
+            : 1;
+        const titleFontSize = Math.round((isRoot ? 18 : 14) * fScale);
         ctx.font = `${isRoot ? 800 : 700} ${titleFontSize}px "Plus Jakarta Sans", sans-serif`;
-        const maxCardTextW = isRoot ? 260 : 210;
+        const maxCardTextW = Math.round((isRoot ? 260 : 210) * Math.max(1, fScale));
         const titleLines = wrapCanvasTextLines(ctx, displayTitle, maxCardTextW, 2);
         const maxTitleLineW = Math.max(
           ...titleLines.map((l) => ctx.measureText(l).width),

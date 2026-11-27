@@ -1496,16 +1496,79 @@ export const App: React.FC = () => {
       setDoc((prev) => {
         const target = prev.nodes[nodeId];
         if (!target) return prev;
+        const { stickerWidthPx: _clearedCustom, ...restTarget } = target;
         const nextNodes: Record<string, MindNode> = {
           ...prev.nodes,
           [nodeId]: {
-            ...target,
+            ...restTarget,
             stickerSize,
           },
         };
         return {
           ...prev,
           nodes: resolveTreeCollisions(nextNodes, prev.rootNodeId),
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [doc, pushHistory]
+  );
+
+  const lastResizeHistoryAtRef = useRef(0);
+  const handleResizeNodeVisual = useCallback(
+    (
+      nodeId: string,
+      patch: {
+        stickerWidthPx?: number | null;
+        fontScale?: number | null;
+        handwritingWidthPx?: number | null;
+      }
+    ) => {
+      const nowMs = Date.now();
+      if (nowMs - lastResizeHistoryAtRef.current > 650) {
+        pushHistory(doc);
+        lastResizeHistoryAtRef.current = nowMs;
+      }
+      setDoc((prev) => {
+        const target = prev.nodes[nodeId];
+        if (!target) return prev;
+        const nextNode: MindNode = { ...target };
+
+        if ('stickerWidthPx' in patch) {
+          if (patch.stickerWidthPx === null || patch.stickerWidthPx === undefined) {
+            delete nextNode.stickerWidthPx;
+          } else {
+            nextNode.stickerWidthPx = Math.round(
+              Math.max(28, Math.min(440, patch.stickerWidthPx))
+            );
+          }
+        }
+        if ('fontScale' in patch) {
+          if (patch.fontScale === null || patch.fontScale === undefined) {
+            delete nextNode.fontScale;
+          } else {
+            nextNode.fontScale =
+              Math.round(Math.max(0.65, Math.min(2.6, patch.fontScale)) * 20) / 20;
+          }
+        }
+        if ('handwritingWidthPx' in patch && nextNode.handwriting) {
+          const nextHw = { ...nextNode.handwriting };
+          if (patch.handwritingWidthPx === null || patch.handwritingWidthPx === undefined) {
+            delete nextHw.renderWidthPx;
+          } else {
+            nextHw.renderWidthPx = Math.round(
+              Math.max(64, Math.min(680, patch.handwritingWidthPx))
+            );
+          }
+          nextNode.handwriting = nextHw;
+        }
+
+        return {
+          ...prev,
+          nodes: {
+            ...prev.nodes,
+            [nodeId]: nextNode,
+          },
           updatedAt: Date.now(),
         };
       });
@@ -2736,6 +2799,7 @@ export const App: React.FC = () => {
             onStartCrossLink={handleStartCrossLink}
             onOpenStickerGallery={handleOpenStickerGallery}
             onOpenHandwritingEditor={handleOpenHandwritingEditor}
+            onResizeNodeVisual={handleResizeNodeVisual}
             onCommitBatchNodePositions={handleCommitBatchNodePositions}
             onReparentNode={handleReparentNode}
             searchMatchIds={searchMatchIdSet}
@@ -2805,6 +2869,7 @@ export const App: React.FC = () => {
             onApplyProactiveSuggestion={handleApplyProactiveSuggestion}
             onUpdateTechBadge={handleUpdateNodeTechBadge}
             onChangeStickerSize={handleChangeStickerSize}
+            onResizeNodeVisual={handleResizeNodeVisual}
             onChangeNodeStyle={handleChangeNodeStyle}
             onRemoveSticker={handleRemoveSticker}
             onChangeBranchColor={handleChangeBranchColor}

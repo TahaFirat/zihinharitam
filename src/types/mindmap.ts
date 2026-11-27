@@ -151,14 +151,23 @@ export interface HandwrittenConceptStroke {
   points: Array<[number, number, number]>;
   /** True when drawn with default adaptive ink so dark/light mode auto-inverts cleanly */
   adaptive?: boolean;
+  /** Pen (crisp solid ink) or Highlighter (translucent marker rendered behind ink) */
+  tool?: 'pen' | 'highlighter';
+  opacity?: number;
 }
 
 export interface HandwrittenConceptAsset {
   strokes: HandwrittenConceptStroke[];
   viewBox: { x: number; y: number; w: number; h: number };
   aspectRatio: number;
-  /** Desired rendered height in world px (sm: 44, md: 64, lg: 88) */
+  /** Legacy/preset scale multiplier or height hint */
   heightPx?: number;
+  /** User's exact freehand-resized width on canvas in world px (64..680) */
+  renderWidthPx?: number;
+  /** Scale preset chosen in writing pad (`0.78` | `1.0` | `1.32`) */
+  sizeScale?: number;
+  /** Preferred notebook guide pattern inside the writing pad */
+  paperGuide?: 'lined' | 'grid' | 'dots' | 'blank';
   updatedAt: number;
 }
 
@@ -182,6 +191,10 @@ export interface MindNode {
   handwriting?: HandwrittenConceptAsset | null;
   nodeStyle?: NodeVisualStyle;
   stickerSize?: StickerSizePreset;
+  /** Optional continuous custom icon width in world px (28..440) from on-canvas corner resize! */
+  stickerWidthPx?: number;
+  /** Optional continuous custom typography scale (0.65..2.6) from on-canvas corner resize! */
+  fontScale?: number;
   examHidden?: boolean;
   stickerUpdatedAt?: number;
   /** Optional external reference link (https:// / http:// only, sanitized) */
