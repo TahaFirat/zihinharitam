@@ -144,6 +144,24 @@ export interface StickerAsset {
   isDuotoneColorizable?: boolean;
 }
 
+export interface HandwrittenConceptStroke {
+  color: string;
+  width: number;
+  /** Local pad points `[x, y, pressure]` for crisp vector Bezier rendering & re-editing */
+  points: Array<[number, number, number]>;
+  /** True when drawn with default adaptive ink so dark/light mode auto-inverts cleanly */
+  adaptive?: boolean;
+}
+
+export interface HandwrittenConceptAsset {
+  strokes: HandwrittenConceptStroke[];
+  viewBox: { x: number; y: number; w: number; h: number };
+  aspectRatio: number;
+  /** Desired rendered height in world px (sm: 44, md: 64, lg: 88) */
+  heightPx?: number;
+  updatedAt: number;
+}
+
 export interface MindNode {
   id: string;
   parentId: string | null;
@@ -160,6 +178,8 @@ export interface MindNode {
   branchColor: string;
   collapsed: boolean;
   sticker?: StickerAsset;
+  /** Optional vector handwriting replacing the typed concept box directly on the branch! */
+  handwriting?: HandwrittenConceptAsset | null;
   nodeStyle?: NodeVisualStyle;
   stickerSize?: StickerSizePreset;
   examHidden?: boolean;

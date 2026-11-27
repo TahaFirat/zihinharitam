@@ -20,6 +20,7 @@ import {
   CheckSquare,
   ChevronDown,
   Flame,
+  PenTool,
 } from 'lucide-react';
 import type {
   AcademicDepartment,
@@ -44,6 +45,11 @@ import {
 } from '../core/canvas/CrossLinkRenderer';
 import { HitTestSpatialIndex } from '../core/canvas/HitTestSpatialIndex';
 import { InfiniteViewport } from '../core/canvas/InfiniteViewport';
+import {
+  buildHandwritingStrokePath,
+  resolveHandwritingRenderBox,
+  resolveHandwritingStrokeColor,
+} from '../core/canvas/HandwritingSvgRenderer';
 import {
   buildInkSvgPath,
   detectSnappedShape,
@@ -118,6 +124,7 @@ interface CanvasStageProps {
   onToggleNoteCollapse?: (nodeId: string) => void;
   onStartCrossLink?: (fromNodeId: string) => void;
   onOpenStickerGallery?: (nodeId: string) => void;
+  onOpenHandwritingEditor?: (nodeId: string) => void;
   onCommitBatchNodePositions: (updates: Record<string, { x: number; y: number }>) => void;
   onReparentNode?: (nodeId: string, newParentId: string) => void;
   searchMatchIds?: Set<string>;
@@ -372,6 +379,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
   onToggleNoteCollapse,
   onStartCrossLink,
   onOpenStickerGallery,
+  onOpenHandwritingEditor,
   onCommitBatchNodePositions,
   onReparentNode,
   searchMatchIds,
@@ -2908,7 +2916,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
 
           const effectiveStyle: NodeVisualStyle =
             node.nodeStyle ?? defaultNodeStyle ?? 'card';
-          const isOrganic = effectiveStyle === 'organic' && !isRoot;
+          const hasHandwriting = Boolean(
+            node.handwriting &&
+              Array.isArray(node.handwriting.strokes) &&
+              node.handwriting.strokes.length > 0
+          );
+          const isOrganic = !hasHandwriting && effectiveStyle === 'organic' && !isRoot;
+          const handwritingBox = hasHandwriting
+            ? resolveHandwritingRenderBox(node.handwriting!, isRoot)
+            : null;
 
           const showSecondaryMeta =
             !isEditing && (!isSemanticFarZoom || isRoot || isSelected);
@@ -2923,6 +2939,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
             cleanNote.length > 135 || cleanNote.split('\n').length > 3;
           const isUntitledRoot =
             isRoot &&
+            !hasHandwriting &&
             (!node.title ||
               node.title.trim() === 'Yeni Zihin Haritası' ||
               node.title.trim() === 'Merkez Konu');
@@ -2931,12 +2948,20 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
           const isMainBranch = !isRoot && nodeDepth === 1;
           const isDeepBranch = !isRoot && nodeDepth >= 2;
 
-          // Compute unified 3-Tier Card vs Organic surface, rim-lit dark shadows, and premium priority glow without unmounting DOM!
+          // Compute unified 3-Tier Card vs Organic vs Boxless Handwritten Concept surface!
           let cardBackground: string;
           let cardBorderColor: string;
           let cardBoxShadow: string;
 
-          if (priorityMeta) {
+          if (hasHandwriting) {
+            cardBackground = 'transparent';
+            cardBorderColor = isLinkSource
+              ? '#8B5CF6'
+              : isSelected
+              ? `${node.branchColor}AA`
+              : 'transparent';
+            cardBoxShadow = 'none';
+          } else if (priorityMeta) {
             cardBackground = darkMode ? priorityMeta.bgDark : priorityMeta.bgLight;
             cardBorderColor = isLinkSource ? '#8B5CF6' : priorityMeta.borderColor;
             cardBoxShadow = priorityMeta.haloShadow;
@@ -3103,7 +3128,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                 <div
                   ref={(el) => bindNodeCardElement(node.id, el)}
                   data-node-card-id={node.id}
-                  data-node-style={isOrganic ? 'organic' : 'card'}
+                  data-node-style={hasHandwriting ? 'handwritten' : isOrganic ? 'organic' : 'card'}
                   data-priority-tag={node.priorityTag ?? undefined}
                   style={{
                     background: cardBackground,
@@ -3112,8 +3137,11 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       : isActiveSearchMatch
                       ? '#F59E0B'
                       : cardBorderColor,
+                    borderStyle: hasHandwriting && isSelected && !isDropTarget ? 'dashed' : 'solid',
                     borderWidth:
-                      isDropTarget || isActiveSearchMatch || priorityMeta
+                      hasHandwriting && !isSelected && !isDropTarget && !isActiveSearchMatch
+                        ? '0px'
+                        : isDropTarget || isActiveSearchMatch || (!hasHandwriting && priorityMeta)
                         ? '2.5px'
                         : isDeepBranch && !isSelected && !isEditing
                         ? '1.5px'
@@ -3126,8 +3154,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       ? '0 0 0 3px rgba(56, 189, 248, 0.40), 0 8px 20px rgba(56, 189, 248, 0.20)'
                       : cardBoxShadow,
                   }}
-                  className={`relative flex flex-col items-center rounded-2xl border-solid text-center ${
-                    isRoot
+                  className={`relative flex flex-col items-center rounded-2xl text-center ${
+                    hasHandwriting
+                      ? 'px-2.5 py-1'
+                      : isRoot
                       ? 'min-w-[188px] max-w-[324px] px-5.5 py-3'
                       : isOrganic && !priorityMeta
                       ? 'min-w-[118px] max-w-[308px] px-3.5 py-1.5'
@@ -3140,21 +3170,21 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       : ''
                   }`}
                 >
-                  {/* 3-Tier Visual Hierarchy Accent: Root top crown pill | Main Branch crisp vertical left rail | Deep Branch subtle top dot-bar */}
-                  {!isOrganic && !priorityMeta && isRoot && (
+                  {/* 3-Tier Visual Hierarchy Accent (Hidden in Boxless Handwritten & Organic modes!) */}
+                  {!hasHandwriting && !isOrganic && !priorityMeta && isRoot && (
                     <div
                       className="mb-1.5 h-1.5 w-11 rounded-full"
                       style={{ backgroundColor: node.branchColor }}
                     />
                   )}
-                  {!isOrganic && !priorityMeta && isMainBranch && (
+                  {!hasHandwriting && !isOrganic && !priorityMeta && isMainBranch && (
                     <div
                       aria-hidden="true"
                       className="pointer-events-none absolute top-2.5 bottom-2.5 left-1.5 w-1 rounded-full"
                       style={{ backgroundColor: node.branchColor }}
                     />
                   )}
-                  {!isOrganic && !priorityMeta && isDeepBranch && (
+                  {!hasHandwriting && !isOrganic && !priorityMeta && isDeepBranch && (
                     <div
                       className="mb-1 h-0.5 w-6 rounded-full opacity-80"
                       style={{ backgroundColor: node.branchColor }}
@@ -3172,7 +3202,67 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                     </span>
                   )}
 
-                  {isEditing &&
+                  {hasHandwriting && node.handwriting && handwritingBox ? (
+                    <div className="flex flex-col items-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {hasTaskCheck && examMode === 'off' && (
+                          <button
+                            type="button"
+                            data-testid="node-checkbox-btn"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void hapticSuccess();
+                              onToggleNodeCheck?.(node.id);
+                            }}
+                            title={isTaskDone ? 'Tamamlandı (Geri al)' : 'Tamamlandı olarak işaretle'}
+                            style={{
+                              borderColor: isTaskDone ? '#10B981' : node.branchColor,
+                              backgroundColor: isTaskDone ? '#10B981' : 'transparent',
+                            }}
+                            className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border-2 text-white transition active:scale-90"
+                          >
+                            {isTaskDone && <Check className="h-3 w-3 stroke-[3]" />}
+                          </button>
+                        )}
+                        <svg
+                          data-testid="node-handwriting-svg"
+                          viewBox={`${node.handwriting.viewBox.x} ${node.handwriting.viewBox.y} ${node.handwriting.viewBox.w} ${node.handwriting.viewBox.h}`}
+                          width={handwritingBox.renderW}
+                          height={handwritingBox.renderH}
+                          preserveAspectRatio="xMidYMid meet"
+                          className={`pointer-events-none block overflow-visible ${isTaskDone ? 'opacity-55' : ''}`}
+                          style={{
+                            filter: darkMode
+                              ? 'drop-shadow(0 1px 4px rgba(0,0,0,0.65))'
+                              : 'drop-shadow(0 1px 2px rgba(255,255,255,0.92))',
+                          }}
+                        >
+                          {node.handwriting.strokes.map((st, sIdx) => (
+                            <path
+                              key={sIdx}
+                              d={buildHandwritingStrokePath(st.points)}
+                              fill="none"
+                              stroke={resolveHandwritingStrokeColor(st, darkMode)}
+                              strokeWidth={st.width}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          ))}
+                        </svg>
+                      </div>
+                      {/* Subtle organic branch underline directly beneath user's own handwriting */}
+                      <div
+                        className="mt-0.5 h-1 rounded-full opacity-85"
+                        style={{
+                          width: `${Math.min(180, Math.max(56, Math.round(handwritingBox.renderW * 0.72)))}px`,
+                          backgroundColor: priorityMeta
+                            ? priorityMeta.borderColor
+                            : node.branchColor,
+                        }}
+                      />
+                    </div>
+                  ) : isEditing &&
                   !kbSnap.isTouchDevice &&
                   !(
                     typeof document !== 'undefined' &&
@@ -3504,6 +3594,26 @@ export const CanvasStage: React.FC<CanvasStageProps> = React.memo(({
                       <Pencil className="h-3 w-3" />
                       <span>{isRoot ? 'Ağaç İsmi' : 'Düzenle'}</span>
                     </button>
+
+                    {onOpenHandwritingEditor && (
+                      <button
+                        type="button"
+                        data-testid="node-floating-handwriting-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void hapticLight();
+                          onOpenHandwritingEditor(node.id);
+                        }}
+                        className={`inline-flex min-h-[30px] items-center gap-1 rounded-xl px-2.5 py-1 active:scale-95 ${
+                          hasHandwriting
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-indigo-500/15 text-indigo-700 hover:bg-indigo-500/25 dark:text-indigo-300'
+                        }`}
+                      >
+                        <PenTool className="h-3 w-3" />
+                        <span>{t('El Yazısı', 'Handwrite')}</span>
+                      </button>
+                    )}
 
                     {onOpenStickerGallery && (
                       <button

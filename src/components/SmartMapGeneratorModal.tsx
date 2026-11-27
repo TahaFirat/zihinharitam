@@ -138,7 +138,7 @@ async function buildSmartMapFromOutlineText(
 ): Promise<MindMapDocument> {
   const now = Date.now();
   const parsed = parseTextToMindMapOutline(rawInput, {
-    density: options?.density ?? 'compact',
+    density: options?.density ?? 'balanced',
   });
   const rootId = parsed.rootId;
 
@@ -709,8 +709,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     localFallbackOutline: string,
     cacheTag: string
   ): Promise<string> => {
-    // Attempt Pro AI whenever user is Pro & AI mode is enabled (never skip just because initial status ping hasn't resolved yet!)
-    if (!effectiveUseAi || (aiStatus !== null && !aiStatus.available)) {
+    // Always attempt Pro AI whenever Pro + AI toggle are active (never abort early because an initial status ping timed out on mobile!)
+    if (!effectiveUseAi) {
       return localFallbackOutline;
     }
     const reqKey = `${cacheTag}|${analysisDepth}|${lang}|${rawSource.slice(0, 120)}|${rawSource.length}`;
@@ -759,6 +759,8 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
             ? 'Gemini AI'
             : res.provider?.startsWith('groq')
             ? 'Groq Qwen AI'
+            : res.provider === 'cloudflare-ai'
+            ? 'Cloudflare AI'
             : 'Pro AI';
         setAiStatusNote(
           res.cached
@@ -776,15 +778,43 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
       if (res.fallbackReason === 'quota_exceeded') {
         setAiStatusNote(
           t(
-            'Günlük Pro AI limiti doldu — yerel çevrimdışı motorla hazırlandı.',
-            'Daily Pro AI quota reached — built with on-device engine.'
+            '⚠️ Günlük Pro AI limiti doldu — yerel çevrimdışı motorla hazırlandı.',
+            '⚠️ Daily Pro AI quota reached — built with on-device engine.'
           )
         );
       } else if (res.fallbackReason === 'pro_required') {
         setAiStatusNote(
           t(
-            'Sunucu Pro oturumu doğrulanamadı — hesabınızla giriş yaptığınızdan emin olun (yerel motor kullanıldı).',
-            'Pro session not verified on server — ensure you are signed in (used on-device engine).'
+            '⚠️ Sunucu Pro oturumu doğrulanamadı — hesabınızla giriş yaptığınızdan emin olun (yerel motor kullanıldı).',
+            '⚠️ Pro session not verified on server — ensure you are signed in (used on-device engine).'
+          )
+        );
+      } else if (res.fallbackReason === 'offline') {
+        setAiStatusNote(
+          t(
+            '⚠️ İnternet bağlantısı yok — harita çevrimdışı yerel motorla hazırlandı.',
+            '⚠️ You are offline — built with the on-device offline engine.'
+          )
+        );
+      } else if (res.fallbackReason === 'timeout') {
+        setAiStatusNote(
+          t(
+            '⚠️ AI yanıt süresi aşıldı — geçici olarak yerel motor kullanıldı, tekrar deneyebilirsiniz.',
+            '⚠️ AI request timed out — used on-device fallback, please retry.'
+          )
+        );
+      } else if (res.fallbackReason === 'rate_limited') {
+        setAiStatusNote(
+          t(
+            '⚠️ Çok sık istek gönderildi — birkaç saniye sonra tekrar deneyin (yerel motor kullanıldı).',
+            '⚠️ Too many AI requests — retry in a few seconds (used on-device engine).'
+          )
+        );
+      } else {
+        setAiStatusNote(
+          t(
+            '⚠️ AI sunucusuna şu an ulaşılamadı — geçici olarak yerel motor kullanıldı.',
+            '⚠️ AI service temporarily unreachable — built with on-device fallback.'
           )
         );
       }
@@ -854,8 +884,41 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
     }
   };
 
+  const isAlreadyStructuredOutline = (txt: string): boolean => {
+    const lines = txt.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    const mainBullets = lines.filter((l) => /^[-*•]\s+\S/.test(l)).length;
+    const subBullets = lines.filter((l) => /^\s{2,}[-*•]\s+\S/.test(l)).length;
+    return mainBullets >= 2 && subBullets >= 2;
+  };
+
+  const handleStructureOutlineWithAi = async () => {
+    const raw = outlineText.trim();
+    if (!raw) return;
+    if (!isLifetimePro) {
+      onTriggerPaywall?.('smart_map_ai');
+      return;
+    }
+    void hapticLight();
+    const localRes = convertLectureNoteToMindMapFormat(raw, { depth: analysisDepth });
+    const aiOutline = await resolveAiOrLocalOutline(raw, localRes.formattedOutline || raw, 'outline');
+    setOutlineText(aiOutline);
+    setShowLivePreview(true);
+  };
+
   const handleCreateSmartMap = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = outlineText.trim();
+    // If Pro AI is active and the user pasted raw lecture prose (not already a structured outline), run Pro AI automatically!
+    if (effectiveUseAi && trimmed.length >= 60 && !isAlreadyStructuredOutline(trimmed)) {
+      const localRes = convertLectureNoteToMindMapFormat(trimmed, { depth: analysisDepth });
+      const aiOutline = await resolveAiOrLocalOutline(
+        trimmed,
+        localRes.formattedOutline || trimmed,
+        'outline'
+      );
+      await executeGenerateFromText(aiOutline);
+      return;
+    }
     await executeGenerateFromText(outlineText);
   };
 
@@ -994,12 +1057,11 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                 </button>
               </div>
 
-              {/* Pro-Only AI vs On-Device Engine Switcher (PDF & Lecture Note modes) */}
-              {(inputMode === 'document' || inputMode === 'converter') && (
-                <div
-                  data-testid="smartmap-ai-engine-bar"
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-indigo-500/6 via-violet-500/6 to-amber-500/8 px-3 py-2 text-[11px]"
-                >
+              {/* Pro-Only AI vs On-Device Engine Switcher (Visible across ALL 3 tabs so Pro AI is always 1 tap away!) */}
+              <div
+                data-testid="smartmap-ai-engine-bar"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-indigo-500/6 via-violet-500/6 to-amber-500/8 px-3 py-2 text-[11px]"
+              >
                   <div className="flex min-w-0 items-center gap-1.5 font-extrabold">
                     {isLifetimePro ? (
                       <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
@@ -1062,12 +1124,15 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     </button>
                   </div>
                 </div>
-              )}
 
               {aiStatusNote && (
                 <div
                   data-testid="smartmap-ai-status-note"
-                  className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-bold text-indigo-800 dark:text-indigo-200"
+                  className={`rounded-xl border px-3 py-1.5 text-[11px] font-bold ${
+                    aiStatusNote.startsWith('⚠️')
+                      ? 'border-amber-500/40 bg-amber-500/12 text-amber-800 dark:text-amber-200'
+                      : 'border-indigo-500/30 bg-indigo-500/10 text-indigo-800 dark:text-indigo-200'
+                  }`}
                 >
                   {aiStatusNote}
                 </div>
@@ -1806,6 +1871,22 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                         Harita Formatı (Konu, Dal ve Açıklamalar):
                       </label>
                       <div className="flex items-center gap-1.5">
+                        {outlineText.trim().length >= 20 && (
+                          <button
+                            type="button"
+                            data-testid="outline-ai-structure-btn"
+                            disabled={isAiStructuring}
+                            onClick={() => void handleStructureOutlineWithAi()}
+                            className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-2xs transition active:scale-95 disabled:opacity-50"
+                          >
+                            {isAiStructuring ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-3 w-3" />
+                            )}
+                            <span>{t('AI ile Ağaca Çevir', 'Structure with AI')}</span>
+                          </button>
+                        )}
                         {outlineText.trim().length > 0 && (
                           <button
                             type="button"
@@ -1955,16 +2036,18 @@ export const SmartMapGeneratorModal: React.FC<SmartMapGeneratorModalProps> = ({
                     <button
                       type="submit"
                       data-testid="smart-map-submit-btn"
-                      disabled={isGenerating}
+                      disabled={isGenerating || isAiStructuring}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-transform active:scale-95 disabled:opacity-60"
                     >
-                      {isGenerating ? (
+                      {isGenerating || isAiStructuring ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Wand2 className="h-4 w-4" />
                       )}
                       <span>
-                        {isGenerating
+                        {isAiStructuring
+                          ? t('✨ Pro AI ile Ağaç Oluşturuluyor...', '✨ Structuring with Pro AI...')
+                          : isGenerating
                           ? t('İkonlar Eşleştiriliyor...', 'Matching Icons...')
                           : t('Görsel Haritayı Oluştur', 'Generate Visual Mind Map')}
                       </span>

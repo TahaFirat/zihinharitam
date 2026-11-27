@@ -28,6 +28,8 @@ import {
   ChevronDown,
   ChevronUp,
   GripHorizontal,
+  PenTool,
+  Type,
 } from 'lucide-react';
 import {
   BRANCH_PALETTE,
@@ -97,6 +99,8 @@ interface KeyboardVisualBarProps {
   onOpenAIStudio: (customQuery?: string) => void;
   onOpenNoteCropper: () => void;
   onOpenQuickSketch: () => void;
+  onOpenHandwriting?: () => void;
+  onClearHandwriting?: (nodeId: string) => void;
   onStartCrossLink: (fromNodeId: string) => void;
   onOpenSmartSubBranches: () => void;
   onCloseEdit: () => void;
@@ -150,6 +154,8 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
   onOpenAIStudio,
   onOpenNoteCropper,
   onOpenQuickSketch,
+  onOpenHandwriting,
+  onClearHandwriting,
   onStartCrossLink,
   onOpenSmartSubBranches,
   onCloseEdit,
@@ -865,6 +871,28 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
             )}
           </div>
 
+          {onOpenHandwriting && (
+            <button
+              type="button"
+              data-testid="studio-handwriting-btn"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => {
+                void hapticLight();
+                void dismissNativeKeyboard();
+                onOpenHandwriting();
+              }}
+              title="Kavramı el yazısıyla yaz (kutu yerine kendi yazın)"
+              className={`inline-flex h-11 shrink-0 items-center gap-1 rounded-2xl border px-3 text-xs font-extrabold transition active:scale-95 ${
+                activeNode.handwriting?.strokes?.length
+                  ? 'border-indigo-500 bg-gradient-to-r from-indigo-600 to-sky-500 text-white shadow-xs'
+                  : 'border-indigo-500/35 bg-indigo-500/12 text-indigo-700 hover:bg-indigo-500/20 dark:text-indigo-300'
+              }`}
+            >
+              <PenTool className="h-4 w-4" />
+              <span className="hidden sm:inline">El Yazısı</span>
+            </button>
+          )}
+
           <button
             type="button"
             onPointerDown={(e) => e.preventDefault()}
@@ -1461,35 +1489,80 @@ export const KeyboardVisualBar: React.FC<KeyboardVisualBarProps> = React.memo(({
               ))}
             </div>
 
-            {/* Card vs Organic Style */}
-            {!isRootNode && (
-              <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">
+            {/* Card vs Organic vs Boxless Handwritten Concept Style */}
+            <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-500/10 p-1">
+              {!isRootNode && (
+                <>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (activeNode.handwriting?.strokes?.length && onClearHandwriting) {
+                        onClearHandwriting(activeNode.id);
+                      }
+                      onChangeNodeStyle(activeNode.id, 'card');
+                    }}
+                    className={`min-h-[42px] rounded-xl px-3 text-xs font-extrabold active:scale-95 ${
+                      !activeNode.handwriting?.strokes?.length && effectiveNodeStyle === 'card'
+                        ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                        : 'opacity-75'
+                    }`}
+                  >
+                    Kart
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (activeNode.handwriting?.strokes?.length && onClearHandwriting) {
+                        onClearHandwriting(activeNode.id);
+                      }
+                      onChangeNodeStyle(activeNode.id, 'organic');
+                    }}
+                    className={`min-h-[42px] rounded-xl px-3 text-xs font-extrabold active:scale-95 ${
+                      !activeNode.handwriting?.strokes?.length && effectiveNodeStyle === 'organic'
+                        ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
+                        : 'opacity-75'
+                    }`}
+                  >
+                    Organik
+                  </button>
+                </>
+              )}
+              {onOpenHandwriting && (
+                <button
+                  type="button"
+                  data-testid="style-handwriting-btn"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    void hapticLight();
+                    onOpenHandwriting();
+                  }}
+                  className={`inline-flex min-h-[42px] items-center gap-1 rounded-xl px-3 text-xs font-extrabold active:scale-95 ${
+                    activeNode.handwriting?.strokes?.length
+                      ? 'bg-gradient-to-r from-indigo-600 to-sky-500 text-white shadow-xs'
+                      : 'opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  <PenTool className="h-3.5 w-3.5" />
+                  <span>El Yazısı</span>
+                </button>
+              )}
+              {Boolean(activeNode.handwriting?.strokes?.length) && onClearHandwriting && isRootNode && (
                 <button
                   type="button"
                   onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => onChangeNodeStyle(activeNode.id, 'card')}
-                  className={`min-h-[42px] rounded-xl px-3.5 text-xs font-extrabold active:scale-95 ${
-                    effectiveNodeStyle === 'card'
-                      ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
-                      : 'opacity-75'
-                  }`}
+                  onClick={() => {
+                    void hapticLight();
+                    onClearHandwriting(activeNode.id);
+                  }}
+                  className="inline-flex min-h-[42px] items-center gap-1 rounded-xl px-3 text-xs font-extrabold opacity-80 hover:opacity-100 active:scale-95"
                 >
-                  Kart
+                  <Type className="h-3.5 w-3.5" />
+                  <span>Metin</span>
                 </button>
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => onChangeNodeStyle(activeNode.id, 'organic')}
-                  className={`min-h-[42px] rounded-xl px-3.5 text-xs font-extrabold active:scale-95 ${
-                    effectiveNodeStyle === 'organic'
-                      ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
-                      : 'opacity-75'
-                  }`}
-                >
-                  Organik
-                </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Big Branch Color Swatches */}
             <div className="flex items-center gap-2 rounded-2xl bg-slate-500/10 px-3 py-1.5">

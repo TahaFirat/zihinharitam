@@ -46,8 +46,8 @@ export interface ParsedOutlineResult {
 const NOTE_PREFIX_RE =
   /^(?:not|notlar|aciklama|açıklama|detay|detaylar|ornek|örnek|tanim|tanım|formul|formül|ipucu|ozet|özet|bilgi|note|notes|desc|description|detail|example|tip|summary|info)\s*[:\-–—]\s*(.+)$/i;
 
-const PRIORITY_EXAM_RE = /(?:^|\s)(?:\[sınav\]|\[sinav\]|\[exam\]|sınavda çıkar|sinavda cikar|🎓)/i;
-const PRIORITY_IMPORTANT_RE = /(?:^|\s)(?:\(!\)|\[önemli\]|\[onemli\]|\[important\]|önemli\s*:|onemli\s*:|🔥|⭐|★)/i;
+const PRIORITY_EXAM_RE = /(?:^|\s)(?:\[s[iİıI]nav\]|\[exam\]|s[iİıI]navda\s+[cç][iİıI]kar|🎓)/i;
+const PRIORITY_IMPORTANT_RE = /(?:^|\s)(?:\(!\)|\[[öoÖO]neml[iİıI]\]|\[important\]|[öoÖO]neml[iİıI]\s*:|🔥|⭐|★)/i;
 const PRIORITY_REVIEW_RE = /(?:^|\s)(?:\[tekrar\]|\[review\]|\(\?\)|❓)/i;
 
 const URL_RE = /(https?:\/\/[^\s)\]]+)/i;

@@ -26,6 +26,11 @@ import {
   generateCrossLinkSvgElements,
 } from '../core/canvas/CrossLinkRenderer';
 import {
+  buildHandwritingExportSvgGroup,
+  drawHandwritingToCanvas2D,
+  resolveHandwritingRenderBox,
+} from '../core/canvas/HandwritingSvgRenderer';
+import {
   drawInkStrokesToCanvas2D,
   drawStickyNotesToCanvas2D,
   generateInkStrokesSvgElements,
@@ -386,14 +391,47 @@ async function renderHighResMapCanvas(
       drawInkStrokesToCanvas2D(ctx, doc.inkStrokes);
       drawStickyNotesToCanvas2D(ctx, doc.stickyNotes);
 
-      // 3. Nodes (Stickers + Wrapped Pill Cards + Priority/Checkboxes + Tech Badges + Note Boxes!)
+      // 3. Nodes (Stickers + Boxless Handwritten Concepts OR Wrapped Pill Cards + Priority/Checkboxes + Tech Badges + Note Boxes!)
       visibleNodes.forEach((node, idx) => {
         const isRoot = node.id === doc.rootNodeId;
         const img = loadedImages[idx];
         const stickerSize = resolveExportStickerSize(node, isRoot);
+        const hasHandwriting = Boolean(node.handwriting?.strokes?.length);
         const checkPrefix =
           node.checked === true ? '☑ ' : node.checked === false ? '☐ ' : '';
         const displayTitle = `${checkPrefix}${node.title || 'Yeni Konu'}`;
+
+        if (hasHandwriting && node.handwriting) {
+          const hwBox = resolveHandwritingRenderBox(node.handwriting, isRoot);
+          const hwTopY = node.y - hwBox.renderH * 0.5;
+          if (img) {
+            const ratio = node.sticker?.aspectRatio || 1;
+            const drawW = ratio >= 1 ? stickerSize : stickerSize * ratio;
+            const drawH = ratio >= 1 ? stickerSize / ratio : stickerSize;
+            ctx.drawImage(img, node.x - drawW / 2, hwTopY - drawH - 8, drawW, drawH);
+          }
+          drawHandwritingToCanvas2D(
+            ctx,
+            node.handwriting,
+            node.x,
+            hwTopY,
+            hwBox.renderW,
+            hwBox.renderH,
+            Boolean(doc.darkMode)
+          );
+          // Subtle branch-colored underline directly beneath handwriting (no box!)
+          const lineW = Math.min(180, Math.max(56, hwBox.renderW * 0.72));
+          ctx.save();
+          ctx.strokeStyle = node.branchColor;
+          ctx.lineWidth = 3.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(node.x - lineW * 0.5, hwTopY + hwBox.renderH + 5);
+          ctx.lineTo(node.x + lineW * 0.5, hwTopY + hwBox.renderH + 5);
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
 
         const titleFontSize = isRoot ? 18 : 14;
         ctx.font = `${isRoot ? 800 : 700} ${titleFontSize}px "Plus Jakarta Sans", sans-serif`;
@@ -607,6 +645,32 @@ function buildVectorSvgBlob(doc: MindMapDocument): Blob {
     const nx = node.x + ox;
     const ny = node.y + oy;
     const sSize = resolveExportStickerSize(node, isRoot);
+    if (node.handwriting?.strokes?.length) {
+      const hwBox = resolveHandwritingRenderBox(node.handwriting, isRoot);
+      const hwTopY = ny - hwBox.renderH * 0.5;
+      if (node.sticker?.url) {
+        nodeElements.push(
+          `<image href="${escapeXml(node.sticker.url)}" x="${nx - sSize / 2}" y="${
+            hwTopY - sSize - 8
+          }" width="${sSize}" height="${sSize}" preserveAspectRatio="xMidYMid meet" />`
+        );
+      }
+      nodeElements.push(
+        buildHandwritingExportSvgGroup(
+          node.handwriting,
+          nx,
+          hwTopY,
+          hwBox.renderW,
+          hwBox.renderH,
+          isDark
+        )
+      );
+      const lineW = Math.min(180, Math.max(56, hwBox.renderW * 0.72));
+      nodeElements.push(
+        `<line x1="${(nx - lineW * 0.5).toFixed(1)}" y1="${(hwTopY + hwBox.renderH + 5).toFixed(1)}" x2="${(nx + lineW * 0.5).toFixed(1)}" y2="${(hwTopY + hwBox.renderH + 5).toFixed(1)}" stroke="${node.branchColor}" stroke-width="3.5" stroke-linecap="round" />`
+      );
+      continue;
+    }
     const checkPrefix =
       node.checked === true ? '☑ ' : node.checked === false ? '☐ ' : '';
     const displayTitle = `${checkPrefix}${node.title || 'Yeni Konu'}`;

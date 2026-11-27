@@ -86,6 +86,8 @@ import { SmartMapGeneratorModal } from './components/SmartMapGeneratorModal';
 import { MiniMapRadar } from './components/MiniMapRadar';
 import { NoteCropperModal } from './components/NoteCropperModal';
 import { QuickSketchPopover } from './components/QuickSketchPopover';
+import { HandwrittenConceptModal } from './components/HandwrittenConceptModal';
+import type { HandwrittenConceptAsset } from './types/mindmap';
 import { ExportSheet } from './components/ExportSheet';
 import { OutlineModal } from './components/OutlineModal';
 import { HomeWorkspace } from './components/HomeWorkspace';
@@ -231,6 +233,7 @@ export const App: React.FC = () => {
   }>({ open: false, tab: 'text_to_map' });
   const [noteCropperOpen, setNoteCropperOpen] = useState(false);
   const [sketchPopoverOpen, setSketchPopoverOpen] = useState(false);
+  const [handwritingModalOpen, setHandwritingModalOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [flashcardsOpen, setFlashcardsOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
@@ -1532,6 +1535,55 @@ export const App: React.FC = () => {
     [doc, pushHistory]
   );
 
+  const handleApplyNodeHandwriting = useCallback(
+    (nodeId: string, handwriting: HandwrittenConceptAsset, optionalTitle?: string) => {
+      pushHistory(doc);
+      setDoc((prev) => {
+        const target = prev.nodes[nodeId];
+        if (!target) return prev;
+        const nextTitle =
+          optionalTitle && optionalTitle.trim().length > 0
+            ? optionalTitle.trim()
+            : target.title;
+        const isRoot = nodeId === prev.rootNodeId;
+        return {
+          ...prev,
+          title: isRoot && nextTitle ? nextTitle : prev.title,
+          nodes: {
+            ...prev.nodes,
+            [nodeId]: {
+              ...target,
+              title: nextTitle,
+              handwriting,
+            },
+          },
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [doc, pushHistory]
+  );
+
+  const handleClearNodeHandwriting = useCallback(
+    (nodeId: string) => {
+      pushHistory(doc);
+      setDoc((prev) => {
+        const target = prev.nodes[nodeId];
+        if (!target || !target.handwriting) return prev;
+        const { handwriting: _removed, ...rest } = target;
+        return {
+          ...prev,
+          nodes: {
+            ...prev.nodes,
+            [nodeId]: rest,
+          },
+          updatedAt: Date.now(),
+        };
+      });
+    },
+    [doc, pushHistory]
+  );
+
   const handleSetDefaultNodeStyle = useCallback(
     (nextStyle: NodeVisualStyle) => {
       pushHistory(doc);
@@ -1843,6 +1895,7 @@ export const App: React.FC = () => {
     smartGenModal.open ||
     noteCropperOpen ||
     sketchPopoverOpen ||
+    handwritingModalOpen ||
     exportOpen ||
     flashcardsOpen ||
     presentationOpen ||
@@ -1955,6 +2008,7 @@ export const App: React.FC = () => {
           setSmartGenModal((s) => ({ ...s, open: false }));
           setNoteCropperOpen(false);
           setSketchPopoverOpen(false);
+          setHandwritingModalOpen(false);
           setExportOpen(false);
           setSettingsOpen(false);
           setPaywallState((p) => ({ ...p, open: false }));
@@ -2123,7 +2177,18 @@ export const App: React.FC = () => {
 
   const handleStartEditing = useCallback((id: string) => {
     setSelectedNodeId(id);
+    if (docRef.current.nodes[id]?.handwriting?.strokes?.length) {
+      setEditingNodeId(null);
+      setHandwritingModalOpen(true);
+      return;
+    }
     setEditingNodeId(id);
+  }, []);
+
+  const handleOpenHandwritingEditor = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setEditingNodeId(null);
+    setHandwritingModalOpen(true);
   }, []);
 
   const handleStartCrossLink = useCallback((fromId: string) => {
@@ -2670,6 +2735,7 @@ export const App: React.FC = () => {
             onToggleNoteCollapse={handleToggleNodeNoteCollapse}
             onStartCrossLink={handleStartCrossLink}
             onOpenStickerGallery={handleOpenStickerGallery}
+            onOpenHandwritingEditor={handleOpenHandwritingEditor}
             onCommitBatchNodePositions={handleCommitBatchNodePositions}
             onReparentNode={handleReparentNode}
             searchMatchIds={searchMatchIdSet}
@@ -2752,6 +2818,11 @@ export const App: React.FC = () => {
             }
             onOpenNoteCropper={handleRequestOpenNoteCropper}
             onOpenQuickSketch={() => setSketchPopoverOpen(true)}
+            onOpenHandwriting={() => {
+              setEditingNodeId(null);
+              setHandwritingModalOpen(true);
+            }}
+            onClearHandwriting={handleClearNodeHandwriting}
             onStartCrossLink={(fromId) => setLinkingFromNodeId(fromId)}
             onOpenSmartSubBranches={() =>
               handleRequestOpenSmartGenerator('proactive_branches', false)
@@ -3098,6 +3169,21 @@ export const App: React.FC = () => {
             }
             onOpenAIStudio={() =>
               handleRequestOpenAIStudio(targetModalNode?.title ?? doc.title)
+            }
+          />
+
+          <HandwrittenConceptModal
+            isOpen={handwritingModalOpen}
+            darkMode={Boolean(doc.darkMode)}
+            nodeTitle={targetModalNode?.title ?? doc.title}
+            branchColor={targetModalNode?.branchColor ?? '#0EA5E9'}
+            initialHandwriting={targetModalNode?.handwriting ?? null}
+            onClose={() => setHandwritingModalOpen(false)}
+            onApplyHandwriting={(asset, optionalTitle) =>
+              handleApplyNodeHandwriting(targetModalNodeId, asset, optionalTitle)
+            }
+            onClearHandwriting={() =>
+              handleClearNodeHandwriting(targetModalNodeId)
             }
           />
 
